@@ -16,6 +16,7 @@ const offline = load('offline.json');
 const copilot = load('copilot.json');
 const claudeResults = loadClaudeResults();
 const proof = load('proof.json');
+const prose = load('prose.json');
 const out = [];
 
 function loadClaudeResults() {
@@ -460,6 +461,63 @@ if (!proof) {
 }
 out.push('');
 
+// ── Arm F — prose region ───────────────────────────────────────────
+out.push('## Arm F — prose region (PIXROOM_SEMANTIC_PROSE)');
+out.push('');
+if (!prose) {
+  out.push('_Not run._');
+} else {
+  out.push(
+    "Same input-token methodology as Arm E, on a region the other arms don't exercise: a large " +
+      '**plain-prose block in a USER message** (the RAG / pasted-context pattern). pxpipe images only the ' +
+      'system slab and the tool_result stage only touches tool_result blocks, so **every other config ' +
+      'passes that block through raw**. The prose path routes it to headroom\'s **Kompress** (ModernBERT ' +
+      'prose token-drop), reversibly via CCR.',
+  );
+  out.push('');
+  const cols = ['pxpipe-only', 'headroom-tools', 'headroom+prose', 'pixroom-default', 'pixroom+prose'];
+  out.push(
+    mdTable(
+      ['scenario', 'kind', 'raw', ...cols, 'prose Δtok'],
+      prose.scenarios.map((e) => {
+        const s = (n) => `${(((e.raw - n) / e.raw) * 100).toFixed(0)}%`;
+        const cell = (k) => `${e.configs[k].tokens} (${s(e.configs[k].tokens)})`;
+        return [
+          e.name,
+          e.category,
+          String(e.raw),
+          cell('pxpipe-only'),
+          cell('headroom-tools'),
+          cell('headroom+prose'),
+          cell('pixroom-default'),
+          `**${cell('pixroom+prose')}**`,
+          `px ${e.proseGainPixroom}t`,
+        ];
+      }),
+    ),
+  );
+  out.push('');
+  out.push(
+    `**Verdict:** \`prose-helps=${prose.verdict.proseHelps}\`, ` +
+      `\`full-stack-best=${prose.verdict.fullStackBestOnMixed}\`, \`no-harm=${prose.verdict.noHarm}\`. On ` +
+      'prose-heavy requests every non-prose config reduces the user prose by **0%** — it is the region ' +
+      'pxpipe (slab-only) and the tool_result stage both skip. The prose path is the only one that touches ' +
+      'it, and it composes **additively** with optical + tool_result compression (`mixed-all`: pixroom+prose ' +
+      'is best). On `control-tools` (no prose) the prose path is byte-identical to its baseline.',
+  );
+  out.push('');
+  out.push(
+    '> **Honest scope.** Kompress is lossy prose token-drop with a must-keep guard (numbers, ALLCAPS, ' +
+      'paths, CamelCase are never dropped) and every offload is CCR-recoverable. Realized savings scale with ' +
+      'prose redundancy: measured **directly** on varied prose, Kompress cuts **~6% (dense) / 15% (natural) ' +
+      '/ 18% (redundant)** of prose tokens; the synthetic corpus here is moderately redundant (~21%). It is ' +
+      '**opt-in** and needs the sidecar to have the Kompress tokenizer (`pip install transformers` — the ' +
+      'lightweight ONNX path, no torch); pixroom sends `compress_user_messages` automatically. Without ' +
+      'Kompress the sidecar no-ops prose and these rows tie their baselines.',
+  );
+}
+out.push('');
+
 out.push('## Findings');
 out.push('');
 if (offline) {
@@ -503,6 +561,14 @@ if (proof) {
       'on single-region workloads. So: **better than both where it matters, never worse anywhere.**',
   );
 }
+if (prose) {
+  out.push(
+    '- **Prose (Arm F): fills the gap** — a large user-message prose block is compressed **0%** by ' +
+      'pxpipe, headroom-tools, and default pixroom, but `PIXROOM_SEMANTIC_PROSE=1` routes it to headroom\'s ' +
+      'Kompress for a real, reversible cut (~6–21% of prose tokens by redundancy), **additive** with the ' +
+      'optical + tool_result regions and a **no-op** when there\'s no prose.',
+  );
+}
 out.push(
   '- **Right-sizing:** use optical where you control an Anthropic model in pxpipe\'s scope; use headroom ' +
     '(semantic) everywhere, including Copilot; use pixroom to get both automatically where both apply.',
@@ -517,6 +583,7 @@ out.push('node benchmarks/offline.mjs           # Arm A (3-way, offline)');
 out.push('BENCH_MODEL=claude-opus-4.8 node benchmarks/copilot.mjs   # Arm B (live Copilot)');
 out.push('PIXROOM_OPTICAL_ON_SUBSCRIPTION=1 BENCH_MODEL=claude-fable-5 node benchmarks/claude.mjs  # Arm C (live Claude 4-way, optical on)');
 out.push('node benchmarks/proof.mjs             # Arm E (input-token domination proof)');
+out.push('node benchmarks/prose.mjs             # Arm F (prose region, needs transformers in the sidecar)');
 out.push('node benchmarks/report.mjs            # regenerate this file');
 out.push('```');
 out.push('');

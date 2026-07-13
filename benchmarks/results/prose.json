@@ -1,0 +1,137 @@
+{
+  "model": "claude-fable-5",
+  "sidecar": true,
+  "generatedAt": "2026-07-12T10:46:09.604Z",
+  "scenarios": [
+    {
+      "name": "rag-doc",
+      "category": "prose",
+      "note": "retrieved doc prose in a user block, tiny slab (only the prose path helps)",
+      "raw": 1713,
+      "configs": {
+        "pxpipe-only": {
+          "tokens": 1713,
+          "reversible": 0
+        },
+        "headroom-tools": {
+          "tokens": 1713,
+          "reversible": 0
+        },
+        "headroom+prose": {
+          "tokens": 1348,
+          "reversible": 0
+        },
+        "pixroom-default": {
+          "tokens": 1713,
+          "reversible": 0
+        },
+        "pixroom+prose": {
+          "tokens": 1348,
+          "reversible": 0
+        }
+      },
+      "proseGainHeadroom": 365,
+      "proseGainPixroom": 365,
+      "fullStackIsBest": true
+    },
+    {
+      "name": "rag-large",
+      "category": "prose",
+      "note": "large retrieved context (~16k chars) in a user block",
+      "raw": 3019,
+      "configs": {
+        "pxpipe-only": {
+          "tokens": 3019,
+          "reversible": 0
+        },
+        "headroom-tools": {
+          "tokens": 3019,
+          "reversible": 0
+        },
+        "headroom+prose": {
+          "tokens": 2387,
+          "reversible": 0
+        },
+        "pixroom-default": {
+          "tokens": 3019,
+          "reversible": 0
+        },
+        "pixroom+prose": {
+          "tokens": 2387,
+          "reversible": 0
+        }
+      },
+      "proseGainHeadroom": 632,
+      "proseGainPixroom": 632,
+      "fullStackIsBest": true
+    },
+    {
+      "name": "mixed-all",
+      "category": "mixed",
+      "note": "big slab + JSON tool_result + user prose (all three regions → additivity)",
+      "raw": 20356,
+      "configs": {
+        "pxpipe-only": {
+          "tokens": 17003,
+          "reversible": 0
+        },
+        "headroom-tools": {
+          "tokens": 14231,
+          "reversible": 0
+        },
+        "headroom+prose": {
+          "tokens": 13875,
+          "reversible": 0
+        },
+        "pixroom-default": {
+          "tokens": 10878,
+          "reversible": 0
+        },
+        "pixroom+prose": {
+          "tokens": 10522,
+          "reversible": 0
+        }
+      },
+      "proseGainHeadroom": 356,
+      "proseGainPixroom": 356,
+      "fullStackIsBest": true
+    },
+    {
+      "name": "control-tools",
+      "category": "control",
+      "note": "no prose → the prose path MUST equal its baseline (proves no harm)",
+      "raw": 18664,
+      "configs": {
+        "pxpipe-only": {
+          "tokens": 15311,
+          "reversible": 0
+        },
+        "headroom-tools": {
+          "tokens": 12539,
+          "reversible": 0
+        },
+        "headroom+prose": {
+          "tokens": 12539,
+          "reversible": 0
+        },
+        "pixroom-default": {
+          "tokens": 9186,
+          "reversible": 0
+        },
+        "pixroom+prose": {
+          "tokens": 9186,
+          "reversible": 0
+        }
+      },
+      "proseGainHeadroom": 0,
+      "proseGainPixroom": 0,
+      "fullStackIsBest": true
+    }
+  ],
+  "verdict": {
+    "proseHelps": true,
+    "fullStackBestOnMixed": true,
+    "noHarm": true,
+    "kompress": true
+  }
+}

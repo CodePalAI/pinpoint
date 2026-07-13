@@ -4,7 +4,10 @@
  * Talks to the headroom sidecar's stateless, loopback-only `/v1/compress` seam. It
  * never touches transport-level `cache_control` (pxpipe owns the breakpoint) and
  * never calls the LLM. It compresses only the semantic region:
- *   - Anthropic: the `tool_result` text blocks in non-recent turns (mapped 1:1 back).
+ *   - Anthropic: the `tool_result` text blocks in non-recent turns, plus (opt-in via
+ *     `includeUserProse`) large plain-text prose in non-recent user turns — both
+ *     mapped 1:1 back and routed to headroom's content-aware compressors (Kompress
+ *     for prose, SmartCrusher for structured data).
  *   - OpenAI: the message array wholesale.
  * headroom's CCR hashes become reversible handles; this class also serves as the
  * {@link CcrRetriever} for `GET /v1/retrieve/{hash}`.
@@ -17,7 +20,9 @@ import type { SemanticConfig } from '../config.js';
 import type { Logger } from '../logger.js';
 import type { CcrRetriever } from '../ccr/store.js';
 import {
+  applyCompressedProse,
   applyCompressedToolResults,
+  collectProseTargets,
   collectToolResultTargets,
   totalChars,
   type ToolResultTarget,
@@ -102,34 +107,51 @@ export class SemanticCompressor implements Compressor, CcrRetriever {
   }
 
   private async runAnthropic(ctx: RequestContext): Promise<StageResult> {
-    const targets = collectToolResultTargets(ctx.body, {
+    const toolTargets = collectToolResultTargets(ctx.body, {
       protectRecent: this.cfg.protectRecent,
       minChars: SEMANTIC_MIN_BLOCK_CHARS,
     });
-    if (targets.length === 0) {
-      return passthroughResult('semantic', 'below_threshold', 'no eligible tool_result blocks');
+    const proseTargets = this.cfg.includeUserProse
+      ? collectProseTargets(ctx.body, {
+          protectRecent: this.cfg.protectRecent,
+          minChars: this.cfg.proseMinChars,
+        })
+      : [];
+
+    if (toolTargets.length + proseTargets.length === 0) {
+      return passthroughResult('semantic', 'below_threshold', 'no eligible content blocks');
     }
-    const regionChars = totalChars(targets);
+    const regionChars = totalChars(toolTargets) + totalChars(proseTargets);
     if (tokensFromChars(regionChars) < this.cfg.minTokensToCompress) {
       return passthroughResult('semantic', 'below_threshold', `region ${regionChars} chars`);
     }
 
-    const messages = targets.map((t: ToolResultTarget, i: number) => ({
-      role: 'tool',
-      tool_call_id: t.toolUseId ?? `pxr_${i}`,
-      content: t.text,
-    }));
+    // Order is [tool_result…, prose…] so the response splits back to the right
+    // reinjector. tool_results ride as `tool` messages, user prose as `user`.
+    const messages = [
+      ...toolTargets.map((t: ToolResultTarget, i: number) => ({
+        role: 'tool',
+        tool_call_id: t.toolUseId ?? `pxr_${i}`,
+        content: t.text,
+      })),
+      ...proseTargets.map((t) => ({ role: 'user', content: t.text })),
+    ];
 
-    const resp = await this.postCompress(messages, ctx.model ?? 'claude-sonnet-4-5', {
-      protect_recent: 0,
-    });
+    // headroom skips user messages by default (prefix-cache safety); opt in
+    // explicitly when we send prose so the prose path works regardless of the
+    // sidecar's savings profile. We pre-select non-recent turns ourselves, so
+    // `protect_recent: 0` compresses exactly the blocks we chose.
+    const config: Record<string, unknown> = { protect_recent: 0 };
+    if (proseTargets.length > 0) config.compress_user_messages = true;
+
+    const resp = await this.postCompress(messages, ctx.model ?? 'claude-sonnet-4-5', config);
 
     // 1:1 mapping is required to reinject safely; degrade on any mismatch.
-    if (resp.messages.length !== targets.length) {
+    if (resp.messages.length !== messages.length) {
       return passthroughResult(
         'semantic',
         'degraded',
-        `compress returned ${resp.messages.length} vs ${targets.length} sent`,
+        `compress returned ${resp.messages.length} vs ${messages.length} sent`,
       );
     }
     const compressed: string[] = [];
@@ -144,7 +166,13 @@ export class SemanticCompressor implements Compressor, CcrRetriever {
     // Only rewrite the body when headroom actually helped; a no-op stays byte-exact.
     const applied = resp.tokens_saved > 0 || resp.ccr_hashes.length > 0;
     if (applied) {
-      applyCompressedToolResults(ctx.body, targets, compressed);
+      const nTool = toolTargets.length;
+      if (nTool > 0) {
+        applyCompressedToolResults(ctx.body, toolTargets, compressed.slice(0, nTool));
+      }
+      if (proseTargets.length > 0) {
+        applyCompressedProse(ctx.body, proseTargets, compressed.slice(nTool));
+      }
       this.registerHashes(ctx, resp.ccr_hashes);
     }
 

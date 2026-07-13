@@ -127,6 +127,76 @@ export function buildPayloads(repoRoot) {
   ];
 }
 
+// ── Prose (RAG/chat) context — the region PIXROOM_SEMANTIC_PROSE adds ────────
+// A large plain-language block that lives in a USER text block. pxpipe images
+// only the system slab and the tool_result stage only touches tool_result blocks,
+// so this region is passed through raw by every config EXCEPT the prose path,
+// which routes it to headroom's Kompress (ModernBERT prose token-drop). The text
+// is varied natural prose (not repeated filler), so token-drop reflects realistic
+// documentation/RAG content rather than gamed repetition.
+
+const PROSE_SENTENCES = [
+  'The service accepts requests over a deliberately small HTTP surface and validates every field at the boundary before any real work begins.',
+  'Once a request passes validation the router inspects its shape and decides which downstream component is best suited to handle it.',
+  'Each stage in the pipeline performs one narrow transformation and records timing and outcome metrics so operators can reason about behavior later.',
+  'When traffic climbs past a configured threshold the scheduler quietly provisions additional workers to keep tail latency within the agreed budget.',
+  'If a downstream dependency starts returning errors the circuit breaker trips and the system falls back to a cached response instead of failing outright.',
+  'Operators usually start an investigation from the dashboard, where a single timeline correlates request volume, error rate, and saturation across every service.',
+  'The documentation goes to some length to explain the reasoning behind these choices rather than simply listing the knobs that happen to exist.',
+  'In practice most requests flow through the happy path without anyone needing to intervene, which is exactly the outcome the design was aiming for.',
+  'Trouble tends to show up at the seams between components, so the tracing spans are stitched together to make those handoffs visible.',
+  'A background reconciler periodically compares the desired state against the observed state and nudges the two back into agreement when they drift.',
+  'Configuration is layered, so a sensible default can be overridden per environment without editing code or rebuilding the container image.',
+  'The team learned the hard way that silent retries can amplify an outage, so every retry now carries a budget and a jittered backoff.',
+  'Logs are structured as events rather than free text, which makes them far easier to aggregate, filter, and turn into alerts that actually mean something.',
+  'Whenever a schema changes the migration runs forward automatically, but the rollback path is written and tested before the change ever ships.',
+  'Caching is treated as an optimization and never as a source of truth, so a cold cache degrades latency without ever corrupting a result.',
+  'The authors emphasize that observability is a feature of the product, not an afterthought bolted on once something has already gone wrong.',
+  'Because the workload is bursty, the queue is sized to absorb short spikes while shedding load gracefully when a spike turns into a sustained flood.',
+  'New engineers are encouraged to read the incident write-ups first, since the postmortems capture the context that the code alone can never convey.',
+  'The interface is intentionally boring: predictable names, consistent errors, and no clever surprises that would force a caller to read the source.',
+  'Under the hood a small state machine tracks each job, and every transition is both logged and emitted as a metric for after-the-fact analysis.',
+  'Security review happens continuously rather than as a gate at the end, so a risky change is caught while it is still cheap to revise.',
+  'The rollout strategy favors small, frequent releases, which keeps the blast radius of any single mistake reassuringly small.',
+  'Data at rest is encrypted and access is scoped narrowly, so a compromised credential exposes far less than it otherwise might.',
+  'The scheduler is careful to spread work across availability zones so that losing one zone never takes the whole service offline.',
+  'Feature flags let the team decouple deployment from release, shipping code dark and turning it on only once the metrics look healthy.',
+  'A great deal of effort went into making the failure modes explicit, because a system that fails predictably is far easier to operate than one that fails creatively.',
+  'The onboarding guide walks through a real request end to end, pausing at each hop to explain what the component does and why it exists.',
+  'Rate limits are applied per tenant rather than globally, which prevents a single noisy customer from degrading the experience for everyone else.',
+  'Whenever possible the system prefers idempotent operations, so a retry that arrives twice produces the same result as a request that arrived once.',
+  'The metrics pipeline samples aggressively at high volume, trading a little precision for the ability to keep dashboards responsive during an incident.',
+];
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Deterministic, varied natural prose of ~`targetChars`, grouped into paragraphs. */
+export function makeProseContext(targetChars = 9000, seed = 7) {
+  const rand = mulberry32(seed);
+  const paragraphs = [];
+  let len = 0;
+  while (len < targetChars) {
+    const n = 4 + Math.floor(rand() * 4);
+    const sentences = [];
+    for (let i = 0; i < n; i++) {
+      sentences.push(PROSE_SENTENCES[Math.floor(rand() * PROSE_SENTENCES.length)]);
+    }
+    const para = sentences.join(' ');
+    paragraphs.push(para);
+    len += para.length + 2;
+  }
+  return paragraphs.join('\n\n').slice(0, targetChars);
+}
+
 /** Effective input tokens for a routed body: text (base64 stripped) + optical image tokens. */
 export function effectiveTokens(routedBody, report) {
   const imageTokens = report.rows

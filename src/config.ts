@@ -46,6 +46,16 @@ export interface SemanticConfig {
   readonly healthTimeoutMs: number;
   /** Milliseconds to wait for a spawned sidecar to become healthy. */
   readonly spawnReadyTimeoutMs: number;
+  /**
+   * Also hand headroom the large plain-text prose blocks in non-recent USER turns
+   * (not just `tool_result` blocks). This routes prose to headroom's ML prose
+   * compressor (Kompress) — the region pixroom otherwise passes through raw.
+   * Off by default: recent turns and model output are never touched, but user
+   * prose is content, so it stays opt-in. Reversible via CCR when offloaded.
+   */
+  readonly includeUserProse: boolean;
+  /** Per-block floor (chars) for a user prose block to be worth compressing. */
+  readonly proseMinChars: number;
 }
 
 export interface CcrConfig {
@@ -151,6 +161,8 @@ export function loadConfig(overrides: PixroomConfigOverrides = {}): PixroomConfi
       minTokensToCompress: envInt('PIXROOM_MIN_TOKENS', 250),
       healthTimeoutMs: envInt('PIXROOM_HEALTH_TIMEOUT_MS', 1500),
       spawnReadyTimeoutMs: envInt('PIXROOM_SPAWN_READY_TIMEOUT_MS', 20000),
+      includeUserProse: envBool('PIXROOM_SEMANTIC_PROSE', false),
+      proseMinChars: envInt('PIXROOM_SEMANTIC_PROSE_MIN_CHARS', 800),
     },
     ccr: {
       injectRetrieveTool: envBool('PIXROOM_CCR_TOOL', true),

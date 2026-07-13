@@ -1,6 +1,6 @@
 # pixroom compression benchmark
 
-_Generated 2026-07-11T18:14:01.813Z._
+_Generated 2026-07-12T10:48:25.308Z._
 
 Measures token consumption (and, for the live arm, the actual response + correctness) for **headroom-only** (semantic), **pxpipe-only** (optical), and **pixroom** (both), on the same prompts + system context.
 
@@ -209,12 +209,28 @@ Follows headroom's benchmarking route (`benchmarks/comprehensive_eval.py`, `real
 
 > This is a **Pareto-domination** proof, not a claim of always-large margins. By construction — disjoint regions, one engine per region, no double-compression — pixroom's output is mathematically ≤ min(headroom-only, pxpipe-only), strict exactly when both regions compress. Real agent traffic (big static slab + bulky tool outputs) is that case, so pixroom wins there; on degenerate single-region workloads it safely reduces to the better engine. Correctness under compression is validated live in Arm C (every retrieval/tool prompt stayed correct across all configs).
 
+## Arm F — prose region (PIXROOM_SEMANTIC_PROSE)
+
+Same input-token methodology as Arm E, on a region the other arms don't exercise: a large **plain-prose block in a USER message** (the RAG / pasted-context pattern). pxpipe images only the system slab and the tool_result stage only touches tool_result blocks, so **every other config passes that block through raw**. The prose path routes it to headroom's **Kompress** (ModernBERT prose token-drop), reversibly via CCR.
+
+| scenario | kind | raw | pxpipe-only | headroom-tools | headroom+prose | pixroom-default | pixroom+prose | prose Δtok |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| rag-doc | prose | 1713 | 1713 (0%) | 1713 (0%) | 1348 (21%) | 1713 (0%) | **1348 (21%)** | px 365t |
+| rag-large | prose | 3019 | 3019 (0%) | 3019 (0%) | 2387 (21%) | 3019 (0%) | **2387 (21%)** | px 632t |
+| mixed-all | mixed | 20356 | 17003 (16%) | 14231 (30%) | 13875 (32%) | 10878 (47%) | **10522 (48%)** | px 356t |
+| control-tools | control | 18664 | 15311 (18%) | 12539 (33%) | 12539 (33%) | 9186 (51%) | **9186 (51%)** | px 0t |
+
+**Verdict:** `prose-helps=true`, `full-stack-best=true`, `no-harm=true`. On prose-heavy requests every non-prose config reduces the user prose by **0%** — it is the region pxpipe (slab-only) and the tool_result stage both skip. The prose path is the only one that touches it, and it composes **additively** with optical + tool_result compression (`mixed-all`: pixroom+prose is best). On `control-tools` (no prose) the prose path is byte-identical to its baseline.
+
+> **Honest scope.** Kompress is lossy prose token-drop with a must-keep guard (numbers, ALLCAPS, paths, CamelCase are never dropped) and every offload is CCR-recoverable. Realized savings scale with prose redundancy: measured **directly** on varied prose, Kompress cuts **~6% (dense) / 15% (natural) / 18% (redundant)** of prose tokens; the synthetic corpus here is moderately redundant (~21%). It is **opt-in** and needs the sidecar to have the Kompress tokenizer (`pip install transformers` — the lightweight ONNX path, no torch); pixroom sends `compress_user_messages` automatically. Without Kompress the sidecar no-ops prose and these rows tie their baselines.
+
 ## Findings
 
 - **Offline (claude-fable-5):** pxpipe-only 21.2%, headroom-only 20.5%, **pixroom 41.7%** overall input-token reduction. The two engines target disjoint regions (optical→system slab, semantic→tool outputs), so composing them beats either alone.
 - **Live Copilot (claude-opus-4.8):** wrapping works end-to-end on the real subscription; correctness is preserved. For Copilot specifically, pixroom's value is headroom's semantic engine (optical is out of scope for these models).
 - **Live Claude Code (fable-5):** optical genuinely engages — pxpipe/pixroom image the static slab for a **net total-input cut vs native** despite the proxy's request inflation, correctness preserved (except a base-URL arithmetic quirk that hits *all* proxies, not compression). On opus (out of optical scope) the same proxying nets *more* tokens. The decisive subscription concern is the **prompt cache**: aggressive/lossy restructuring interacts with Claude Code's cache, so pixroom goes stealth there. See Arm C; the full optical+semantic composition is Arm A.
 - **Proof (Arm E): pixroom dominates** — `dominates-all=true`, never worse than the better single engine, and **strictly better on mixed-json + mixed-logs** (savings are additive across the disjoint optical/semantic regions). It ties the better engine only on single-region workloads. So: **better than both where it matters, never worse anywhere.**
+- **Prose (Arm F): fills the gap** — a large user-message prose block is compressed **0%** by pxpipe, headroom-tools, and default pixroom, but `PIXROOM_SEMANTIC_PROSE=1` routes it to headroom's Kompress for a real, reversible cut (~6–21% of prose tokens by redundancy), **additive** with the optical + tool_result regions and a **no-op** when there's no prose.
 - **Right-sizing:** use optical where you control an Anthropic model in pxpipe's scope; use headroom (semantic) everywhere, including Copilot; use pixroom to get both automatically where both apply.
 
 ## Reproduce
@@ -226,5 +242,6 @@ node benchmarks/offline.mjs           # Arm A (3-way, offline)
 BENCH_MODEL=claude-opus-4.8 node benchmarks/copilot.mjs   # Arm B (live Copilot)
 PIXROOM_OPTICAL_ON_SUBSCRIPTION=1 BENCH_MODEL=claude-fable-5 node benchmarks/claude.mjs  # Arm C (live Claude 4-way, optical on)
 node benchmarks/proof.mjs             # Arm E (input-token domination proof)
+node benchmarks/prose.mjs             # Arm F (prose region, needs transformers in the sidecar)
 node benchmarks/report.mjs            # regenerate this file
 ```

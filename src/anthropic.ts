@@ -3,10 +3,11 @@
  *
  * pixroom's router hands each region to exactly one engine. This module isolates
  * the *semantic* region of an Anthropic request — the `tool_result` text blocks in
- * non-recent turns — so the headroom stage can compress them while pxpipe images the
- * static system+tools slab and recent turns stay byte-exact
- * (planning/end_product.md §3). It never touches `system`, `tools`, images, or the
- * last `protectRecent` turns.
+ * non-recent turns, and (opt-in) large plain-text prose in non-recent user turns —
+ * so the headroom stage can compress them while pxpipe images the static
+ * system+tools slab and recent turns stay byte-exact
+ * (planning/end_product.md §3). It never touches `system`, `tools`, images, model
+ * output, or the last `protectRecent` turns.
  */
 
 const decoder = new TextDecoder();
@@ -135,8 +136,89 @@ export function applyCompressedToolResults(
 }
 
 /** Total chars across a set of targets (denominator for gate/estimate). */
-export function totalChars(targets: readonly ToolResultTarget[]): number {
+export function totalChars(targets: readonly { readonly text: string }[]): number {
   let n = 0;
   for (const t of targets) n += t.text.length;
   return n;
+}
+
+/**
+ * A plain-text prose region eligible for semantic compression. `blockIndex === -1`
+ * marks a message whose `content` is a raw string (rewritten wholesale on reinject).
+ */
+export interface ProseTarget {
+  readonly messageIndex: number;
+  readonly blockIndex: number;
+  readonly text: string;
+}
+
+/**
+ * Collect large plain-`text` prose in non-recent USER messages — the region both
+ * pxpipe (static slab) and the tool_result stage skip, so it otherwise passes
+ * through raw. Assistant turns, `tool_result` blocks, images/non-text blocks,
+ * `system`, and the last `protectRecent` turns are never touched: this only adds
+ * headroom coverage, never risks fidelity of model output or recent context.
+ */
+export function collectProseTargets(
+  body: Record<string, unknown>,
+  opts: { protectRecent: number; minChars: number },
+): ProseTarget[] {
+  const messages = getMessages(body);
+  const cutoff = Math.max(0, messages.length - Math.max(0, opts.protectRecent));
+  const targets: ProseTarget[] = [];
+
+  for (let mi = 0; mi < cutoff; mi++) {
+    const msg = messages[mi];
+    if (msg == null || typeof msg !== 'object') continue;
+    if ((msg as { role?: unknown }).role !== 'user') continue;
+    const content = (msg as { content?: unknown }).content;
+    if (typeof content === 'string') {
+      if (content.length >= opts.minChars) {
+        targets.push({ messageIndex: mi, blockIndex: -1, text: content });
+      }
+      continue;
+    }
+    if (!Array.isArray(content)) continue;
+    for (let bi = 0; bi < content.length; bi++) {
+      const block = content[bi];
+      if (block == null || typeof block !== 'object') continue;
+      const b = block as Block;
+      if (b.type !== 'text' || typeof b.text !== 'string') continue;
+      if (b.text.length < opts.minChars) continue;
+      targets.push({ messageIndex: mi, blockIndex: bi, text: b.text });
+    }
+  }
+  return targets;
+}
+
+/**
+ * Reinject compressed prose into the collected targets, in order (mirror of
+ * {@link applyCompressedToolResults}). Mutates `body` in place; caller guarantees
+ * `compressed.length === targets.length`.
+ */
+export function applyCompressedProse(
+  body: Record<string, unknown>,
+  targets: readonly ProseTarget[],
+  compressed: readonly string[],
+): void {
+  if (compressed.length !== targets.length) {
+    throw new Error(
+      `refusing to reinject prose: ${compressed.length} compressed vs ${targets.length} targets`,
+    );
+  }
+  const messages = getMessages(body);
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i]!;
+    const msg = messages[t.messageIndex];
+    if (msg == null || typeof msg !== 'object') continue;
+    if (t.blockIndex === -1) {
+      (msg as { content?: unknown }).content = compressed[i]!;
+      continue;
+    }
+    const content = (msg as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    const block = content[t.blockIndex];
+    if (block == null || typeof block !== 'object') continue;
+    (block as Block).text = compressed[i]!;
+  }
 }

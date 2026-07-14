@@ -1,14 +1,8 @@
-<div align="center"><pre>
-██████╗ ██╗██╗  ██╗██████╗  ██████╗  ██████╗ ███╗   ███╗
-██╔══██╗██║╚██╗██╔╝██╔══██╗██╔═══██╗██╔═══██╗████╗ ████║
-██████╔╝██║ ╚███╔╝ ██████╔╝██║   ██║██║   ██║██╔████╔██║
-██╔═══╝ ██║ ██╔██╗ ██╔══██╗██║   ██║██║   ██║██║╚██╔╝██║
-██║     ██║██╔╝ ██╗██║  ██║╚██████╔╝╚██████╔╝██║ ╚═╝ ██║
-╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝     ╚═╝
-              save tokens before they reach the LLM
-</pre></div>
+<h1 align="center">Pixroom</h1>
 
-<p align="center"><strong>Point your existing agent at one local proxy and send fewer input tokens to the LLM.</strong></p>
+<p align="center"><strong>Stop paying your LLM to reread giant tool outputs.</strong></p>
+
+<p align="center">A local context optimizer for coding agents and LLM apps. Pixroom shrinks requests before they leave your machine while keeping exact data available when the model needs it.</p>
 
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg">
@@ -18,18 +12,23 @@
 </p>
 
 <p align="center">
-       <a href="#try-it-locally">Try it</a> ·
+       <a href="#start-in-30-seconds">Start</a> ·
+       <a href="#use-it-with-your-agent-or-app">Use it</a> ·
   <a href="#proof">Proof</a> ·
-  <a href="#agent-compatibility">Agents</a> ·
   <a href="#how-it-works">How it works</a> ·
+       <a href="#safety-and-privacy">Safety</a> ·
        <a href="./benchmarks/REPORT.md">Benchmarks</a>
 </p>
+
+<p align="center"><sub>Local by default | No Pixroom account | Works with your existing provider credentials</sub></p>
 
 ---
 
 ## Save up to 97.4% on eligible input
 
-Pixroom reduces the context your agents and LLM apps send to model providers. Connect it with a base URL or agent wrapper; no app rewrite is required. Pixroom removes repeated bulk before the request leaves your machine. Your app still calls the same model and receives the same response format.
+LLM agents often resend thousands of lines of old JSON, logs, source code, and tool output on every turn. Those input tokens cost money and consume context space even when the model needs only one row or count.
+
+Pixroom sits between your app and the provider. You keep the same model, SDK, and response format.
 
 In controlled paid Haiku 4.5 pilots, measured against sending the same requests directly to the LLM:
 
@@ -38,18 +37,18 @@ In controlled paid Haiku 4.5 pilots, measured against sending the same requests 
 | Mixed long-context tasks (3) | 24,249 | 14,478 | **40.3%** | 2/3 -> 2/3 |
 | Structured JSON and log tasks (2) | 22,614 | 594 | **97.4%** | 1/2 -> 2/2 |
 
-Modeled cost fell 40.1% and 97.1%, respectively. These are small controlled pilots with synthetic fixtures, one model, and one run per task. They show measured savings on eligible requests, not a promise that every prompt will shrink by the same amount.
+Modeled cost fell 40.1% and 97.1%, respectively. These were small controlled pilots with synthetic fixtures, one model, and one run per task. They show what Pixroom did on eligible requests, not what every prompt will save.
 
-## Try it locally
+## Start in 30 seconds
 
-From this checkout:
+You need Node.js 18 or newer and Git. Pixroom is not on the npm registry yet, so install the current release directly from GitHub:
 
 ```bash
-npm install && npm run build && npm link
+npm install -g git+https://github.com/CodePalAI/pixroom.git
 pixroom demo
 ```
 
-The demo runs the real exact-context optimizer without an API key, model call, or network request:
+The demo runs the real optimizer without an API key, model call, or network request:
 
 ```console
 $ pixroom demo
@@ -63,23 +62,60 @@ model-driven fallback: not needed
 network requests: 0
 ```
 
-Start the local proxy when you are ready to use it with an app or agent:
+<details>
+<summary><strong>Installing from a cloned checkout</strong></summary>
+
+```bash
+git clone https://github.com/CodePalAI/pixroom.git
+cd pixroom
+npm install && npm link
+pixroom demo
+```
+
+</details>
+
+## Use it with your agent or app
+
+### Coding agents
+
+| You use | Run |
+|---|---|
+| Claude Code | `pixroom wrap claude` |
+| Codex | `pixroom wrap codex` |
+| Aider, OpenCode, Goose, OpenHands, or Vibe | `pixroom agent list`, then `pixroom wrap <agent>` |
+| GitHub Copilot CLI | `pixroom doctor copilot`, then `pixroom wrap copilot` |
+| Cursor, Cline, or Continue | `pixroom wrap cursor` to print the base URL setup |
+
+`wrap` changes only the launched process environment. It does not rewrite your agent configuration.
+
+### Your own LLM app
+
+Start Pixroom:
 
 ```bash
 pixroom proxy
 ```
 
-Then point Anthropic clients to `http://127.0.0.1:8788` or OpenAI clients to `http://127.0.0.1:8788/v1`. You can also use one of the agent wrappers below.
+Then point your existing client at it:
 
-## What it does
+```bash
+# Anthropic-compatible clients
+ANTHROPIC_BASE_URL=http://127.0.0.1:8788 your-command
 
-- Connects through one local endpoint. Existing apps only need a base URL change.
-- Keeps eligible old JSON, logs, and source output in a bounded local store, then sends the model the exact result needed for the current question.
-- Compresses other eligible context regions when a configured optimizer can reduce them safely.
-- Preserves recent turns and passes unsupported or ambiguous requests through unchanged.
-- Reports input-token savings per request, including negative results and fallback costs.
-- Supports Anthropic Messages, OpenAI Chat Completions, and OpenAI Responses, plus CLI wrappers for popular coding agents.
-- Exposes the same runtime as a Node/TypeScript SDK and an MCP server.
+# OpenAI-compatible clients
+OPENAI_BASE_URL=http://127.0.0.1:8788/v1 your-command
+```
+
+Keep your normal provider key configured in the client. Pixroom forwards it to the provider and does not write it to disk.
+
+## What Pixroom does automatically
+
+- **Large old tool results:** keeps eligible JSON, logs, and source output in bounded local memory, then inserts the exact row, field, or count needed now.
+- **Other bulky context:** lets registered optimizers reduce eligible prompt, tool, and history regions without applying two transforms to the same bytes.
+- **Unclear or unsafe requests:** leaves them unchanged. Pixroom does not guess an answer from ambiguous data.
+- **Every request:** records an honest savings report, including negative savings and hidden continuation costs.
+
+Safe exact optimization is already on. Most users do not need to configure QCV or understand its internals.
 
 ## How it works
 
@@ -107,54 +143,64 @@ same LLM provider
 
 Provider credentials pass through to the configured upstream. Pixroom does not send them to local optimization services. Provider responses keep their original format and stream through unless a feature explicitly requires a bounded continuation.
 
-### Exact context without guesswork
+### Exact answers instead of summaries
 
-QCV does not summarize the stored dataset. It keeps the original bytes in process memory and inserts an exact result into the current turn. The default path does not ask the model to plan a retrieval.
+Suppose an agent loaded 50,000 characters of account data and now asks for one email address.
 
-QCV applies only when all of these conditions hold:
+Without Pixroom, the provider reads the full dataset again. With Pixroom, the provider receives a small dataset reference plus the exact matching email. The original bytes stay in bounded local memory. Pixroom does not summarize the data or ask the model to guess which row matters.
 
-1. The request is Anthropic Messages, OpenAI Chat, or OpenAI Responses traffic using PAYG/API-key auth. Deterministic exact prefetch also works when the response is streamed.
-2. Exactly one eligible historical dataset matches one explicit selector or supported exact count.
-3. The local operation returns a complete, bounded, unambiguous result.
-4. Manifest plus current-turn prefetch is smaller than the original tool result.
-5. Every referenced dataset fits the per-request and process memory budgets.
+<details>
+<summary><strong>When exact optimization applies</strong></summary>
 
-Repeated selectors, ranges, negation, multiple matching datasets, malformed values, and subscription traffic pass through unchanged. The model-driven fallback remains unavailable on streaming requests. Disable QCV with `PIXROOM_VIRTUAL_CONTEXT=0` or `pixroom proxy --no-qcv`.
+Pixroom changes a request only when all of these checks pass:
 
-The model-driven `pixroom_query` fallback is separate and off by default. An early version saved tokens but reduced task quality, so the default now uses only conservative exact prefetch. See the [QCV design note](./planning/query_backed_context.md) for supported operations, safety limits, and the rejected design.
+1. The request uses Anthropic Messages, OpenAI Chat, or OpenAI Responses with API-key authentication.
+2. One eligible historical dataset matches one explicit lookup or supported count.
+3. The local operation returns one complete, bounded, unambiguous result.
+4. The dataset reference plus exact result is smaller than the original tool output.
+5. The data fits the configured request and memory limits.
 
-## Use it
+Repeated selectors, ranges, negation, multiple matching datasets, malformed values, and subscription traffic pass through unchanged. Exact prefetch works with streaming responses.
 
-```bash
-pixroom proxy                           # local endpoint on 127.0.0.1:8788
-pixroom wrap claude                     # launch a supported agent through Pixroom
-pixroom agent list                      # show wrapper coverage
-pixroom integration list                # show active optimizer capabilities
-pixroom export README.md                # inspect savings without an LLM call
-pixroom replay capture.jsonl            # replay body-enabled captures offline
-pixroom mcp                             # expose compress, retrieve, and stats tools
-```
+</details>
 
-Use shadow mode to measure proposals without changing requests:
+An experimental model-driven fallback exists for harder Anthropic questions, but it is off by default because an earlier version saved tokens while reducing task quality. Disable all exact virtualization with `PIXROOM_VIRTUAL_CONTEXT=0` or `pixroom proxy --no-qcv`. The [QCV design note](./planning/query_backed_context.md) documents every boundary and the rejected design.
+
+## Advanced workflows
+
+Most users only need `pixroom wrap <agent>` or `pixroom proxy`. The commands below are for evaluation and integration work.
+
+<details>
+<summary><strong>Show capture, telemetry, SDK, and MCP workflows</strong></summary>
+
+<br>
+
+### Preview changes without applying them
 
 ```bash
 pixroom proxy --mode shadow --port 8788
 ```
 
-Capture replayable requests only on a trusted machine. Bodies are never captured unless explicitly enabled:
+### Capture and replay your own traffic
+
+Capture bodies only on a trusted machine. Pixroom records metadata by default and includes prompts only when you explicitly enable them:
 
 ```bash
 PIXROOM_CAPTURE_PATH=.pixroom/capture.jsonl PIXROOM_CAPTURE_BODIES=1 pixroom proxy
 pixroom replay .pixroom/capture.jsonl
 ```
 
-Export content-free optimization spans to an OTLP/HTTP collector:
+Replay runs the captured requests through the current optimizer stack without calling a provider.
+
+### Export telemetry
+
+Send content-free optimization spans to an OTLP/HTTP collector:
 
 ```bash
 PIXROOM_OTLP_ENDPOINT=http://127.0.0.1:4318/v1/traces pixroom proxy
 ```
 
-Or embed the Node/TypeScript runtime:
+### Embed the runtime
 
 ```ts
 import { createPixroom } from 'pixroom';
@@ -170,20 +216,34 @@ console.log(body);
 console.log(report.tokensSavedTotal, report.savedFraction);
 ```
 
-Public subpaths expose the integration kernel, protocol registry, normalized output events, agent registry, virtual-context APIs, capture/replay, and OTLP telemetry.
+Other useful commands:
+
+```bash
+pixroom stats               # savings from a running proxy
+pixroom export README.md    # offline transform report
+pixroom integration list    # installed optimizer capabilities
+pixroom mcp                 # MCP tools over stdio
+```
+
+Public subpaths expose the integration kernel, protocols, normalized output events, agent adapters, virtual-context APIs, capture/replay, and OTLP telemetry.
+
+</details>
 
 ## Proof
 
-### Paid requests versus raw LLM usage
+### Paid exact-context pilot
 
-These pilots sent the same fixed tasks directly to Anthropic and through Pixroom. Input usage is provider-reported. Cost uses the provider's published Haiku 4.5 rates.
+The headline result came from two fixed Haiku 4.5 tasks sent directly to Anthropic and through Pixroom:
 
-| Pilot | Raw input | Pixroom input | Reduction | Raw modeled cost | Pixroom modeled cost | Exact score |
-|---|---:|---:|---:|---:|---:|---:|
-| Mixed long-context, 3 tasks | 24,249 | 14,478 | **40.3%** | $0.024369 | $0.014598 | 2/3 -> 2/3 |
-| Exact JSON and logs, 2 tasks | 22,614 | 594 | **97.4%** | $0.022684 | $0.000664 | 1/2 -> 2/2 |
+- Provider-reported input fell from **22,614 to 594 tokens**.
+- Modeled cost fell from **$0.022684 to $0.000664**.
+- Exact score improved from **1/2 to 2/2**.
 
-The mixed-context pilot exercised Headroom semantic compression through Pixroom; its 40.3% result is integration evidence, not Pixroom-owned compression IP. The structured pilot exercised Pixroom's QCV deterministic exact path. On the log-count task, raw Haiku returned `5` for a fixture containing seven errors; Pixroom computed the exact count locally and returned `7`.
+On the log task, the raw model answered `5` for a fixture containing seven errors. Pixroom counted the exact local lines and returned `7`. See the [raw paid result](./benchmarks/results/direct-anthropic-virtual.json).
+
+A separate three-task pilot tested the optional semantic path. Input fell from 24,249 to 14,478 tokens with the same 2/3 exact score. That result validates the integration path rather than Pixroom's exact-context algorithm.
+
+These are small pilots with synthetic fixtures, one model, and one randomized pair per task. They do not establish universal model-quality parity.
 
 ### Broader offline token accounting
 
@@ -202,17 +262,17 @@ The broader exact-QCV suite runs 36 deterministic tasks across JSON lookup, filt
 
 The full [benchmark report](./benchmarks/REPORT.md) keeps live, offline, agentic, and simulated evidence separate. It also preserves failed experiments instead of averaging them into successful results.
 
-## Agent compatibility
+## Compatibility
 
-`pixroom wrap <agent>` launches the agent with temporary environment changes. It does not edit the agent's configuration files.
+| API | Exact local lookups | Streaming exact lookups | Local retrieval continuation |
+|---|:---:|:---:|:---:|
+| Anthropic Messages | Yes | Yes | Yes |
+| OpenAI Chat Completions | Yes | Yes | Yes |
+| OpenAI Responses | Yes | Yes | Yes |
 
-| Setup | Agents | Command |
-|---|---|---|
-| Launch through the local proxy | Claude Code, Codex, Aider, OpenCode, Goose, OpenHands, Vibe | `pixroom wrap <agent>` |
-| Use an existing subscription login | GitHub Copilot | `pixroom wrap copilot` |
-| Print the base URL configuration | Cursor, Cline, Continue | `pixroom wrap <agent>` |
+Exact virtualization applies to API-key traffic. Subscription and unsupported traffic pass through unchanged unless another configured optimizer can handle it.
 
-Run `pixroom agent list` for the exact traffic, delegation, and configuration coverage of each wrapper. Exact QCV applies to first-party Anthropic Messages, OpenAI Chat, and OpenAI Responses requests using API-key auth. Other traffic can use the remaining registered optimizers or pass through unchanged.
+Wrappers are included for Claude Code, Codex, Aider, OpenCode, Goose, OpenHands, Vibe, GitHub Copilot CLI, Cursor, Cline, and Continue. Run `pixroom agent list` to see whether each adapter proxies traffic, delegates to another local path, or prints configuration.
 
 ## Safety and privacy
 
@@ -222,13 +282,27 @@ Run `pixroom agent list` for the exact traffic, delegation, and configuration co
 - Audit and shadow modes inspect proposals without retaining QCV datasets or changing requests.
 - Failed proposals leave their regions unchanged; unavailable optimizers, unsupported traffic, and unsafe QCV questions pass through to the next eligible path.
 - The experimental model-driven QCV fallback is disabled by default and has a separate switch.
-- `headroom_retrieve` calls are executed inside the proxy only when every tool call in the response is Pixroom-owned. Mixed tool ownership replays the original request.
+- Local retrieval calls run inside the proxy only when every tool call in the response belongs to Pixroom. Mixed tool ownership replays the original request.
 - Durable capture is off by default and records metadata only unless `PIXROOM_CAPTURE_BODIES=1` is explicitly set. Body-enabled files contain private prompts and are forced to mode `0600`.
 - OTLP spans never include request or response content.
 
 See the [security policy](./SECURITY.md) before exposing the proxy outside a trusted machine or network.
 
-## Configuration
+## Configuration (optional)
+
+The defaults are designed for local use. These are the controls most people need:
+
+| You want to | Set |
+|---|---|
+| Change the proxy port | `PIXROOM_PORT=9000` |
+| Preview without changing requests | `PIXROOM_MODE=shadow` |
+| Turn off exact virtualization | `PIXROOM_VIRTUAL_CONTEXT=0` |
+| Reduce logs | `PIXROOM_LOG=warn` |
+
+<details>
+<summary><strong>All environment variables</strong></summary>
+
+<br>
 
 | Env | Purpose | Default |
 |---|---|---|
@@ -240,7 +314,7 @@ See the [security policy](./SECURITY.md) before exposing the proxy outside a tru
 | `PIXROOM_VIRTUAL_MAX_ENTRIES` / `PIXROOM_VIRTUAL_MAX_STORED_BYTES` | in-process exact-store limits | `256` / `67108864` |
 | `PIXROOM_VIRTUAL_MAX_DATASETS_PER_REQUEST` | maximum datasets virtualized in one request | `8` |
 | `PIXROOM_VIRTUAL_MAX_QUERY_ROUNDS` | hidden query fallback round cap | `4` |
-| `PIXROOM_CCR_CONTINUATION` | execute pure `headroom_retrieve` calls inside the proxy | `on` |
+| `PIXROOM_CCR_CONTINUATION` | execute pure local retrieval calls inside the proxy | `on` |
 | `PIXROOM_CCR_MAX_CONTINUATION_ROUNDS` | hidden CCR continuation round cap | `3` |
 | `PIXROOM_CAPTURE_PATH` | fsynced JSONL optimization capture | unset |
 | `PIXROOM_CAPTURE_BODIES` | include sensitive bodies required for replay | `off` |
@@ -253,24 +327,30 @@ See the [security policy](./SECURITY.md) before exposing the proxy outside a tru
 | `PIXROOM_OPTICAL_ON_SUBSCRIPTION` | allow lossy optical on oauth/subscription (stealth) | `off` |
 | `PIXROOM_LOG` | `silent`\|`error`\|`warn`\|`info`\|`debug` | `info` |
 
+</details>
+
 Advanced QCV limits are documented in the [design note](./planning/query_backed_context.md). Run `pixroom help` for CLI options and `pixroom doctor` to inspect the local runtime.
 
 ## Integrations
 
-Pixroom owns the proxy, QCV, protocol adapters, transactional request planning, and savings reports. Its public integration kernel also lets specialized optimizers propose changes without taking over the product's routing or safety policy.
+You can use Pixroom's exact-context path and demo with Node.js alone. Python is not required.
+
+Pixroom owns the proxy, QCV, protocol adapters, transactional request planning, and savings reports. Its public integration API also lets specialized optimizers propose changes without taking over routing or safety policy.
 
 Two standalone examples live in [`examples/integrations`](./examples/integrations/README.md): a non-compression secret-redaction policy and a deterministic JSON tool-output minifier. They import only public package exports and run with built-ins disabled.
 
-The default distribution includes [pxpipe](https://github.com/teamchong/pxpipe) for in-process optical compression and [Headroom](https://github.com/headroomlabs-ai/headroom) for optional semantic compression through a local sidecar. Install the optional sidecar with:
+The package includes [pxpipe](https://github.com/teamchong/pxpipe) for supported in-process optical compression. [Headroom](https://github.com/headroomlabs-ai/headroom) adds optional semantic compression through a local sidecar:
 
 ```bash
 pip install headroom-ai
 pixroom doctor
 ```
 
-If the sidecar is unavailable, semantic optimization becomes a no-op while QCV and other available paths continue. Configure an existing sidecar with `PIXROOM_HEADROOM_URL`, or disable auto-start with `PIXROOM_HEADROOM_AUTOSPAWN=0`. See [UPSTREAM.md](./UPSTREAM.md) for versioning and attribution.
+If the sidecar is unavailable, that stage becomes a no-op while exact QCV and other available paths continue. Configure an existing sidecar with `PIXROOM_HEADROOM_URL`, or disable auto-start with `PIXROOM_HEADROOM_AUTOSPAWN=0`. See [UPSTREAM.md](./UPSTREAM.md) for versioning and attribution.
 
-## Develop
+## Contributing
+
+Start with [`CONTRIBUTING.md`](./CONTRIBUTING.md). The main local checks are:
 
 ```bash
 npm run typecheck
@@ -286,7 +366,12 @@ npm run bench:profile:isolated  # separate load, proxy, and upstream processes
 
 ## Status
 
-**Experimental optimizer runtime.** The transactional kernel, cross-provider exact QCV, streaming-safe exact prefetch, server-side CCR continuation, durable capture/replay, OTLP export, normalized output events, agent registry, and external integration examples are implemented. Remaining proof gates are lower saturated two-hop latency, repeated live-model non-inferiority, sanitized production trace replay, and independent external adoption. The candid standalone-product decision is in [the product assessment](./planning/product_assessment.md).
+Pixroom is experimental but usable today for local evaluation and API-key traffic.
+
+- **Implemented:** cross-provider exact QCV, streaming exact prefetch, local retrieval continuation, capture/replay, OTLP export, SDK, MCP, and agent wrappers.
+- **Still being proved:** repeated live-model quality across larger task sets, real sanitized agent traces, independent adoption, and lower proxy overhead under heavy concurrency.
+
+The [product assessment](./planning/product_assessment.md) explains the evidence and current limits without marketing shortcuts.
 
 ## License
 

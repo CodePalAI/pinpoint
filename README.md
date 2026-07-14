@@ -14,6 +14,8 @@
          <a href="https://codepal.ai"><img alt="Built by CodePal" src="https://img.shields.io/badge/built%20by-CodePal-2563eb.svg"></a>
 </p>
 
+<!-- LAUNCH(npm): After `npm view pixroom version` succeeds, add npm version/download badges here. -->
+
 <p align="center">
        <a href="#try-the-exact-path-offline">Start</a> ·
        <a href="#use-it-with-your-agent-or-app">Use it</a> ·
@@ -40,18 +42,16 @@
 
 ## Try the exact path offline
 
-You need Node.js 18 or newer. Run the exact-data demo directly from npm:
+You need Node.js 18 or newer and Git. Until the first npm release is live, use a cloned checkout:
 
 ```bash
-npx pixroom demo
-```
-
-Or install the CLI globally:
-
-```bash
-npm install -g pixroom
+git clone https://github.com/CodePalAI/pixroom.git
+cd pixroom
+npm install && npm link
 pixroom demo
 ```
+
+<!-- LAUNCH(npm): Replace the checkout flow above with `npx pixroom demo` after verifying pixroom@0.1.0 from a clean machine. -->
 
 The demo runs the production exact-data path against 1,000 JSON rows. It needs no API key, model call, or network request:
 
@@ -123,11 +123,15 @@ Modeled cost, calculated from provider-reported tokens and published prices, fel
 
 ### TypeScript SDK
 
-Install Pixroom in your app, alongside the provider SDK you already use:
+Until Pixroom is on npm, build a cloned checkout and install that local directory in your app:
 
 ```bash
-npm install pixroom
+git clone https://github.com/CodePalAI/pixroom.git
+cd pixroom && npm install && npm run build
+cd /path/to/your-app && npm install /path/to/pixroom
 ```
+
+<!-- LAUNCH(npm): Replace the checkout flow above with `npm install pixroom` after registry verification. -->
 
 Wrap an Anthropic client:
 

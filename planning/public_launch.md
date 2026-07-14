@@ -56,9 +56,11 @@ Recommended tools: VHS for deterministic terminal capture, or Screen Studio/Quic
 - [x] Set the About description to: `Exact local context virtualization for AI agents. Stop resending giant JSON, logs, and tool output.` Verified 2026-07-14.
 - [x] Set the homepage to `https://codepal.ai` until dedicated docs have a stable domain. Verified 2026-07-14.
 - [x] Keep topics focused: `llm`, `ai-agents`, `context-optimization`, `context-compression`, `token-optimization`, `claude-code`, `openai`, `anthropic`, `developer-tools`, `codepal`. Verified 2026-07-14.
-- [x] Enable GitHub Discussions. Verified 2026-07-14. Create or rename `Q&A`, `Ideas`, `Show and tell`, and `Benchmarks` categories in the web UI if they are not present.
+- [x] Enable GitHub Discussions with `Q&A`, `Ideas`, and `Show and tell`. Verified 2026-07-14.
+- [ ] Add a `Benchmarks` Discussions category in the web UI; GitHub exposes no category-creation API.
 - [x] Add the Discussions link to the README. Verified 2026-07-14.
-- [ ] Pin a welcome discussion with the demo, supported operations, current limits, and a request for sanitized traces and independent replications.
+- [x] Publish a welcome discussion with the demo, supported operations, current limits, and a request for sanitized traces and independent replications: [Discussion #2](https://github.com/CodePalAI/pixroom/discussions/2).
+- [ ] Pin [Discussion #2](https://github.com/CodePalAI/pixroom/discussions/2) in the web UI; GitHub exposes no pin-discussion API mutation.
 - [ ] Create 5-10 scoped `good first issue` items before launch. Prefer protocol fixtures, docs, adapters, and adversarial cases over architecture rewrites.
 - [ ] Confirm bug, optimizer, and benchmark-replication issue forms work while logged out of the maintainer account.
 - [ ] Add a Code of Conduct only if CodePal is prepared to enforce it and names a private reporting channel.

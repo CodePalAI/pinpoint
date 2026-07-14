@@ -89,6 +89,27 @@ describe('IntegrationRegistry and IntegrationPipeline', () => {
     expect(ctx.body).toEqual({ value: 'original' });
   });
 
+  it('isolates the live context from integration analysis mutations', async () => {
+    const mutating = integration('mutating', 10, 'system', 'proposed');
+    const registry = new IntegrationRegistry().register({
+      ...mutating,
+      async propose(ctx) {
+        (ctx.body as { value: string }).value = 'mutated directly';
+        (ctx.reversible as Array<{ id: string; origin: 'semantic' }>).push({
+          id: 'leaked',
+          origin: 'semantic',
+        });
+        return mutating.propose(ctx);
+      },
+    });
+    const ctx = context();
+
+    await new IntegrationPipeline(registry).run(ctx, { mode: 'shadow' });
+
+    expect(ctx.body).toEqual({ value: 'original' });
+    expect(ctx.reversible).toEqual([]);
+  });
+
   it('does not execute integration analysis in audit mode', async () => {
     let proposed = false;
     const candidate = integration('audited', 10, 'system', 'nope');

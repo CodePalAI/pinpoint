@@ -1,7 +1,7 @@
 import type { RequestContext } from '../types.js';
 import { DeterministicPlanner } from './planner.js';
 import type { IntegrationRegistry } from './registry.js';
-import { transactProposal } from './transaction.js';
+import { cloneRequestContext, transactProposal } from './transaction.js';
 import type {
   PlanDecision,
   ProcessorIntegration,
@@ -45,7 +45,7 @@ export class IntegrationPipeline {
       if (mode === 'audit') continue;
 
       try {
-        const proposal = await integration.propose(ctx);
+        const proposal = await integration.propose(cloneRequestContext(ctx));
         const decision = planner.consider(proposal);
         decisions.push(decision);
         if (decision.status === 'rejected') continue;

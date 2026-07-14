@@ -434,6 +434,7 @@ The defaults are designed for local use. These are the controls most people need
 | Env | Purpose | Default |
 |---|---|---|
 | `PINPOINT_HOST` / `PINPOINT_PORT` | listen interface / port | `127.0.0.1` / `8788` |
+| `PINPOINT_MAX_INSPECTION_BYTES` | maximum request bytes buffered for optimization; larger requests stream unchanged | `33554432` |
 | `PINPOINT_MODE` | `audit` (no processors), `shadow` (propose only), `optimize` (commit), `enforce` (reserved output policy) | `optimize` |
 | `PINPOINT_VIRTUAL_CONTEXT` | exact-data path; set `0` to turn it off | `on` |
 | `PINPOINT_VIRTUAL_QUERY_FALLBACK` | model-planned retrieval for harder Anthropic questions (experimental) | `off` |
@@ -443,13 +444,16 @@ The defaults are designed for local use. These are the controls most people need
 | `PINPOINT_VIRTUAL_MAX_QUERY_ROUNDS` | hidden query fallback round cap | `4` |
 | `PINPOINT_CCR_CONTINUATION` | execute pure local retrieval calls inside the proxy | `on` |
 | `PINPOINT_CCR_MAX_CONTINUATION_ROUNDS` | maximum extra provider rounds for local retrieval | `3` |
+| `PINPOINT_CCR_MAX_ENTRIES` / `PINPOINT_CCR_MAX_STORED_BYTES` | in-process reversible handle limits | `1000` / `67108864` |
+| `PINPOINT_CCR_TTL_MS` | reversible handle retention time | `1800000` |
+| `PINPOINT_HEADROOM_REQUEST_TIMEOUT_MS` | local compression/retrieval request timeout | `60000` |
 | `PINPOINT_CAPTURE_PATH` | fsynced JSONL optimization capture | unset |
 | `PINPOINT_CAPTURE_BODIES` | include sensitive bodies required for replay | `off` |
 | `PINPOINT_CAPTURE_MAX_BYTES` / `PINPOINT_CAPTURE_MAX_FILES` | bounded JSONL rotation | `268435456` / `3` |
 | `PINPOINT_OTLP_ENDPOINT` | OpenTelemetry OTLP/HTTP endpoint | unset |
 | `PINPOINT_OTLP_HEADERS` | collector headers as comma-separated `key=value` pairs | unset |
 | `PINPOINT_OPTICAL` / `PINPOINT_SEMANTIC` | image-based and text-based compression switches | `on` |
-| `PINPOINT_MODELS` | models allowed to use image-based compression; `off` disables it | integration default |
+| `PINPOINT_MODELS` | models allowed to use image-based compression; `off` disables it | `claude-fable-5` |
 | `PINPOINT_SEMANTIC_PROSE` | text-compress large prose from older user turns | `off` |
 | `PINPOINT_OPTICAL_ON_SUBSCRIPTION` | allow lossy image-based compression on subscription traffic | `off` |
 | `PINPOINT_LOG` | `silent`\|`error`\|`warn`\|`info`\|`debug` | `info` |

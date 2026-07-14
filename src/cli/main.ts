@@ -62,6 +62,7 @@ COMMANDS
 
 COMMON ENV
   PINPOINT_HOST / PINPOINT_PORT        listen interface / port (default 127.0.0.1:8788)
+  PINPOINT_MAX_INSPECTION_BYTES        request inspection cap (default 33554432)
   PINPOINT_MODE                       audit|shadow|optimize|enforce (default optimize)
   PINPOINT_MODELS                     optical model scope CSV; 'off' disables; unset = pxpipe default
   PINPOINT_OPTICAL / PINPOINT_SEMANTIC on/off master switches
@@ -269,7 +270,7 @@ async function cmdDoctor(rest: string[]): Promise<void> {
     `capture:          ${cfg.capture.path ? `${cfg.capture.includeBodies ? 'bodies' : 'metadata'} -> ${cfg.capture.path}` : 'disabled'}`,
   );
   lines.push(`OTLP traces:      ${cfg.telemetry.endpoint || 'disabled'}`);
-  lines.push(`optical scope:    ${cfg.optical.allowedModelBases == null ? 'pxpipe default (Fable-5)' : `[${cfg.optical.allowedModelBases.join(', ') || 'none'}]`}`);
+  lines.push(`optical scope:    ${cfg.optical.allowedModelBases == null ? '[claude-fable-5]' : `[${cfg.optical.allowedModelBases.join(', ') || 'none'}]`}`);
   lines.push('');
   lines.push(
     sidecar === 'unavailable'

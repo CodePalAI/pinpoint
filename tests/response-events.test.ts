@@ -97,4 +97,41 @@ describe('createResponseEventDecoder', () => {
     expect(events).toContainEqual({ type: 'stop', reason: 'stop' });
     expect(events).toContainEqual({ type: 'usage', inputTokens: 10, outputTokens: 2 });
   });
+
+  it('normalizes non-stream OpenAI Responses message text', () => {
+    const events: ResponseEvent[] = [];
+    const decoder = createResponseEventDecoder({
+      provider: 'openai',
+      contentType: 'application/json',
+      onEvent: (event) => events.push(event),
+    });
+    decoder.push(
+      new TextEncoder().encode(
+        JSON.stringify({
+          id: 'resp_1',
+          object: 'response',
+          status: 'completed',
+          output: [{
+            type: 'message',
+            role: 'assistant',
+            content: [
+              { type: 'output_text', text: 'first' },
+              { type: 'refusal', refusal: 'not emitted as text' },
+              { type: 'output_text', text: ' second' },
+            ],
+          }],
+          usage: { input_tokens: 12, output_tokens: 3 },
+        }),
+      ),
+    );
+    decoder.end();
+
+    expect(events.filter((event) => event.type === 'text-delta')).toEqual([
+      { type: 'text-delta', text: 'first' },
+      { type: 'text-delta', text: ' second' },
+    ]);
+    expect(events).toContainEqual({ type: 'usage', inputTokens: 12, outputTokens: 3 });
+    expect(events).toContainEqual({ type: 'stop', reason: 'stop' });
+    expect(events.at(-1)).toEqual({ type: 'response-end' });
+  });
 });

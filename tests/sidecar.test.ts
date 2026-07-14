@@ -60,6 +60,7 @@ process.on('SIGTERM', () => server.close(() => process.exit(0)));
     process.env.HEADROOM_HOST = '0.0.0.0';
     process.env.HEADROOM_CCR_BACKEND = 'sqlite';
     process.env.HEADROOM_TELEMETRY = 'on';
+    process.env.PINPOINT_HEADROOM_AUTOSPAWN = '1';
     const port = await unusedPort();
     const config = loadConfig({
       semantic: {

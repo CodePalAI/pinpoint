@@ -47,7 +47,7 @@ Recommended tools: VHS for deterministic terminal capture, or Screen Studio/Quic
 - [ ] Publish GitHub Release `v0.1.0`; verify the release workflow publishes `@codepal/pinpoint@0.1.0` with provenance.
 - [ ] On a clean Node 18, 20, and 22 environment, run `npx @codepal/pinpoint@0.1.0 demo`, import every public subpath, and test `pinpoint --help`.
 - [ ] Confirm `npm view @codepal/pinpoint version repository.url dist.integrity` points to this repository.
-- [ ] Replace all `LAUNCH(npm)` comments in the README. Switch install commands to `npx @codepal/pinpoint demo`, `npm install -g @codepal/pinpoint`, and `npm install @codepal/pinpoint`.
+- [ ] After the registry confirms `@codepal/pinpoint@0.1.0`, replace all `LAUNCH(npm)` comments and switch install commands to `npx @codepal/pinpoint demo`, `npm install -g @codepal/pinpoint`, and `npm install @codepal/pinpoint`.
 - [ ] Add npm version and weekly-download badges only after the registry data exists.
 - [ ] Create a signed `v0.1.0` tag and attach the npm tarball SHA-512/integrity value to the release notes.
 

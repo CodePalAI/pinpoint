@@ -144,4 +144,39 @@ describe('ContentRouter end-to-end', () => {
 
     await px.shutdown();
   });
+
+  it('times out hung sidecar compression and retrieval requests', async () => {
+    const server = http.createServer((request, response) => {
+      if (request.url === '/health') {
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end('{}');
+      }
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    const px = createPinpoint({
+      optical: { enabled: false },
+      semantic: {
+        enabled: true,
+        autoSpawn: false,
+        sidecarUrl: `http://127.0.0.1:${port}`,
+        requestTimeoutMs: 50,
+        protectRecent: 0,
+        minTokensToCompress: 10,
+      },
+      logLevel: 'silent',
+    });
+    const original = 'x'.repeat(3000);
+
+    const routed = await px.route('anthropic', 'claude-fable-5', bodyWithToolResult(original));
+    expect(routed.report.rows.find((row) => row.stage === 'semantic')).toMatchObject({
+      applied: false,
+      reason: 'error',
+    });
+    px.ccr.registerHashes(['hung-hash']);
+    expect(await px.retrieve('hung-hash')).toBeNull();
+
+    await px.shutdown();
+    await closeTestServer(server);
+  });
 });

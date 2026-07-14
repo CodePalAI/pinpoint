@@ -50,9 +50,31 @@ describe('output integrations', () => {
       .register({ id: 'healthy', onEvent: (event) => { received.push(event); } });
 
     registry.dispatch({ type: 'text-delta', text: 'ok' }, context);
-    await Promise.resolve();
+    await registry.flush();
     expect(received).toEqual([{ type: 'text-delta', text: 'ok' }]);
-    expect(failures).toEqual(['broken:boom']);
+    expect(failures).toEqual(['broken:handler_failed']);
+  });
+
+  it('preserves event order for asynchronous subscribers', async () => {
+    const received: string[] = [];
+    let releaseFirst!: () => void;
+    const first = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const registry = new OutputIntegrationRegistry().register({
+      id: 'ordered',
+      async onEvent(event) {
+        if (event.type !== 'text-delta') return;
+        if (event.text === 'first') await first;
+        received.push(event.text);
+      },
+    });
+
+    registry.dispatch({ type: 'text-delta', text: 'first' }, context);
+    registry.dispatch({ type: 'text-delta', text: 'second' }, context);
+    expect(received).toEqual([]);
+    releaseFirst();
+    await registry.flush();
+
+    expect(received).toEqual(['first', 'second']);
   });
 });
 
@@ -159,5 +181,53 @@ describe('proxy output integration surface', () => {
     expect(result.headers['content-encoding']).toBe('gzip');
     expect(result.body).toEqual(compressed);
     expect(events).toEqual([]);
+  });
+
+  it('waits for asynchronous output integrations during close', async () => {
+    const upstream = http.createServer((request, response) => {
+      request.resume();
+      request.on('end', () => {
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({
+          choices: [{ message: { content: 'observed' }, finish_reason: 'stop' }],
+        }));
+      });
+    });
+    upstreams.push(upstream);
+    await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const proxy = createProxyServer(
+      {
+        port: 0,
+        upstreams: { openai: `http://127.0.0.1:${upstreamPort}` },
+        semantic: { enabled: false },
+        optical: { enabled: false },
+        logLevel: 'silent',
+      },
+      {
+        outputIntegrations: [{
+          id: 'test.delayed',
+          onEvent: (event) => event.type === 'text-delta' ? gate : undefined,
+        }],
+      },
+    );
+    proxies.push(proxy);
+    const { port } = await proxy.listen();
+    const response = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer test', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-test', messages: [] }),
+    });
+    await response.json();
+
+    let closed = false;
+    const closePromise = proxy.close().then(() => { closed = true; });
+    await Promise.resolve();
+    expect(closed).toBe(false);
+    release();
+    await closePromise;
+    expect(closed).toBe(true);
   });
 });

@@ -251,7 +251,7 @@ export class SemanticCompressor implements Compressor, CcrRetriever {
     model: string,
     config: Record<string, unknown>,
   ): Promise<CompressResponse> {
-    const res = await fetch(`${this.sidecar.url}/v1/compress`, {
+    const res = await this.fetchSidecar(`${this.sidecar.url}/v1/compress`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ messages, model, config }),
@@ -275,12 +275,27 @@ export class SemanticCompressor implements Compressor, CcrRetriever {
   async retrieveHash(hash: string): Promise<string | null> {
     if (!this.sidecar.available) return null;
     try {
-      const res = await fetch(`${this.sidecar.url}/v1/retrieve/${encodeURIComponent(hash)}`);
+      const res = await this.fetchSidecar(
+        `${this.sidecar.url}/v1/retrieve/${encodeURIComponent(hash)}`,
+      );
       if (!res.ok) return null;
       const data = (await res.json()) as { original_content?: unknown };
       return typeof data.original_content === 'string' ? data.original_content : null;
     } catch {
       return null;
+    }
+  }
+
+  private async fetchSidecar(url: string, init?: RequestInit): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Math.max(1, this.cfg.requestTimeoutMs),
+    );
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

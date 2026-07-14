@@ -166,7 +166,11 @@ export function createRuntime(options: RuntimeOptions = {}): Pinpoint {
       : undefined;
 
   // The semantic compressor doubles as the CCR retriever for headroom hashes.
-  const ccr = new CcrStore(semantic, recorder);
+  const ccr = new CcrStore(semantic, recorder, {
+    maxEntries: config.ccr.maxEntries,
+    maxStoredBytes: config.ccr.maxStoredBytes,
+    ttlMs: config.ccr.ttlMs,
+  });
   const pipeline = new IntegrationPipeline(integrations);
   const router = new ContentRouter(
     pipeline,
@@ -261,6 +265,7 @@ export function createRuntime(options: RuntimeOptions = {}): Pinpoint {
       policy?.save();
       await telemetry.flush();
       await sidecar.stop();
+      ccr.clear();
     },
   };
 }

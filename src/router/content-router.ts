@@ -120,7 +120,10 @@ export class ContentRouter {
     let adaptive: RouteResult['adaptive'];
     const pipelineResult = await this.pipeline.run(ctx, {
       mode: this.mode,
-      validate,
+      validate: async (candidate, proposal) => {
+        this.ccr.validateReversible(candidate.reversible);
+        await validate?.(candidate, proposal);
+      },
       beforeIntegration: (integration) => {
         if (integration.id !== PXPIPE_OPTICAL_INTEGRATION_ID || !this.controller) return true;
 
@@ -150,7 +153,9 @@ export class ContentRouter {
 
     // Inject the retrieve tool last so its description isn't imaged by pxpipe.
     let ccrToolNeeded = false;
-    const ccrContextIds = new Set(ctx.reversible.map((handle) => handle.id));
+    const ccrContextIds = new Set(
+      ctx.reversible.map((handle) => handle.id).filter((id) => this.ccr.has(id)),
+    );
     for (const id of ccrReferences(ctx.body)) {
       if (this.ccr.has(id)) ccrContextIds.add(id);
     }

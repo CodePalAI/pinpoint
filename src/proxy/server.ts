@@ -85,12 +85,58 @@ function detectProvider(pathname: string, headers: http.IncomingHttpHeaders): Pr
   return 'anthropic';
 }
 
-function readBody(req: http.IncomingMessage): Promise<Uint8Array> {
+type InspectedBody =
+  | { readonly complete: true; readonly bytes: Uint8Array }
+  | { readonly complete: false; readonly prefix: Uint8Array };
+
+function inspectBody(req: http.IncomingMessage, maxBytes: number): Promise<InspectedBody> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
-    req.on('end', () => resolve(new Uint8Array(Buffer.concat(chunks))));
-    req.on('error', reject);
+    let bytes = 0;
+    const limit = Math.max(1, maxBytes);
+    const cleanup = (): void => {
+      req.off('data', onData);
+      req.off('end', onEnd);
+      req.off('error', onError);
+      req.off('aborted', onAborted);
+    };
+    const overflow = (): void => {
+      cleanup();
+      resolve({ complete: false, prefix: new Uint8Array(Buffer.concat(chunks, bytes)) });
+    };
+    const onData = (chunk: Buffer): void => {
+      const remaining = limit + 1 - bytes;
+      if (chunk.byteLength <= remaining) {
+        chunks.push(chunk);
+        bytes += chunk.byteLength;
+        if (bytes > limit) {
+          req.pause();
+          overflow();
+        }
+        return;
+      }
+
+      req.pause();
+      if (remaining > 0) {
+        chunks.push(chunk.subarray(0, remaining));
+        bytes += remaining;
+      }
+      req.unshift(chunk.subarray(remaining));
+      overflow();
+    };
+    const onEnd = (): void => {
+      cleanup();
+      resolve({ complete: true, bytes: new Uint8Array(Buffer.concat(chunks, bytes)) });
+    };
+    const onError = (error: Error): void => {
+      cleanup();
+      reject(error);
+    };
+    const onAborted = (): void => onError(new Error('client aborted'));
+    req.on('data', onData);
+    req.once('end', onEnd);
+    req.once('error', onError);
+    req.once('aborted', onAborted);
   });
 }
 
@@ -341,14 +387,17 @@ export function createProxyServer(
     const provider = protocol?.provider ?? detectProvider(pathname, req.headers);
     const inspection = protocol ? pinpoint.requestInspection(provider) : 'none';
     const knownLength = contentLength(req.headers);
+    const inspectionLimit = Math.max(1, config.maxInspectionBytes);
     const inspectRequest =
       inspection !== 'none' &&
+      (knownLength === undefined || knownLength <= inspectionLimit) &&
       !(
         inspection === 'tool-results' &&
         knownLength !== undefined &&
         knownLength < Math.max(1, config.virtualContext.minChars)
       );
     let outBytes: Uint8Array | undefined;
+    let bodyPrefix: Uint8Array | undefined;
     let originalBodyBytes: Uint8Array | undefined;
     let localAnthropicContinuation = false;
     let localOpenAiContinuation = false;
@@ -357,7 +406,22 @@ export function createProxyServer(
     let ccrContextIds: readonly string[] = [];
 
     if (protocol && inspectRequest) {
-      const bodyBytes = await readBody(req);
+      const inspected = await inspectBody(req, inspectionLimit);
+      if (!inspected.complete) {
+        bodyPrefix = inspected.prefix;
+        await forward(
+          req,
+          res,
+          provider,
+          pathname + url.search,
+          undefined,
+          protocol.id,
+          randomUUID(),
+          bodyPrefix,
+        );
+        return;
+      }
+      const bodyBytes = inspected.bytes;
       originalBodyBytes = bodyBytes;
       outBytes = bodyBytes;
       if (bodyBytes.byteLength > 0) {
@@ -833,6 +897,7 @@ export function createProxyServer(
     bodyBytes: Uint8Array | undefined,
     protocolId: string | undefined,
     exchangeId: string,
+    bodyPrefix?: Uint8Array,
   ): Promise<void> {
     const base = config.upstreams[provider].replace(/\/+$/, '');
     const target = `${base}${pathAndQuery}`;
@@ -894,6 +959,9 @@ export function createProxyServer(
         upstreamRequest.end();
       } else if (bodyBytes !== undefined) {
         upstreamRequest.end(bodyBytes);
+      } else if (bodyPrefix !== undefined) {
+        upstreamRequest.write(bodyPrefix);
+        req.pipe(upstreamRequest);
       } else {
         req.pipe(upstreamRequest);
       }
@@ -942,29 +1010,58 @@ export function createProxyServer(
     );
   }
 
-  return {
-    pinpoint,
-    async listen() {
-      await pinpoint.warmup();
-      await new Promise<void>((resolve) => server.listen(config.port, config.host, resolve));
-      const address = server.address();
-      const port = typeof address === 'object' && address != null ? address.port : config.port;
-      log.info(`pinpoint proxy listening on http://${config.host}:${port}`);
-      log.info(`  mode: ${config.mode}`);
-      log.info(`  anthropic → ${config.upstreams.anthropic}`);
-      log.info(`  openai    → ${config.upstreams.openai}`);
-      log.info(`  semantic sidecar: ${pinpoint.sidecar.status} (${pinpoint.sidecar.url})`);
-      return { host: config.host, port };
-    },
-    async close() {
-      const closePromise = new Promise<void>((resolve, reject) =>
-        server.close((err) => (err ? reject(err) : resolve())),
-      );
-      server.closeIdleConnections?.();
-      await closePromise;
+  let listenPromise: Promise<{ host: string; port: number }> | undefined;
+  let shutdownPromise: Promise<void> | undefined;
+
+  const shutdown = (): Promise<void> => {
+    shutdownPromise ??= (async () => {
+      if (server.listening) {
+        const closePromise = new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        );
+        server.closeIdleConnections?.();
+        await closePromise;
+      }
       httpAgent.destroy();
       httpsAgent.destroy();
+      await outputs.flush();
       await pinpoint.shutdown();
+    })();
+    return shutdownPromise;
+  };
+
+  return {
+    pinpoint,
+    listen() {
+      listenPromise ??= (async () => {
+        await pinpoint.warmup();
+        await new Promise<void>((resolve, reject) => {
+          const onError = (error: Error): void => {
+            server.off('listening', onListening);
+            reject(error);
+          };
+          const onListening = (): void => {
+            server.off('error', onError);
+            resolve();
+          };
+          server.once('error', onError);
+          server.once('listening', onListening);
+          server.listen(config.port, config.host);
+        });
+        const address = server.address();
+        const port = typeof address === 'object' && address != null ? address.port : config.port;
+        log.info(`pinpoint proxy listening on http://${config.host}:${port}`);
+        log.info(`  mode: ${config.mode}`);
+        log.info(`  anthropic → ${config.upstreams.anthropic}`);
+        log.info(`  openai    → ${config.upstreams.openai}`);
+        log.info(`  semantic sidecar: ${pinpoint.sidecar.status} (${pinpoint.sidecar.url})`);
+        return { host: config.host, port };
+      })().catch(async (error: unknown) => {
+        await shutdown();
+        throw error;
+      });
+      return listenPromise;
     },
+    close: shutdown,
   };
 }

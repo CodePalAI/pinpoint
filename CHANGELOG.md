@@ -30,6 +30,8 @@ All notable changes are documented here. This project follows semantic versionin
 ### Changed
 
 - Renamed the product, CLI, SDK, environment variables, npm package, and repository to Pinpoint.
+- Optical model allowlists are now runtime-local, with a reviewed Fable-5-only default.
+- Output integrations now receive events in order and are flushed during proxy shutdown.
 - Safe exact QCV now defaults on. `PINPOINT_VIRTUAL_CONTEXT=0` or `--no-qcv` disables it.
 - Model-driven query fallback is independently gated by `PINPOINT_VIRTUAL_QUERY_FALLBACK=1` or `--virtual-query-fallback`.
 - Unchanged routed requests preserve their original wire bytes.
@@ -37,6 +39,8 @@ All notable changes are documented here. This project follows semantic versionin
 
 ### Safety
 
+- Proxy optimization inspection is capped at 32 MiB by default; oversized requests stream through unchanged.
+- Third-party integration analysis now receives a cloned request context so direct proposal-time mutations cannot leak into live requests.
 - Provider validation now occurs before QCV storage commits.
 - Shadow, rejected, and rolled-back proposals retain no QCV data.
 - Mixed tools, failed continuations, invalid responses, and exhausted query rounds replay the original request.

@@ -16,8 +16,8 @@ export interface OpticalConfig {
   /** Master switch for the pxpipe optical stage. */
   readonly enabled: boolean;
   /**
-   * CSV of allowed model bases for optical imaging, or `null` to keep pxpipe's
-   * built-in default scope (Fable-5 only). Empty array disables optical entirely.
+    * Model bases allowed for optical imaging. `null` uses Pinpoint's reviewed
+    * Fable-5-only default. Empty array disables optical entirely.
    */
   readonly allowedModelBases: readonly string[] | null;
   /** Emit pxpipe `recoverable` originals and register them into the CCR store. */
@@ -47,6 +47,8 @@ export interface SemanticConfig {
   readonly healthTimeoutMs: number;
   /** Milliseconds to wait for a spawned sidecar to become healthy. */
   readonly spawnReadyTimeoutMs: number;
+  /** Milliseconds to wait for a sidecar compression or retrieval request. */
+  readonly requestTimeoutMs: number;
   /**
    * Also hand headroom the large plain-text prose blocks in non-recent USER turns
    * (not just `tool_result` blocks). This routes prose to headroom's ML prose
@@ -66,6 +68,12 @@ export interface CcrConfig {
   readonly continueToolCalls: boolean;
   /** Maximum hidden retrieval continuation rounds. */
   readonly maxContinuationRounds: number;
+  /** Maximum reversible handles retained in process memory. */
+  readonly maxEntries: number;
+  /** Maximum inline original bytes retained in process memory. */
+  readonly maxStoredBytes: number;
+  /** Time-to-live for retained handles in milliseconds. */
+  readonly ttlMs: number;
 }
 
 export interface CaptureConfig {
@@ -136,6 +144,8 @@ export interface PinpointConfig {
   readonly mode: RuntimeMode;
   readonly host: string;
   readonly port: number;
+  /** Maximum request bytes buffered for optimization inspection. */
+  readonly maxInspectionBytes: number;
   readonly upstreams: Readonly<Record<Provider, string>>;
   readonly optical: OpticalConfig;
   readonly semantic: SemanticConfig;
@@ -152,6 +162,7 @@ export interface PinpointConfigOverrides {
   mode?: RuntimeMode;
   host?: string;
   port?: number;
+  maxInspectionBytes?: number;
   upstreams?: Partial<Record<Provider, string>>;
   optical?: Partial<OpticalConfig>;
   semantic?: Partial<SemanticConfig>;
@@ -209,13 +220,13 @@ function resolveOtlpEndpoint(): string {
 
 /**
  * Resolve optical model scope. `PINPOINT_MODELS`:
- *   unset      → `null` (pxpipe default: Fable-5 only)
+ *   unset      → Fable-5 only
  *   'off'      → `[]`   (optical disabled)
  *   'a,b,c'    → those model bases allowed
  */
 function resolveOpticalScope(): readonly string[] | null {
   const raw = process.env.PINPOINT_MODELS;
-  if (raw == null || raw.trim() === '') return null;
+  if (raw == null || raw.trim() === '') return ['claude-fable-5'];
   if (raw.trim().toLowerCase() === 'off') return [];
   return raw
     .split(',')
@@ -243,6 +254,7 @@ export function loadConfig(overrides: PinpointConfigOverrides = {}): PinpointCon
     mode: resolveMode(),
     host: envStr('PINPOINT_HOST', '127.0.0.1'),
     port: envInt('PINPOINT_PORT', 8788),
+    maxInspectionBytes: envInt('PINPOINT_MAX_INSPECTION_BYTES', 32 * 1024 * 1024),
     upstreams: {
       anthropic: envStr(
         'PINPOINT_ANTHROPIC_UPSTREAM',
@@ -268,6 +280,7 @@ export function loadConfig(overrides: PinpointConfigOverrides = {}): PinpointCon
       minTokensToCompress: envInt('PINPOINT_MIN_TOKENS', 250),
       healthTimeoutMs: envInt('PINPOINT_HEALTH_TIMEOUT_MS', 1500),
       spawnReadyTimeoutMs: envInt('PINPOINT_SPAWN_READY_TIMEOUT_MS', 20000),
+      requestTimeoutMs: envInt('PINPOINT_HEADROOM_REQUEST_TIMEOUT_MS', 60000),
       includeUserProse: envBool('PINPOINT_SEMANTIC_PROSE', false),
       proseMinChars: envInt('PINPOINT_SEMANTIC_PROSE_MIN_CHARS', 800),
     },
@@ -287,6 +300,9 @@ export function loadConfig(overrides: PinpointConfigOverrides = {}): PinpointCon
       injectRetrieveTool: envBool('PINPOINT_CCR_TOOL', true),
       continueToolCalls: envBool('PINPOINT_CCR_CONTINUATION', true),
       maxContinuationRounds: envInt('PINPOINT_CCR_MAX_CONTINUATION_ROUNDS', 3),
+      maxEntries: envInt('PINPOINT_CCR_MAX_ENTRIES', 1000),
+      maxStoredBytes: envInt('PINPOINT_CCR_MAX_STORED_BYTES', 64 * 1024 * 1024),
+      ttlMs: envInt('PINPOINT_CCR_TTL_MS', 30 * 60 * 1000),
     },
     capture: {
       path: envStr('PINPOINT_CAPTURE_PATH', ''),

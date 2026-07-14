@@ -12,13 +12,12 @@
  * carry no Anthropic cache-control marker; model scope and stealth gates still apply.
  */
 
-import { transformOpenAIChatCompletions, transformOpenAIResponses } from 'pxpipe-proxy';
-import { transformAnthropicMessages, type PxpipeReason } from 'pxpipe-proxy/transform';
 import {
-  isPxpipeSupportedGptModel,
-  isPxpipeSupportedModel,
-  setAllowedModelBases,
-} from 'pxpipe-proxy/applicability';
+  countCacheControlMarkers,
+  transformOpenAIChatCompletions,
+  transformOpenAIResponses,
+  transformRequest,
+} from 'pxpipe-proxy';
 
 import type { OpticalConfig } from '../config.js';
 import type { Logger } from '../logger.js';
@@ -41,26 +40,15 @@ const SLAB_CHARS_PER_TOKEN = 2;
 const PX_PER_TOKEN = 750;
 /** Max page geometry pxpipe clamps to (1568×728) — conservative fallback per page. */
 const MAX_PAGE_PIXELS = 1568 * 728;
+const DEFAULT_ALLOWED_MODEL_BASES = ['claude-fable-5'] as const;
 
-function mapReason(reason: PxpipeReason): CompressionReason {
-  switch (reason) {
-    case 'applied':
-      return 'applied';
-    case 'unsupported_model':
-      return 'unsupported_model';
-    case 'not_profitable':
-      return 'not_profitable';
-    case 'below_min_chars':
-    case 'below_min_tokens':
-      return 'below_threshold';
-    case 'compress_disabled':
-      return 'disabled';
-    case 'parse_error':
-    case 'transform_error':
-      return 'error';
-    default:
-      return 'passthrough';
-  }
+function mapTransformReason(reason: string | undefined): CompressionReason {
+  if (reason == null) return 'passthrough';
+  if (reason.startsWith('below_min_')) return 'below_threshold';
+  if (reason.startsWith('not_profitable')) return 'not_profitable';
+  if (reason.startsWith('compress=false')) return 'disabled';
+  if (reason.startsWith('parse_error')) return 'error';
+  return 'passthrough';
 }
 
 function mapOpenAIReason(reason: string | undefined): CompressionReason {
@@ -72,14 +60,26 @@ function mapOpenAIReason(reason: string | undefined): CompressionReason {
   return 'passthrough';
 }
 
+function baseModelId(model: string): string {
+  return model.replace(/\[[^\]]*\]/g, '');
+}
+
+function supportsModel(model: string | null, allowedModelBases: readonly string[]): boolean {
+  if (model == null) return false;
+  const base = baseModelId(model);
+  return allowedModelBases.some((allowed) => base === allowed || base.startsWith(`${allowed}-`));
+}
+
 export class OpticalCompressor implements Compressor {
   readonly stage = 'optical' as const;
-  private scopeApplied = false;
+  private readonly allowedModelBases: readonly string[];
 
   constructor(
     private readonly cfg: OpticalConfig,
     private readonly log: Logger,
-  ) {}
+  ) {
+    this.allowedModelBases = cfg.allowedModelBases ?? DEFAULT_ALLOWED_MODEL_BASES;
+  }
 
   preflight(ctx: Readonly<RequestContext>): StageResult | undefined {
     if (!this.cfg.enabled) return passthroughResult('optical', 'disabled');
@@ -90,32 +90,14 @@ export class OpticalCompressor implements Compressor {
         `lossy optical disabled on ${ctx.authMode} auth (set PINPOINT_OPTICAL_ON_SUBSCRIPTION=1 to override)`,
       );
     }
-    this.ensureScope();
-    const supported =
-      ctx.provider === 'anthropic'
-        ? isPxpipeSupportedModel(ctx.model)
-        : isPxpipeSupportedGptModel(ctx.model);
-    return supported
+    return supportsModel(ctx.model, this.allowedModelBases)
       ? undefined
       : passthroughResult('optical', 'unsupported_model', ctx.model ?? undefined);
   }
 
-  /** Apply the configured model scope to pxpipe once (null ⇒ keep pxpipe's default). */
-  private ensureScope(): void {
-    if (this.scopeApplied) return;
-    if (this.cfg.allowedModelBases != null) {
-      setAllowedModelBases([...this.cfg.allowedModelBases]);
-      this.log.debug(`optical model scope set: [${this.cfg.allowedModelBases.join(', ') || '(none)'}]`);
-    }
-    this.scopeApplied = true;
-  }
-
   applicable(ctx: RequestContext): boolean {
     if (!this.cfg.enabled) return false;
-    this.ensureScope();
-    return ctx.provider === 'anthropic'
-      ? isPxpipeSupportedModel(ctx.model)
-      : isPxpipeSupportedGptModel(ctx.model);
+    return supportsModel(ctx.model, this.allowedModelBases);
   }
 
   async run(ctx: RequestContext): Promise<StageOutcome> {
@@ -130,26 +112,26 @@ export class OpticalCompressor implements Compressor {
       if (ctx.provider === 'openai') return this.runOpenAI(ctx);
 
       const inputBody = serializeBody(ctx.body);
-      const out = await transformAnthropicMessages({
-        body: inputBody,
-        model: ctx.model,
-        options: {
-          compress: true,
-          // Slab-only: keep reminders/tool_results as text (semantic stage owns them).
-          keepSharp: () => true,
-          emitRecoverable: this.cfg.emitRecoverable,
-        },
+      const out = await transformRequest(inputBody, {
+        compress: true,
+        // Slab-only: keep reminders/tool_results as text (semantic stage owns them).
+        keepSharp: () => true,
+        emitRecoverable: this.cfg.emitRecoverable,
       });
 
-      if (!out.applied) {
-        const result = passthroughResult('optical', mapReason(out.reason), out.detail);
+      if (!out.info.compressed) {
+        const result = passthroughResult(
+          'optical',
+          mapTransformReason(out.info.reason),
+          out.info.reason,
+        );
         ctx.stages.push(result);
         return { context: ctx, result };
       }
 
       // Adopt pxpipe's transformed body as the new working body.
       ctx.body = parseBody(out.body);
-      ctx.opticalOwnsCacheControl = out.cache.ownsCacheControl;
+      ctx.opticalOwnsCacheControl = countCacheControlMarkers(out.body) > 0;
 
       const staticChars = out.info.staticChars || out.info.origChars;
       const pixels = out.info.imagePixels ?? out.info.imageCount * MAX_PAGE_PIXELS;
@@ -164,7 +146,7 @@ export class OpticalCompressor implements Compressor {
         stage: 'optical',
         applied: true,
         reason: 'applied',
-        detail: `images=${out.info.imageCount} staticChars=${staticChars} ownsCacheControl=${out.cache.ownsCacheControl}`,
+        detail: `images=${out.info.imageCount} staticChars=${staticChars} ownsCacheControl=${ctx.opticalOwnsCacheControl}`,
         counterfactual: counterfactual(tokensText, tokensImage, 'estimate'),
         reversible,
       };

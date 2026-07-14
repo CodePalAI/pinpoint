@@ -8,6 +8,41 @@ function bigSystemText(): string {
 }
 
 describe('optical stage (real pxpipe, in-process)', () => {
+  it('keeps GPT 5.6 outside the reviewed default model scope', async () => {
+    const runtime = createPinpoint({ semantic: { enabled: false }, optical: { enabled: true } });
+    const routed = await runtime.route('openai', 'gpt-5.6', {
+      model: 'gpt-5.6',
+      input: 'A short request.',
+    });
+
+    expect(routed.report.rows.find((row) => row.stage === 'optical')).toMatchObject({
+      applied: false,
+      reason: 'unsupported_model',
+    });
+    await runtime.shutdown();
+  });
+
+  it('isolates optical model scopes between runtime instances', async () => {
+    const optedIn = createPinpoint({
+      semantic: { enabled: false },
+      optical: { enabled: true, allowedModelBases: ['gpt-5.6'] },
+    });
+    const defaults = createPinpoint({ semantic: { enabled: false }, optical: { enabled: true } });
+
+    const [custom, standard] = await Promise.all([
+      optedIn.route('openai', 'gpt-5.6', { model: 'gpt-5.6', input: 'A short request.' }),
+      defaults.route('openai', 'gpt-5.6', { model: 'gpt-5.6', input: 'A short request.' }),
+    ]);
+
+    expect(custom.report.rows.find((row) => row.stage === 'optical')?.reason).not.toBe(
+      'unsupported_model',
+    );
+    expect(standard.report.rows.find((row) => row.stage === 'optical')?.reason).toBe(
+      'unsupported_model',
+    );
+    await Promise.all([optedIn.shutdown(), defaults.shutdown()]);
+  });
+
   it('passes through unsupported models', async () => {
     const px = createPinpoint({ semantic: { enabled: false }, optical: { enabled: true } });
     const routed = await px.route('anthropic', 'gpt-4', {

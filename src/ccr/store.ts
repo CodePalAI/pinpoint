@@ -28,49 +28,78 @@ interface HandleMeta {
   readonly regionId?: string;
 }
 
+interface StoredHandle {
+  readonly original?: string;
+  readonly bytes: number;
+  readonly expiresAt: number;
+  readonly meta: HandleMeta;
+}
+
+export interface CcrStoreOptions {
+  readonly maxEntries?: number;
+  readonly maxStoredBytes?: number;
+  readonly ttlMs?: number;
+  readonly now?: () => number;
+}
+
 export class CcrStore {
-  /** pxpipe `rec_…` id → original text (held in-process). */
-  private readonly inline = new Map<string, string>();
-  /** headroom CCR hashes seen this session (originals live in the sidecar). */
-  private readonly hashes = new Set<string>();
-  /** id → attribution metadata (engine, content type, ratio) for the recorder. */
-  private readonly meta = new Map<string, HandleMeta>();
+  /** id → bounded original/metadata entry. Map insertion order is the LRU order. */
+  private readonly entries = new Map<string, StoredHandle>();
+  private readonly maxEntries: number;
+  private readonly maxStoredBytes: number;
+  private readonly ttlMs: number;
+  private readonly now: () => number;
+  private storedBytes = 0;
 
   constructor(
     private readonly retriever?: CcrRetriever,
     private readonly recorder?: RetrievalRecorder,
-  ) {}
+    options: CcrStoreOptions = {},
+  ) {
+    this.maxEntries = Math.max(1, options.maxEntries ?? 1000);
+    this.maxStoredBytes = Math.max(1, options.maxStoredBytes ?? 64 * 1024 * 1024);
+    this.ttlMs = Math.max(1, options.ttlMs ?? 30 * 60 * 1000);
+    this.now = options.now ?? Date.now;
+  }
+
+  /** Reject a request before commit when its own reversible batch cannot fit. */
+  validateReversible(handles: readonly ReversibleHandle[]): void {
+    const batch = this.batch(handles);
+    const bytes = [...batch.values()].reduce((total, entry) => total + entry.bytes, 0);
+    if (batch.size > this.maxEntries) {
+      throw new RangeError(`CCR batch exceeds max entries (${batch.size} > ${this.maxEntries})`);
+    }
+    if (bytes > this.maxStoredBytes) {
+      throw new RangeError(`CCR batch exceeds max bytes (${bytes} > ${this.maxStoredBytes})`);
+    }
+  }
 
   /** Register pxpipe imaged-block originals (optical stage, inline text). */
   registerReversible(handles: readonly ReversibleHandle[]): void {
-    for (const h of handles) {
-      if (h.origin === 'optical' && typeof h.original === 'string') {
-        this.inline.set(h.id, h.original);
-      } else if (h.origin === 'semantic') {
-        this.hashes.add(h.id);
-      }
-      this.noteOffer(h.id, {
-        engine: h.origin,
-        contentType: h.contentType ?? 'unknown',
-        ratio: h.ratio,
-        regionId: h.regionId,
-      });
+    this.validateReversible(handles);
+    this.sweepExpired();
+    const batch = this.batch(handles);
+    const protectedIds = new Set(batch.keys());
+    for (const [id, entry] of batch) {
+      const previous = this.entries.get(id);
+      if (previous) this.storedBytes -= previous.bytes;
+      this.entries.delete(id);
+      this.entries.set(id, entry);
+      this.storedBytes += entry.bytes;
+      if (!previous) this.noteOffer(id, entry.meta);
     }
+    this.evictToLimits(protectedIds);
   }
 
   /** Register headroom CCR hashes (semantic stage). */
   registerHashes(hashes: readonly string[]): void {
-    for (const h of hashes) {
-      if (!h) continue;
-      this.hashes.add(h);
-      this.noteOffer(h, { engine: 'semantic', contentType: 'unknown' });
-    }
+    this.registerReversible(
+      hashes.filter(Boolean).map((id) => ({ id, origin: 'semantic' as const })),
+    );
   }
 
   /** Record an offload once per id (dedup across retries) and notify the recorder. */
   private noteOffer(id: string, meta: HandleMeta): void {
-    if (this.meta.has(id)) return;
-    this.meta.set(id, meta);
     this.recorder?.recordOffer({
       id,
       engine: meta.engine,
@@ -82,11 +111,18 @@ export class CcrStore {
 
   /** Number of distinct offloaded originals tracked. */
   get size(): number {
-    return this.inline.size + this.hashes.size;
+    this.sweepExpired();
+    return this.entries.size;
+  }
+
+  /** Number of inline original bytes retained. */
+  get bytes(): number {
+    this.sweepExpired();
+    return this.storedBytes;
   }
 
   has(id: string): boolean {
-    return this.inline.has(id) || this.hashes.has(id);
+    return this.entry(id, true) !== undefined;
   }
 
   /** True when anything has been offloaded (⇒ the retrieve tool is worth injecting). */
@@ -96,10 +132,10 @@ export class CcrStore {
 
   /** Resolve an id to its original content. Inline (pxpipe) first, else sidecar (headroom). */
   async retrieve(id: string): Promise<string | null> {
-    const local = this.inline.get(id);
-    if (local != null) {
+    const entry = this.entry(id, true);
+    if (entry?.original != null) {
       this.noteRetrieved(id);
-      return local;
+      return entry.original;
     }
     // Known hash, or unknown id (a hash may have been created out of band): try the sidecar.
     const content = this.retriever ? await this.retriever.retrieveHash(id) : null;
@@ -114,7 +150,7 @@ export class CcrStore {
    * unknown ids (no-op).
    */
   noteRetrieved(id: string): void {
-    const meta = this.meta.get(id);
+    const meta = this.entry(id, true)?.meta;
     if (!meta || !this.recorder) return;
     this.recorder.recordRetrieval({
       id,
@@ -123,6 +159,70 @@ export class CcrStore {
       ratio: meta.ratio,
       regionId: meta.regionId,
     });
+  }
+
+  /** Drop every retained original and attribution record. */
+  clear(): void {
+    this.entries.clear();
+    this.storedBytes = 0;
+  }
+
+  private batch(handles: readonly ReversibleHandle[]): Map<string, StoredHandle> {
+    const batch = new Map<string, StoredHandle>();
+    const expiresAt = this.now() + this.ttlMs;
+    for (const handle of handles) {
+      if (!handle.id) continue;
+      const original = handle.origin === 'optical' && typeof handle.original === 'string'
+        ? handle.original
+        : undefined;
+      if (handle.origin !== 'semantic' && original === undefined) continue;
+      batch.set(handle.id, {
+        original,
+        bytes: original === undefined ? 0 : Buffer.byteLength(original),
+        expiresAt,
+        meta: {
+          engine: handle.origin,
+          contentType: handle.contentType ?? 'unknown',
+          ratio: handle.ratio,
+          regionId: handle.regionId,
+        },
+      });
+    }
+    return batch;
+  }
+
+  private entry(id: string, touch: boolean): StoredHandle | undefined {
+    const entry = this.entries.get(id);
+    if (!entry) return undefined;
+    if (entry.expiresAt <= this.now()) {
+      this.remove(id, entry);
+      return undefined;
+    }
+    if (touch) {
+      this.entries.delete(id);
+      this.entries.set(id, entry);
+    }
+    return entry;
+  }
+
+  private sweepExpired(): void {
+    const now = this.now();
+    for (const [id, entry] of this.entries) {
+      if (entry.expiresAt <= now) this.remove(id, entry);
+    }
+  }
+
+  private evictToLimits(protectedIds: ReadonlySet<string>): void {
+    while (this.entries.size > this.maxEntries || this.storedBytes > this.maxStoredBytes) {
+      const candidate = [...this.entries.entries()].find(([id]) => !protectedIds.has(id));
+      if (!candidate) throw new RangeError('CCR store cannot retain the current request batch');
+      this.remove(candidate[0], candidate[1]);
+    }
+  }
+
+  private remove(id: string, entry: StoredHandle): void {
+    if (!this.entries.delete(id)) return;
+    this.storedBytes -= entry.bytes;
   }
 
   /**

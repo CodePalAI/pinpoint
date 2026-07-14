@@ -236,7 +236,15 @@ export function createResponseEventDecoder(
       const output = Array.isArray(payload.output) ? payload.output : [];
       for (const rawItem of output) {
         const item = object(rawItem);
-        if (item?.type === 'function_call' && typeof item.name === 'string') {
+        if (item?.type === 'message') {
+          const itemContent = Array.isArray(item.content) ? item.content : [];
+          for (const rawPart of itemContent) {
+            const part = object(rawPart);
+            if (part?.type === 'output_text' && typeof part.text === 'string') {
+              emit({ type: 'text-delta', text: part.text });
+            }
+          }
+        } else if (item?.type === 'function_call' && typeof item.name === 'string') {
           emit({
             type: 'tool-call',
             name: item.name,
@@ -246,6 +254,8 @@ export function createResponseEventDecoder(
         }
       }
       if (typeof payload.stop_reason === 'string') emit({ type: 'stop', reason: payload.stop_reason });
+      else if (payload.status === 'completed') emit({ type: 'stop', reason: 'stop' });
+      else if (payload.status === 'incomplete') emit({ type: 'stop', reason: 'incomplete' });
     } catch {
       // Non-JSON response; no normalized events.
     }

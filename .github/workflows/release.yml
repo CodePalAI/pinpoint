@@ -4,35 +4,102 @@ on:
   release:
     types: [published]
 
-permissions:
-  contents: read
-  id-token: write
-
 jobs:
-  publish:
-    name: Publish npm package
+  build:
+    name: Verify and pack
     runs-on: ubuntu-latest
-    environment: release
+    permissions:
+      contents: read
+    env:
+      PINPOINT_HEADROOM_AUTOSPAWN: "0"
+      PINPOINT_LOG: silent
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-          package-manager-cache: false
-      - run: npm ci
-      - name: Validate release tag
-        run: |
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          if [ "$GITHUB_REF_NAME" != "v$PACKAGE_VERSION" ]; then
-            echo "Release tag $GITHUB_REF_NAME does not match package version v$PACKAGE_VERSION" >&2
-            exit 1
-          fi
-      - name: Check whether version is already published
-        id: registry
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.22.2
+          cache: npm
+      - name: Validate release source
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          test "$PACKAGE_NAME" = "@codepal/pinpoint"
+          test "$GITHUB_REF_NAME" = "v$PACKAGE_VERSION"
+          git fetch --no-tags origin "$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          git merge-base --is-ancestor "$GITHUB_SHA" "origin/$DEFAULT_BRANCH"
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=high
+      - run: npm run prepublishOnly
+      - name: Verify generated files are committed
+        run: git diff --exit-code
+      - name: Pack release artifact
+        run: |
+          mkdir -p release
+          npm pack --ignore-scripts --pack-destination release
+          test "$(find release -maxdepth 1 -name '*.tgz' | wc -l)" -eq 1
+      - name: Checksum release artifact
+        run: |
+          curl --fail --silent --show-error --location \
+            https://registry.npmjs.org/npm/-/npm-12.0.1.tgz \
+            --output release/npm-12.0.1.tgz
+          NPM_SHA512=$(openssl dgst -sha512 -binary release/npm-12.0.1.tgz | openssl base64 -A)
+          test "$NPM_SHA512" = "L5T9i/YAQWQWqTS/xZxJkei/9zcu99hCeE4qi41IyBVV7mRQad3qc2JfuOktwmH+qwGI/V2rbCL+/UYxb1+RQA=="
+          cd release
+          shasum -a 512 ./*.tgz > SHA512SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: npm-release
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish verified package
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.22.2
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: npm-release
+          path: release
+      - name: Verify release artifact
+        run: |
+          cd release
+          shasum -a 512 -c SHA512SUMS
+          test "$(find . -maxdepth 1 -name 'codepal-pinpoint-*.tgz' | wc -l)" -eq 1
+          NPM_SHA512=$(openssl dgst -sha512 -binary npm-12.0.1.tgz | openssl base64 -A)
+          test "$NPM_SHA512" = "L5T9i/YAQWQqTS/xZxJkei/9zcu99hCeE4qi41IyBVV7mRQad3qc2JfuOktwmH+qwGI/V2rbCL+/UYxb1+RQA=="
+          mkdir ../npm-cli
+          tar -xzf npm-12.0.1.tgz -C ../npm-cli
+          test "$(node ../npm-cli/package/bin/npm-cli.js --version)" = "12.0.1"
+      - name: Verify npm scope ownership
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
+          NPM_USER=$(node "$NPM_CLI" whoami)
+          MEMBERSHIP=$(node "$NPM_CLI" org ls codepal "$NPM_USER" --json)
+          ROLE=$(node -e 'const membership = JSON.parse(process.argv[1]); process.stdout.write(membership[process.argv[2]] ?? "")' "$MEMBERSHIP" "$NPM_USER")
+          test -n "$ROLE"
+          echo "authenticated npm user $NPM_USER has codepal organization role $ROLE"
+      - name: Check whether version is already published
+        id: registry
+        run: |
+          PACKAGE_NAME='@codepal/pinpoint'
+          PACKAGE_VERSION=${GITHUB_REF_NAME#v}
           if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
             echo "published=true" >> "$GITHUB_OUTPUT"
             echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published"
@@ -44,5 +111,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          npm install --global npm@latest
-          npm publish --access public --provenance
+          NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
+          PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
+          test -n "$PACKAGE_TARBALL"
+          node "$NPM_CLI" publish "$PACKAGE_TARBALL" --access public --provenance --ignore-scripts

@@ -1,7 +1,8 @@
 {
+  "evidenceLevel": "offline-real-transform",
   "model": "claude-fable-5",
   "sidecar": true,
-  "generatedAt": "2026-07-11T18:12:03.718Z",
+  "generatedAt": "2026-07-14T09:56:24.081Z",
   "scenarios": [
     {
       "name": "mixed-json",
@@ -19,9 +20,9 @@
       "category": "mixed",
       "note": "big static slab + verbose build log (both regions)",
       "raw": 18308,
-      "headroom": 14717,
+      "headroom": 13415,
       "pxpipe": 14955,
-      "pixroom": 11364,
+      "pixroom": 10062,
       "dominates": true,
       "strictWin": true
     },
@@ -29,12 +30,12 @@
       "name": "mixed-code",
       "category": "mixed",
       "note": "big static slab + source-code tool output (both regions)",
-      "raw": 10466,
-      "headroom": 10466,
-      "pxpipe": 7113,
-      "pixroom": 7113,
+      "raw": 12048,
+      "headroom": 9198,
+      "pxpipe": 8695,
+      "pixroom": 5845,
       "dominates": true,
-      "strictWin": false
+      "strictWin": true
     },
     {
       "name": "slab-heavy",
@@ -61,6 +62,6 @@
   ],
   "verdict": {
     "dominatesAll": true,
-    "strictOnMixed": false
+    "strictOnMixed": true
   }
 }

@@ -3,7 +3,7 @@
  *
  * A dependency-free JSON-RPC 2.0 server over stdio (newline-delimited messages,
  * the MCP stdio transport). Exposes three tools mirroring headroom's MCP surface:
- *   - pixroom_compress  — route a provider request through both engines
+ *   - pixroom_compress  — route a provider request through registered optimizers
  *   - pixroom_retrieve  — pull an offloaded original back by CCR id
  *   - pixroom_stats     — session savings
  *
@@ -32,7 +32,7 @@ const TOOLS = [
     name: 'pixroom_compress',
     description:
       'Compress a provider request (Anthropic Messages or OpenAI Chat Completions) ' +
-      'through pixroom (optical + semantic) and return the transformed body plus an ' +
+      'through pixroom (QCV + semantic + optical) and return the transformed body plus an ' +
       'honest savings report.',
     inputSchema: {
       type: 'object',

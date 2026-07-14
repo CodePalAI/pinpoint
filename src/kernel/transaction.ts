@@ -1,6 +1,7 @@
 import type { RequestContext } from '../types.js';
 import type {
   ContextPatch,
+  ProposalCommit,
   ProposalValidation,
   TransactionResult,
   TransformProposal,
@@ -16,6 +17,8 @@ export function cloneRequestContext(ctx: Readonly<RequestContext>): RequestConte
     reversible: structuredClone(ctx.reversible),
     stages: structuredClone(ctx.stages),
     opticalOwnsCacheControl: ctx.opticalOwnsCacheControl,
+    virtualQueryToolNeeded: ctx.virtualQueryToolNeeded,
+    virtualContextIds: structuredClone(ctx.virtualContextIds),
   };
 }
 
@@ -32,6 +35,12 @@ function applyPatch(candidate: RequestContext, patch: Readonly<ContextPatch>): v
   if (patch.opticalOwnsCacheControl !== undefined) {
     candidate.opticalOwnsCacheControl = patch.opticalOwnsCacheControl;
   }
+  if (patch.virtualQueryToolNeeded !== undefined) {
+    candidate.virtualQueryToolNeeded = patch.virtualQueryToolNeeded;
+  }
+  if (patch.virtualContextIds !== undefined) {
+    candidate.virtualContextIds = [...new Set([...candidate.virtualContextIds, ...patch.virtualContextIds])];
+  }
 }
 
 /**
@@ -43,16 +52,20 @@ export async function transactProposal(
   ctx: RequestContext,
   proposal: TransformProposal,
   validate?: ProposalValidation,
+  commit?: ProposalCommit,
 ): Promise<TransactionResult> {
   try {
     const candidate = cloneRequestContext(ctx);
     applyPatch(candidate, proposal.patch);
     await validate?.(candidate, proposal);
+    await commit?.(candidate, proposal, ctx);
 
     ctx.body = candidate.body;
     ctx.reversible = candidate.reversible;
     ctx.stages = candidate.stages;
     ctx.opticalOwnsCacheControl = candidate.opticalOwnsCacheControl;
+    ctx.virtualQueryToolNeeded = candidate.virtualQueryToolNeeded;
+    ctx.virtualContextIds = candidate.virtualContextIds;
     return { status: 'committed', proposal };
   } catch (error) {
     return {

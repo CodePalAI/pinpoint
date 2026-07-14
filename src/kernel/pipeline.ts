@@ -12,6 +12,7 @@ import type {
 
 export interface PipelineHooks {
   readonly mode?: RuntimeMode;
+  readonly validate?: ProposalValidation;
   readonly beforeIntegration?: (
     integration: ProcessorIntegration,
     ctx: Readonly<RequestContext>,
@@ -53,7 +54,15 @@ export class IntegrationPipeline {
           continue;
         }
 
-        const transaction = await transactProposal(ctx, proposal, this.validate);
+        const transaction = await transactProposal(
+          ctx,
+          proposal,
+          hooks.validate ?? this.validate,
+          integration.commit
+            ? (candidate, committedProposal, original) =>
+                integration.commit!(candidate, committedProposal, original)
+            : undefined,
+        );
         transactions.push(transaction);
         if (transaction.status === 'committed') {
           planner.commit(proposal);

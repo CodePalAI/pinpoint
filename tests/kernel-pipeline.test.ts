@@ -20,6 +20,8 @@ function context(): RequestContext {
     reversible: [],
     stages: [],
     opticalOwnsCacheControl: false,
+    virtualQueryToolNeeded: false,
+    virtualContextIds: [],
   };
 }
 

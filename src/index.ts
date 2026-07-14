@@ -49,6 +49,7 @@ export type {
   PlanDecision,
   ProcessorIntegration,
   ProposalEstimate,
+  ProposalCommit,
   ProposalValidation,
   RegionKind,
   RuntimeMode,
@@ -61,6 +62,26 @@ export type { CcrRetriever } from './ccr/store.js';
 
 export { OpticalCompressor } from './compressors/optical.js';
 export { SemanticCompressor } from './compressors/semantic.js';
+export {
+  VIRTUAL_CONTEXT_INTEGRATION_ID,
+  VirtualContextIntegration,
+} from './integrations/virtual-context.js';
+export {
+  VIRTUAL_QUERY_TOOL_NAME,
+  VirtualContextStore,
+  virtualQueryToolSchema,
+} from './virtual-context/store.js';
+export {
+  aggregateAnthropicUsage,
+  continueVirtualAnthropicTurn,
+} from './virtual-context/anthropic.js';
+export type {
+  VirtualContextDescriptor,
+  VirtualContextInspection,
+  VirtualContextKind,
+  VirtualContextPrefetch,
+  VirtualContextQuery,
+} from './virtual-context/store.js';
 export { HeadroomSidecar } from './sidecar/headroom-sidecar.js';
 export type { SidecarState } from './sidecar/headroom-sidecar.js';
 
@@ -71,6 +92,7 @@ export type {
   OpticalConfig,
   SemanticConfig,
   CcrConfig,
+  VirtualContextConfig,
   AdaptiveConfig,
   LogLevel,
 } from './config.js';

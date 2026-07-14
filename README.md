@@ -5,153 +5,209 @@
 ██╔═══╝ ██║ ██╔██╗ ██╔══██╗██║   ██║██║   ██║██║╚██╔╝██║
 ██║     ██║██╔╝ ██╗██║  ██║╚██████╔╝╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝     ╚═╝
-       local-first agent I/O optimization runtime
+              save tokens before they reach the LLM
 </pre></div>
 
-<p align="center"><strong>A programmable local runtime for inspecting and optimizing coding-agent input. pxpipe and headroom ship as the first two integrations behind a transactional kernel.</strong></p>
+<p align="center"><strong>Point your existing agent at one local proxy and send fewer input tokens to the LLM.</strong></p>
 
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg">
-  <img alt="built on" src="https://img.shields.io/badge/built%20on-pxpipe%20%2B%20headroom-6f42c1.svg">
+       <a href="https://github.com/CodePalAI/pixroom/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/CodePalAI/pixroom/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A518-brightgreen.svg">
-       <img alt="tests" src="https://img.shields.io/badge/tests-passing-brightgreen.svg">
        <img alt="status" src="https://img.shields.io/badge/status-experimental-orange.svg">
 </p>
 
 <p align="center">
-  <a href="#get-started-60-seconds">Install</a> ·
+       <a href="#try-it-locally">Try it</a> ·
   <a href="#proof">Proof</a> ·
   <a href="#agent-compatibility">Agents</a> ·
   <a href="#how-it-works">How it works</a> ·
-  <a href="./benchmarks/REPORT.md">Benchmarks</a>
+       <a href="./benchmarks/REPORT.md">Benchmarks</a>
 </p>
 
 ---
 
-pixroom is evolving from a two-engine composition into an agent I/O optimization runtime. **[pxpipe](https://github.com/teamchong/pxpipe)** renders eligible cache-stable context to dense PNGs; **[headroom](https://github.com/headroomlabs-ai/headroom)** compresses eligible tool outputs and prose. Both now run as ordered integrations that return typed proposals; the host applies them atomically and rolls back failures.
+## Save up to 97.4% on eligible input
 
-The name is **pix** (pxpipe) + **room** (headroom).
+Pixroom reduces the context your agents and LLM apps send to model providers. Connect it with a base URL or agent wrapper; no app rewrite is required. Pixroom removes repeated bulk before the request leaves your machine. Your app still calls the same model and receives the same response format.
 
-## See it
+In controlled paid Haiku 4.5 pilots, measured against sending the same requests directly to the LLM:
+
+| Workload | Raw LLM input | With Pixroom | Input saved | Exact score |
+|---|---:|---:|---:|---:|
+| Mixed long-context tasks (3) | 24,249 | 14,478 | **40.3%** | 2/3 -> 2/3 |
+| Structured JSON and log tasks (2) | 22,614 | 594 | **97.4%** | 1/2 -> 2/2 |
+
+Modeled cost fell 40.1% and 97.1%, respectively. These are small controlled pilots with synthetic fixtures, one model, and one run per task. They show measured savings on eligible requests, not a promise that every prompt will shrink by the same amount.
+
+## Try it locally
+
+From this checkout:
+
+```bash
+npm install && npm run build && npm link
+pixroom demo
+```
+
+The demo runs the real exact-context optimizer without an API key, model call, or network request:
 
 ```console
-$ pixroom export planning/*.md            # offline — no LLM call
+$ pixroom demo
 
-files: 3   input chars: 54245
-stage      applied  reason      text → compressed   saved
-optical    yes      applied     27121 → 3004        24117
-──────────────────────────────────────────────────────────
-TOTAL      27121 → 3004     saved 24117t (88.9%)     cache_control: owned
+pixroom QCV demo (offline)
+dataset: 1,000 exact JSON rows (55,281 chars)
+question: What is the email for id 733?
+dataset region: 13,821 -> 171 estimated tokens (98.8% smaller)
+exact answer materialized: user733@example.com
+model-driven fallback: not needed
+network requests: 0
 ```
+
+Start the local proxy when you are ready to use it with an app or agent:
+
+```bash
+pixroom proxy
+```
+
+Then point Anthropic clients to `http://127.0.0.1:8788` or OpenAI clients to `http://127.0.0.1:8788/v1`. You can also use one of the agent wrappers below.
 
 ## What it does
 
-- **Proxy** — `pixroom proxy`; point `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` at it. Zero code changes, any language.
-- **Agent wrap** — `pixroom wrap claude|codex|copilot|aider|opencode|goose|openhands|vibe` in one command (+ `cursor|cline|continue` print config). **Copilot uses your existing login — no API key.**
-- **SDK** — `createPixroom().route(...)` — the embeddable Node/TS core.
-- **Integration kernel** — `pixroom/kernel` exposes the registry, planner, proposal, and transaction contracts; `pixroom integration list` shows active integrations.
-- **Protocol adapters** — Anthropic Messages, OpenAI Chat Completions, and OpenAI Responses (including Codex aliases) are registry-driven; unknown fields survive validation/encoding.
-- **Output integrations** — normalized streaming text, tool-call, usage, stop, and error events; responses remain byte-for-byte passthrough unless an explicit future rewriter is enabled.
-- **MCP server** — `pixroom mcp` → `pixroom_compress` · `_retrieve` · `_stats` for any MCP host.
-- **Offline export** — `pixroom export <files>` — an honest, per-stage savings report with **no** LLM call.
-- **Optical + semantic, composed** — images the static slab (pxpipe) *and* compresses tool outputs (headroom); one **CCR** store makes both reversible via an injected `headroom_retrieve` tool.
-- **Honest & safe** — cache-aware measurement (negatives reported, never floored), **auth-mode stealth** on subscription traffic, and it **never fails closed** (sidecar down → optical-only; model unsupported → semantic-only).
+- Connects through one local endpoint. Existing apps only need a base URL change.
+- Keeps eligible old JSON, logs, and source output in a bounded local store, then sends the model the exact result needed for the current question.
+- Compresses other eligible context regions when a configured optimizer can reduce them safely.
+- Preserves recent turns and passes unsupported or ambiguous requests through unchanged.
+- Reports input-token savings per request, including negative results and fallback costs.
+- Supports Anthropic Messages, OpenAI Chat Completions, and OpenAI Responses, plus CLI wrappers for popular coding agents.
+- Exposes the same runtime as a Node/TypeScript SDK and an MCP server.
 
 ## How it works
 
-pixroom's router hands each region of a request to **exactly one** engine, so nothing is double-compressed, and unifies reversibility through one store:
+A raw agent request can resend thousands of lines of JSON, logs, source code, tool definitions, and old conversation history. The model often needs only a small part of that material for the current turn.
 
-| Region | Engine | Why |
-|---|---|---|
-| Static system + tool-docs slab | **optical** (pxpipe, in-process) | headroom won't mutate the cache hot-zone; pxpipe's strongest, safest win |
-| Tool outputs · logs · JSON · code · history | **semantic** (headroom sidecar) | reversible, content-aware compressors + CCR |
-| Recent turns · byte-exact IDs / secrets | **passthrough** | fidelity — never lossy-compressed |
+Pixroom sits between the client and the provider:
+
+1. It identifies the distinct context regions in the request.
+2. Query-Backed Context Virtualization (QCV) moves eligible structured tool output into an exact local store and computes narrow lookups or counts locally.
+3. Registered optimizers can reduce other eligible regions. Each region has one owner, so transforms do not overlap.
+4. Pixroom validates and commits each selected optimizer atomically, then forwards the composed request to the same LLM provider. A failed proposal rolls back without corrupting the request or undoing previously committed regions.
 
 ```
- your agent / app   (Claude Code · Codex · Copilot · Cursor · your own code)
-        │   Anthropic / OpenAI request   (your API key passes straight through)
-        ▼
- ┌───────────────────────────────────────────────────────────────┐
- │  pixroom proxy    (Node/TS — owns transport · cache_control)   │
- │  ───────────────────────────────────────────────────────────  │
- │   1. semantic   tool outputs ─►  headroom /v1/compress         │
- │                 (loopback · keyless · never sees your keys)    │
- │   2. optical    static slab  ─►  pxpipe (in-process; pins the  │
- │                 single ttl:'1h' cache_control breakpoint)      │
- │   3. register both originals ─►  one CCR store (reversible)    │
- │   4. inject headroom_retrieve  ·  one honest savings report    │
- └───────────────────────────────────────────────────────────────┘
-        │   compressed request   (single forward hop)
-        ▼
- LLM provider   (Anthropic · OpenAI · …)  — responses stream back untouched
+agent or app
+       |
+       | raw Anthropic or OpenAI request
+       v
+Pixroom on 127.0.0.1
+       |  exact local datasets
+       |  selected context optimizations
+       |  validated request + savings report
+       v
+same LLM provider
 ```
 
-## Get started (60 seconds)
+Provider credentials pass through to the configured upstream. Pixroom does not send them to local optimization services. Provider responses keep their original format and stream through unless a feature explicitly requires a bounded continuation.
+
+### Exact context without guesswork
+
+QCV does not summarize the stored dataset. It keeps the original bytes in process memory and inserts an exact result into the current turn. The default path does not ask the model to plan a retrieval.
+
+QCV applies only when all of these conditions hold:
+
+1. The request is non-streaming Anthropic Messages traffic using PAYG/API-key auth.
+2. Exactly one eligible historical dataset matches one explicit selector or supported exact count.
+3. The local operation returns a complete, bounded, unambiguous result.
+4. Manifest plus current-turn prefetch is smaller than the original tool result.
+5. Every referenced dataset fits the per-request and process memory budgets.
+
+Repeated selectors, ranges, negation, multiple matching datasets, malformed values, streaming requests, and subscription traffic pass through unchanged. Disable QCV with `PIXROOM_VIRTUAL_CONTEXT=0` or `pixroom proxy --no-qcv`.
+
+The model-driven `pixroom_query` fallback is separate and off by default. An early version saved tokens but reduced task quality, so the default now uses only conservative exact prefetch. See the [QCV design note](./planning/query_backed_context.md) for supported operations, safety limits, and the rejected design.
+
+## Use it
 
 ```bash
-# 1 — Build  (pulls pxpipe-proxy — the optical engine, pure-JS, in-process)
-npm install && npm run build && npm link        # gives you the `pixroom` command
-
-# 2 — (optional) the semantic engine: a headroom sidecar
-pip install headroom-ai                          # pixroom auto-spawns + health-checks it
-#     absent? pixroom degrades to optical-only — it never fails closed.
-
-# 3 — Use it
-pixroom doctor                                   # health: toolchain · pxpipe · headroom
-pixroom integration list                         # optimizer capabilities
-pixroom agent list                               # honest traffic/delegate/config coverage
-pixroom export README.md                         # offline savings report (no LLM)
-pixroom wrap claude                              # wrap an agent in one command
-pixroom proxy                                    # or run the proxy, point your agent at it
-pixroom proxy --mode shadow --port 8788           # analyze proposals without mutation
+pixroom proxy                           # local endpoint on 127.0.0.1:8788
+pixroom wrap claude                     # launch a supported agent through Pixroom
+pixroom agent list                      # show wrapper coverage
+pixroom integration list                # show active optimizer capabilities
+pixroom export README.md                # inspect savings without an LLM call
+pixroom mcp                             # expose compress, retrieve, and stats tools
 ```
 
-Embed the core:
+Use shadow mode to measure proposals without changing requests:
+
+```bash
+pixroom proxy --mode shadow --port 8788
+```
+
+Or embed the Node/TypeScript runtime:
 
 ```ts
 import { createPixroom } from 'pixroom';
 
-const px = createPixroom();
-const { report } = await px.route('anthropic', 'claude-fable-5', anthropicRequestBody);
-console.log(report.tokensSavedTotal, report.savedFraction);   // honest, per-stage
+const pixroom = createPixroom();
+const { body, report } = await pixroom.route(
+  'anthropic',
+  'claude-haiku-4-5',
+  anthropicRequestBody,
+);
+
+console.log(body);
+console.log(report.tokensSavedTotal, report.savedFraction);
 ```
 
-## Current evidence
+Public subpaths expose the integration kernel, protocol registry, normalized output events, agent registry, and virtual-context APIs.
 
-On five constructed, disjoint-region inputs, combining both transforms produces the sum of their token reductions. This is useful transform arithmetic, not a universal task-quality or latency claim. The benchmark uses real pxpipe/headroom transform code with synthetic agent-shaped payloads and one consistent token basis.
+## Proof
 
-**Input-token savings vs raw** (real agent-shaped requests):
+### Paid requests versus raw LLM usage
 
-| workload | headroom-only | pxpipe-only | **pixroom** | vs best |
-|---|---:|---:|---:|:--|
-| JSON tool output + slab | 33% | 18% | **51%** | **strict win** |
-| build log + slab | 20% | 18% | **38%** | **strict win** |
-| source code + slab | 0%\* | 32% | **32%** | ties best |
-| slab-heavy | 0% | 71% | **71%** | ties best |
-| tools-heavy | 44% | 0% | **44%** | ties best |
+These pilots sent the same fixed tasks directly to Anthropic and through Pixroom. Input usage is provider-reported. Cost uses the provider's published Haiku 4.5 rates.
 
-<sub>Evidence level: `offline-real-transform`. `dominates-all = true` only within this five-scenario corpus. \*headroom's code compressor needs its `[code]` extra (not installed in this run).</sub>
+| Pilot | Raw input | Pixroom input | Reduction | Raw modeled cost | Pixroom modeled cost | Exact score |
+|---|---:|---:|---:|---:|---:|---:|
+| Mixed long-context, 3 tasks | 24,249 | 14,478 | **40.3%** | $0.024369 | $0.014598 | 2/3 -> 2/3 |
+| Exact JSON and logs, 2 tasks | 22,614 | 594 | **97.4%** | $0.022684 | $0.000664 | 1/2 -> 2/2 |
 
-**Why it works — additivity.** On the JSON workload, optical saved 3,353 tokens and semantic saved 6,125 — pixroom saved **exactly 9,478** (their sum). Neither engine alone captures both regions:
+The mixed-context pilot exercised Headroom semantic compression through Pixroom; its 40.3% result is integration evidence, not Pixroom-owned compression IP. The structured pilot exercised Pixroom's QCV deterministic exact path. On the log-count task, raw Haiku returned `5` for a fixture containing seven errors; Pixroom computed the exact count locally and returned `7`.
 
-```
-raw 18,661  ──optical(slab) −3,353──  ──semantic(tools) −6,125──►  pixroom 9,183   (−51%)
-```
+### Broader offline token accounting
 
-Reproduce: `node benchmarks/proof.mjs`. The full report separates simulation, offline transform, controlled live, and agentic live evidence in **[`benchmarks/REPORT.md`](./benchmarks/REPORT.md)**.
+The offline corpus runs real Pixroom transforms over agent-shaped requests and compares the resulting input with the original raw request:
 
-The adaptive controller remains an experimental mechanism test. Arm G uses hand-authored probabilities and ratios, and the same simulated oracle trains and grades it; it is not competitive product evidence. Real adaptation is gated on shadow proposals and held-out task benchmarks.
+| Workload | Raw input | Pixroom input | Input saved |
+|---|---:|---:|---:|
+| JSON tool output + static context | 18,662 | 9,184 | **50.8%** |
+| Build log + static context | 18,309 | 10,063 | **45.0%** |
+| Source output + static context | 12,049 | 5,846 | **51.5%** |
+| **Total** | **49,020** | **25,093** | **48.8%** |
+
+This offline result validates transform and token accounting, not model quality. The paid pilots are also small: synthetic fixtures, one model, one randomized pair per task, and no retries. Cache behavior, retrievals, model choice, and workload eligibility can change the net saving.
+
+The full [benchmark report](./benchmarks/REPORT.md) keeps live, offline, agentic, and simulated evidence separate. It also preserves failed experiments instead of averaging them into successful results.
 
 ## Agent compatibility
 
-`pixroom wrap <agent>` starts the right composition and launches the agent — ephemeral (env-only, no config files touched).
+`pixroom wrap <agent>` launches the agent with temporary environment changes. It does not edit the agent's configuration files.
 
-| Agent | How | Notes |
+| Setup | Agents | Command |
 |---|---|---|
-| **Claude Code** | proxy front door | optical + semantic — where pixroom shines (pxpipe-model traffic) |
-| **Codex** · **Aider** · **OpenCode** · **Goose** · **OpenHands** · **Vibe** | proxy front door | base-URL env; semantic always, optical on supported models |
-| **GitHub Copilot** | delegates to headroom | **subscription, no API key** — uses your existing login; `pixroom doctor copilot` checks readiness |
-| **Cursor** · **Cline** · **Continue** | prints config | IDE extensions — paste the base URL it prints |
+| Launch through the local proxy | Claude Code, Codex, Aider, OpenCode, Goose, OpenHands, Vibe | `pixroom wrap <agent>` |
+| Use an existing subscription login | GitHub Copilot | `pixroom wrap copilot` |
+| Print the base URL configuration | Cursor, Cline, Continue | `pixroom wrap <agent>` |
+
+Run `pixroom agent list` for the exact traffic, delegation, and configuration coverage of each wrapper. Exact QCV currently applies to first-party Anthropic Messages requests that use API-key auth and do not stream. Other traffic can use the remaining registered optimizers or pass through unchanged.
+
+## Safety and privacy
+
+- Pixroom binds to `127.0.0.1` by default. It is not an authenticated public gateway.
+- Provider credentials are forwarded to the configured provider and are not stored by Pixroom.
+- QCV stores exact eligible tool output in process memory only. The default cap is 256 datasets or 64 MiB, with least-recently-used eviction.
+- Audit and shadow modes inspect proposals without retaining QCV datasets or changing requests.
+- Failed proposals leave their regions unchanged; unavailable optimizers, unsupported traffic, and unsafe QCV questions pass through to the next eligible path.
+- The experimental model-driven QCV fallback is disabled by default and has a separate switch.
+
+See the [security policy](./SECURITY.md) before exposing the proxy outside a trusted machine or network.
 
 ## Configuration
 
@@ -159,82 +215,52 @@ The adaptive controller remains an experimental mechanism test. Arm G uses hand-
 |---|---|---|
 | `PIXROOM_HOST` / `PIXROOM_PORT` | listen interface / port | `127.0.0.1` / `8788` |
 | `PIXROOM_MODE` | `audit` (no processors), `shadow` (propose only), `optimize` (commit), `enforce` (reserved output policy) | `optimize` |
-| `PIXROOM_MODELS` | optical model-scope CSV; `off` disables; unset = pxpipe default (Fable-5) | unset |
-| `PIXROOM_OPTICAL` / `PIXROOM_SEMANTIC` | master switches | `on` |
-| `PIXROOM_HEADROOM_URL` | headroom sidecar base URL | `http://127.0.0.1:8787` |
-| `PIXROOM_HEADROOM_AUTOSPAWN` | auto-start `headroom proxy` if unreachable | `on` |
-| `PIXROOM_SEMANTIC_PROSE` | also compress large prose in non-recent user turns (routes to headroom's Kompress) | `off` |
+| `PIXROOM_VIRTUAL_CONTEXT` | exact QCV master switch; set `0` for the kill switch | `on` |
+| `PIXROOM_VIRTUAL_QUERY_FALLBACK` | model-driven `pixroom_query` continuation (experimental) | `off` |
+| `PIXROOM_VIRTUAL_MIN_CHARS` / `PIXROOM_VIRTUAL_MAX_CHARS` | eligible dataset size range | `6000` / `2000000` |
+| `PIXROOM_VIRTUAL_MAX_ENTRIES` / `PIXROOM_VIRTUAL_MAX_STORED_BYTES` | in-process exact-store limits | `256` / `67108864` |
+| `PIXROOM_VIRTUAL_MAX_DATASETS_PER_REQUEST` | maximum datasets virtualized in one request | `8` |
+| `PIXROOM_VIRTUAL_MAX_QUERY_ROUNDS` | hidden query fallback round cap | `4` |
+| `PIXROOM_OPTICAL` / `PIXROOM_SEMANTIC` | built-in integration switches | `on` |
+| `PIXROOM_MODELS` | optical integration model allowlist; `off` disables it | integration default |
+| `PIXROOM_SEMANTIC_PROSE` | include large prose from non-recent user turns | `off` |
 | `PIXROOM_OPTICAL_ON_SUBSCRIPTION` | allow lossy optical on oauth/subscription (stealth) | `off` |
-| `PIXROOM_ADAPTIVE` | learn cross-modal routing from retrieval-regret (experimental) | `off` |
-| `PIXROOM_ADAPTIVE_LOG` | observe-only: record the regret signal without changing routing | `off` |
-| `PIXROOM_ADAPTIVE_STORE` | path to persist the learned policy (empty = in-memory) | unset |
 | `PIXROOM_LOG` | `silent`\|`error`\|`warn`\|`info`\|`debug` | `info` |
 
-<details>
-<summary><b>Enabling optical for opus 4.8 (or any model)</b></summary>
+Advanced QCV limits are documented in the [design note](./planning/query_backed_context.md). Run `pixroom help` for CLI options and `pixroom doctor` to inspect the local runtime.
 
-Optical imaging is opt-in **per model** because dense renders are lossy and some models read them poorly. To add opus 4.8, list it in `PIXROOM_MODELS` — the list *replaces* the default, so include Fable-5 too:
+## Integrations
 
-```bash
-PIXROOM_MODELS=claude-fable-5,claude-opus-4-8 pixroom proxy
-```
+Pixroom owns the proxy, QCV, protocol adapters, transactional request planning, and savings reports. Its public integration kernel also lets specialized optimizers propose changes without taking over the product's routing or safety policy.
 
-Measured on live opus 4.8: pxpipe's **factsheet keeps fragile identifiers (hex, UUIDs, numbers, paths) as text** (verified byte-exact), so only the prose bulk is imaged. But opus is a weaker image reader than Fable-5, and on a subscription this is additionally gated by `PIXROOM_OPTICAL_ON_SUBSCRIPTION=1` and can bust Claude Code's prompt cache — so it stays **off by default**. Prefer it on PAYG/API traffic. Details in [`benchmarks/REPORT.md`](./benchmarks/REPORT.md).
-
-</details>
-
-<details>
-<summary><b>Compressing user prose (<code>PIXROOM_SEMANTIC_PROSE</code>)</b></summary>
-
-By default the semantic stage hands headroom only the **`tool_result`** region. Large plain-text prose in **user** turns (pasted docs, long RAG context) otherwise passes through raw. Set `PIXROOM_SEMANTIC_PROSE=1` to also route those blocks to headroom's content-aware compressors — **Kompress** (ModernBERT prose token-drop) for prose, SmartCrusher for structured text. pixroom sends `compress_user_messages` to the sidecar automatically, so the prose path works regardless of the sidecar's savings profile.
+The default distribution includes [pxpipe](https://github.com/teamchong/pxpipe) for in-process optical compression and [Headroom](https://github.com/headroomlabs-ai/headroom) for optional semantic compression through a local sidecar. Install the optional sidecar with:
 
 ```bash
-PIXROOM_SEMANTIC_PROSE=1 pixroom proxy
+pip install headroom-ai
+pixroom doctor
 ```
 
-Kompress runs on a lightweight ONNX path — the sidecar only needs its tokenizer (`pip install transformers`; `onnxruntime` is already a headroom core dep, **no torch required**). The model auto-downloads on first use. Measured savings are **~6–21% of prose tokens** depending on redundancy (dense prose compresses least, verbose/redundant prose most). Without the tokenizer the sidecar simply no-ops prose — pixroom degrades safely.
-
-It's **off by default** because user prose is instruction content, not machine output: only **non-recent** user turns above `PIXROOM_SEMANTIC_PROSE_MIN_CHARS` (default `800`) are touched, the last `protectRecent` turns and all model output stay byte-exact, and any offloaded text is recoverable through the same `headroom_retrieve` tool as the rest of the CCR store. This composes headroom's existing ML prose compressor rather than adding a redundant engine (headroom itself retired its standalone LLMLingua-2 path in favor of Kompress).
-
-</details>
-
-<details>
-<summary><b>Adaptive cross-modal routing (<code>PIXROOM_ADAPTIVE</code>, experimental)</b></summary>
-
-pixroom records **retrieval-regret** — how often the model pulls an offloaded original back — with integration attribution. The current controller explores how that signal might inform later proposal selection.
-
-Set `PIXROOM_ADAPTIVE=1` to enable the controller. Per region it maximizes expected **net token saving** — `saved − regret` (a retrieval wastes the compressed copy) — from a persistent per-(content-type × engine) posterior. Guarantees:
-
-- **Cold-start = today.** With no evidence it reproduces the static routing exactly.
-- **Cache-safe.** Decisions are stable within a session and adapt only *across* sessions, so routing never flips per request and busts the prompt cache.
-- **Bounded harm.** A non-default engine only wins once it clears an evidence bar; on any error the router falls back to the static path (never fails closed).
-
-`PIXROOM_ADAPTIVE_LOG=1` is the safe first step: it records the regret signal (and persists it to `PIXROOM_ADAPTIVE_STORE`) **without changing any routing** — gather evidence, inspect it, then enable the controller.
-
-**Honest scope.** `benchmarks/rd_frontier.mjs` and `benchmarks/adaptive.mjs` are `unit-simulation` artifacts. Their oracle probabilities and engine ratios are hand-authored, so they validate controller plumbing only. The current slab decision also chooses between optical and raw passthrough, not two transforms over the same region. The feature stays off by default until real shadow-mode proposals and held-out task evidence exist.
-
-</details>
-
-## Compose, don't fork
-
-pixroom consumes both upstreams as **pinned, unmodified dependencies** — `pxpipe-proxy` (npm, in-process) and `headroom-ai` (a managed loopback sidecar). It owns only the glue: the router, one CCR store, one measurement layer, one front door. Upgrades are version bumps gated by smoke tests, not re-ports — so pixroom keeps inheriting both projects' daily improvements. See [`UPSTREAM.md`](./UPSTREAM.md).
+If the sidecar is unavailable, semantic optimization becomes a no-op while QCV and other available paths continue. Configure an existing sidecar with `PIXROOM_HEADROOM_URL`, or disable auto-start with `PIXROOM_HEADROOM_AUTOSPAWN=0`. See [UPSTREAM.md](./UPSTREAM.md) for versioning and attribution.
 
 ## Develop
 
 ```bash
 npm run typecheck
-npm test                        # unit + real pxpipe optical + fake-sidecar end-to-end
+npm test                        # offline test suite
 node benchmarks/proof.mjs       # constructed additivity check
 node benchmarks/rd_frontier.mjs # simulated RD surface
 node benchmarks/adaptive.mjs    # controller simulation
+npm run bench:virtual           # QCV vs current full stack, no provider calls
 npm run bench:profile           # paired direct-vs-proxy local profile + raw samples
 ```
 
 ## Status
 
-**Experimental kernel migration underway.** The current proxy/CLI/MCP surfaces remain compatible, while pxpipe and headroom now run behind a public integration registry and atomic transaction boundary. Next are protocol adapters (starting with OpenAI Responses), shadow mode, capture/replay, and the quality-constrained benchmark v2.
+**Experimental optimizer runtime.** The transactional integration kernel, audit/shadow modes, Anthropic Messages, OpenAI Chat/Responses adapters, normalized output events, and agent registry are implemented. The remaining release gates are durable capture/replay, OTLP export, server-side CCR continuation, lower high-concurrency overhead, external integrations, and repeated quality-constrained evidence. The candid standalone-product decision is in [the product assessment](./planning/product_assessment.md).
 
 ## License
 
-**Apache-2.0.** Bundles attribution for pxpipe (MIT) and headroom (Apache-2.0) — see [`NOTICE`](./NOTICE).
+**Apache-2.0.** Third-party attribution is listed in [`NOTICE`](./NOTICE).
+
+Contributions are welcome under [`CONTRIBUTING.md`](./CONTRIBUTING.md). Report vulnerabilities through the private process in [`SECURITY.md`](./SECURITY.md), not a public issue.
 

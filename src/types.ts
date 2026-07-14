@@ -5,7 +5,7 @@
  * same contract: it runs over a {@link RequestContext}, is a safe no-op rather than
  * a throw when it cannot help, and always reports an honest {@link Counterfactual}
  * plus any {@link ReversibleHandle}s it produced. This is what lets pixroom prove
- * end-to-end savings the same way for both engines and keep both regions reversible
+ * end-to-end savings in one shape and keep offloaded regions reversible
  * through one store.
  *
  * See planning/end_product.md §3 (partition), §5 (subsystems), and
@@ -16,7 +16,7 @@
 export type Provider = 'anthropic' | 'openai';
 
 /** Which engine owns a region / produced a result. */
-export type Stage = 'optical' | 'semantic';
+export type Stage = 'optical' | 'semantic' | 'virtual';
 
 /**
  * Coarse content class of a compressed region, used for cross-modal
@@ -124,6 +124,10 @@ export interface RequestContext {
   stages: StageResult[];
   /** Whether pxpipe has claimed the single Anthropic `cache_control` breakpoint. */
   opticalOwnsCacheControl: boolean;
+  /** Whether QCV needs its post-optical query tool for this request. */
+  virtualQueryToolNeeded: boolean;
+  /** Exact dataset capabilities exposed to QCV for this request only. */
+  virtualContextIds: string[];
 }
 
 /** Outcome of a stage: the (possibly mutated) context + this stage's result. */
@@ -140,6 +144,8 @@ export interface StageOutcome {
  */
 export interface Compressor {
   readonly stage: Stage;
+  /** Return a definitive no-op before request cloning, or undefined to run normally. */
+  preflight?(ctx: Readonly<RequestContext>): StageResult | Promise<StageResult | undefined> | undefined;
   /** Cheap gate: can this stage even run for this request (model scope, availability)? */
   applicable(ctx: RequestContext): boolean | Promise<boolean>;
   /** Run the stage. Always resolves; degrades to a documented no-op on any failure. */

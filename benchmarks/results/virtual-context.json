@@ -1,0 +1,138 @@
+{
+  "evidenceLevel": "offline-real-transform",
+  "generatedAt": "2026-07-14T11:42:40.926Z",
+  "model": "claude-fable-5",
+  "methodology": {
+    "current": "headroom semantic + pxpipe optical",
+    "virtual": "query-backed exact offload + headroom fallback + pxpipe optical",
+    "total": "initial request + one full uncached continuation request",
+    "quality": "deterministic exact local query check; no model call"
+  },
+  "scenarios": [
+    {
+      "name": "json-data",
+      "rawTokens": 18697,
+      "currentTokens": 9219,
+      "virtualInitialTokens": 1614,
+      "continuationTokens": 1736,
+      "virtualOneQueryTokens": 3350,
+      "reductionVsCurrent": 0.6366200238637596,
+      "exact": true,
+      "queryResult": "{\"matches\":[{\"email\":\"user73@example.com\"}],\"count\":1,\"truncated\":false}",
+      "stages": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7896,
+          "tokensCompressed": 179,
+          "tokensSaved": 7717,
+          "basis": "estimate"
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0,
+          "tokensSaved": 0,
+          "basis": "estimate"
+        },
+        {
+          "stage": "optical",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 10975,
+          "tokensCompressed": 1259,
+          "tokensSaved": 9716,
+          "basis": "estimate"
+        }
+      ]
+    },
+    {
+      "name": "build-log",
+      "rawTokens": 18342,
+      "currentTokens": 10096,
+      "virtualInitialTokens": 1578,
+      "continuationTokens": 1679,
+      "virtualOneQueryTokens": 3257,
+      "reductionVsCurrent": 0.6773969889064977,
+      "exact": true,
+      "queryResult": "{\"count\":9}",
+      "stages": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 8200,
+          "tokensCompressed": 139,
+          "tokensSaved": 8061,
+          "basis": "estimate"
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0,
+          "tokensSaved": 0,
+          "basis": "estimate"
+        },
+        {
+          "stage": "optical",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 10975,
+          "tokensCompressed": 1259,
+          "tokensSaved": 9716,
+          "basis": "estimate"
+        }
+      ]
+    },
+    {
+      "name": "source-code",
+      "rawTokens": 14450,
+      "currentTokens": 7253,
+      "virtualInitialTokens": 1618,
+      "continuationTokens": 1751,
+      "virtualOneQueryTokens": 3369,
+      "reductionVsCurrent": 0.5355025506686888,
+      "exact": true,
+      "queryResult": "{\"matches\":[{\"line\":625,\"text\":\"export class ContentRouter {\"}],\"count\":1,\"truncated\":false}",
+      "stages": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 9086,
+          "tokensCompressed": 163,
+          "tokensSaved": 8923,
+          "basis": "estimate"
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0,
+          "tokensSaved": 0,
+          "basis": "estimate"
+        },
+        {
+          "stage": "optical",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 10975,
+          "tokensCompressed": 1259,
+          "tokensSaved": 9716,
+          "basis": "estimate"
+        }
+      ]
+    }
+  ],
+  "verdict": {
+    "exact": true,
+    "initialSmaller": true,
+    "oneUncachedQuerySmaller": true
+  }
+}

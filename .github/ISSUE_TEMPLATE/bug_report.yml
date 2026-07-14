@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a reproducible correctness, compatibility, or performance problem.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Remove API keys, tokens, proprietary prompts, and raw tool output before submitting.
+  - type: input
+    id: version
+    attributes:
+      label: Pixroom version or commit
+      placeholder: 0.1.0 or git SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - QCV exact prefetch
+        - QCV query fallback
+        - Proxy transport
+        - Headroom semantic integration
+        - pxpipe optical integration
+        - CLI or agent wrapper
+        - SDK or integration kernel
+        - Benchmark or documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Include commands and a sanitized request fixture.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node version, model/provider, auth mode, and relevant PIXROOM_* settings.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Data safety
+      options:
+        - label: I removed credentials, personal data, and proprietary context.
+          required: true

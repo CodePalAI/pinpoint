@@ -81,6 +81,25 @@ export class OpticalCompressor implements Compressor {
     private readonly log: Logger,
   ) {}
 
+  preflight(ctx: Readonly<RequestContext>): StageResult | undefined {
+    if (!this.cfg.enabled) return passthroughResult('optical', 'disabled');
+    if (ctx.authMode !== 'payg' && !this.cfg.allowOnSubscription) {
+      return passthroughResult(
+        'optical',
+        'stealth',
+        `lossy optical disabled on ${ctx.authMode} auth (set PIXROOM_OPTICAL_ON_SUBSCRIPTION=1 to override)`,
+      );
+    }
+    this.ensureScope();
+    const supported =
+      ctx.provider === 'anthropic'
+        ? isPxpipeSupportedModel(ctx.model)
+        : isPxpipeSupportedGptModel(ctx.model);
+    return supported
+      ? undefined
+      : passthroughResult('optical', 'unsupported_model', ctx.model ?? undefined);
+  }
+
   /** Apply the configured model scope to pxpipe once (null ⇒ keep pxpipe's default). */
   private ensureScope(): void {
     if (this.scopeApplied) return;
@@ -100,31 +119,9 @@ export class OpticalCompressor implements Compressor {
   }
 
   async run(ctx: RequestContext): Promise<StageOutcome> {
-    if (!this.cfg.enabled) {
-      const result = passthroughResult('optical', 'disabled');
-      ctx.stages.push(result);
-      return { context: ctx, result };
-    }
-    // Stealth: lossy imaging rewrites the system prompt into an image — too aggressive
-    // for oauth/subscription traffic. Off unless explicitly opted in (§4.4).
-    if (ctx.authMode !== 'payg' && !this.cfg.allowOnSubscription) {
-      const result = passthroughResult(
-        'optical',
-        'stealth',
-        `lossy optical disabled on ${ctx.authMode} auth (set PIXROOM_OPTICAL_ON_SUBSCRIPTION=1 to override)`,
-      );
-      ctx.stages.push(result);
-      return { context: ctx, result };
-    }
-
-    this.ensureScope();
-
-    const supported =
-      ctx.provider === 'anthropic'
-        ? isPxpipeSupportedModel(ctx.model)
-        : isPxpipeSupportedGptModel(ctx.model);
-    if (!supported) {
-      const result = passthroughResult('optical', 'unsupported_model', ctx.model ?? undefined);
+    const preflight = this.preflight(ctx);
+    if (preflight) {
+      const result = preflight;
       ctx.stages.push(result);
       return { context: ctx, result };
     }

@@ -1,9 +1,17 @@
 {
   "name": "pixroom",
   "version": "0.1.0",
-  "description": "Local-first agent I/O optimization runtime with transactional integrations, protocol adapters, streaming output events, and reproducible profiling.",
+  "description": "Local-first agent context optimizer with exact query-backed virtualization, transactional integrations, and reproducible quality evidence.",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CodePalAI/pixroom.git"
+  },
+  "homepage": "https://github.com/CodePalAI/pixroom#readme",
+  "bugs": {
+    "url": "https://github.com/CodePalAI/pixroom/issues"
+  },
   "bin": {
     "pixroom": "bin/cli.js"
   },
@@ -35,6 +43,10 @@
     "./agents": {
       "types": "./dist/agents/index.d.ts",
       "import": "./dist/agents/index.js"
+    },
+    "./virtual-context": {
+      "types": "./dist/virtual-context/index.d.ts",
+      "import": "./dist/virtual-context/index.js"
     }
   },
   "files": [
@@ -42,21 +54,37 @@
     "dist/",
     "!dist/**/*.map",
     "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "NOTICE",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx src/cli/main.ts",
+    "demo:qcv": "npm run build && node bin/cli.js demo",
     "test": "vitest run",
     "test:watch": "vitest",
     "bench:profile": "npm run build && node benchmarks/v2/profile_proxy.mjs",
+    "bench:virtual": "npm run build && node benchmarks/virtual_context.mjs",
+    "bench:anthropic:self-test": "npm run build && node benchmarks/v2/direct_anthropic.mjs --phase self-test",
+    "bench:anthropic:preflight": "npm run build && node benchmarks/v2/direct_anthropic.mjs --phase preflight",
+    "bench:anthropic:canary": "npm run build && node benchmarks/v2/direct_anthropic.mjs --phase canary",
+    "bench:anthropic": "npm run build && node benchmarks/v2/direct_anthropic.mjs --phase benchmark",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "keywords": [
     "llm",
     "context-compression",
+    "context-virtualization",
+    "query-backed-context",
     "token-optimization",
     "prompt-cache",
     "claude-code",

@@ -1,7 +1,7 @@
 /**
  * pixroom ContentRouter (planning/end_product.md §5.1).
  *
- * A thin orchestration layer over the two engines that enforces the §3 partition —
+ * A thin orchestration layer over registered optimizers that enforces region ownership —
  * exactly one engine per region — and unifies reversibility through one CCR store:
  *
  *   1. semantic stage (headroom): compress tool_result/content regions
@@ -9,7 +9,7 @@
  *   3. register both engines' reversible handles into the single CCR store
  *   4. inject `headroom_retrieve` last (after optical) so its description stays sharp
  *
- * Ordering matches the §4.3 data flow. Both stages self-gate and degrade to a safe
+ * Ordering matches the §4.3 data flow. Every stage self-gates and degrades to a safe
  * pass-through, so `route()` never fails closed.
  */
 
@@ -19,10 +19,15 @@ import { PXPIPE_OPTICAL_INTEGRATION_ID } from '../integrations/legacy-compressor
 import type { IntegrationPipeline } from '../kernel/pipeline.js';
 import type { PipelineResult } from '../kernel/pipeline.js';
 import type { RuntimeMode } from '../kernel/types.js';
+import type { ProposalValidation } from '../kernel/types.js';
 import { buildReport, summarizeReport } from '../measurement/savings.js';
 import { classifyContent } from '../policy/content-type.js';
 import { readSystemText } from '../anthropic.js';
 import type { CrossModalController, EngineDecision } from '../policy/controller.js';
+import {
+  VIRTUAL_QUERY_TOOL_NAME,
+  virtualQueryToolSchema,
+} from '../virtual-context/store.js';
 import {
   passthroughResult,
   type AuthMode,
@@ -40,6 +45,12 @@ export interface RouteResult {
   readonly reversible: readonly ReversibleHandle[];
   /** True when pxpipe pinned the single Anthropic `cache_control` breakpoint. */
   readonly opticalOwnsCacheControl: boolean;
+  /** True when QCV committed at least one exact dataset manifest. */
+  readonly virtualized: boolean;
+  /** True when the experimental model-driven query fallback is active. */
+  readonly virtualQueryToolNeeded: boolean;
+  /** Exact dataset capabilities available to this routed request. */
+  readonly virtualContextIds: readonly string[];
   /** Proposal/transaction trace for audit, shadow, and explain surfaces. */
   readonly pipeline: PipelineResult;
   /** Cross-modal controller decision for the slab region, when the adaptive path is on. */
@@ -72,6 +83,7 @@ export class ContentRouter {
     model: string | null,
     body: Record<string, unknown>,
     authMode: AuthMode = 'payg',
+    validate?: ProposalValidation,
   ): Promise<RouteResult> {
     const ctx: RequestContext = {
       provider,
@@ -81,11 +93,14 @@ export class ContentRouter {
       reversible: [],
       stages: [],
       opticalOwnsCacheControl: false,
+      virtualQueryToolNeeded: false,
+      virtualContextIds: [],
     };
 
     let adaptive: RouteResult['adaptive'];
     const pipelineResult = await this.pipeline.run(ctx, {
       mode: this.mode,
+      validate,
       beforeIntegration: (integration) => {
         if (integration.id !== PXPIPE_OPTICAL_INTEGRATION_ID || !this.controller) return true;
 
@@ -117,6 +132,9 @@ export class ContentRouter {
     if (this.ccr.hasOffloaded()) {
       this.injectCcrTool(ctx);
     }
+    if (ctx.virtualQueryToolNeeded) {
+      this.injectVirtualQueryTool(ctx);
+    }
 
     const report = buildReport(ctx);
     this.log.info(summarizeReport(report));
@@ -126,6 +144,9 @@ export class ContentRouter {
       report,
       reversible: ctx.reversible,
       opticalOwnsCacheControl: ctx.opticalOwnsCacheControl,
+      virtualized: report.rows.some((row) => row.stage === 'virtual' && row.applied),
+      virtualQueryToolNeeded: ctx.virtualQueryToolNeeded,
+      virtualContextIds: ctx.virtualContextIds,
       pipeline: pipelineResult,
       adaptive,
     };
@@ -136,5 +157,12 @@ export class ContentRouter {
     if (existing.some((t) => toolName(t) === CCR_TOOL_NAME)) return;
     ctx.body.tools = [...existing, this.ccr.toolSchema(ctx.provider)];
     this.log.debug(`injected ${CCR_TOOL_NAME} tool (${this.ccr.size} offloaded originals)`);
+  }
+
+  private injectVirtualQueryTool(ctx: RequestContext): void {
+    const existing = Array.isArray(ctx.body.tools) ? ctx.body.tools : [];
+    if (existing.some((tool) => toolName(tool) === VIRTUAL_QUERY_TOOL_NAME)) return;
+    ctx.body.tools = [...existing, virtualQueryToolSchema()];
+    this.log.debug(`injected ${VIRTUAL_QUERY_TOOL_NAME} tool`);
   }
 }

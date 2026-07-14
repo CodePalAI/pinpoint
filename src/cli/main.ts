@@ -30,16 +30,19 @@ function version(): string {
   }
 }
 
-const HELP = `pixroom ${version()} — local-first agent I/O optimization runtime
+const HELP = `pixroom ${version()} — exact-context optimization runtime for agents
 
 USAGE
   pixroom <command> [options]
 
 COMMANDS
   proxy [options]  Start the programmable optimization proxy. Options:
-                   --mode audit|shadow|optimize|enforce, --host, --port.
+                   --mode audit|shadow|optimize|enforce, --host, --port,
+                   --no-qcv, --virtual-query-fallback.
                    Point your agent's
                    ANTHROPIC_BASE_URL / OPENAI_BASE_URL at it.
+  demo             Run an exact QCV transformation locally. No model, API key,
+                   sidecar, or network request.
   export <paths>   Offline: compress the given files and print an honest,
                    per-stage savings report. No upstream calls.
   doctor [copilot] Check the toolchain, pxpipe, and the headroom sidecar.
@@ -59,6 +62,8 @@ COMMON ENV
   PIXROOM_MODE                       audit|shadow|optimize|enforce (default optimize)
   PIXROOM_MODELS                     optical model scope CSV; 'off' disables; unset = pxpipe default
   PIXROOM_OPTICAL / PIXROOM_SEMANTIC on/off master switches
+  PIXROOM_VIRTUAL_CONTEXT             exact QCV switch (default on; set 0 to disable)
+  PIXROOM_VIRTUAL_QUERY_FALLBACK      model-driven QCV continuation (default off)
   PIXROOM_HEADROOM_URL               headroom sidecar base URL (default http://127.0.0.1:8787)
   PIXROOM_HEADROOM_AUTOSPAWN         auto-start 'headroom proxy' if not reachable (default on)
   PIXROOM_OPTICAL_ON_SUBSCRIPTION    allow lossy optical on oauth/subscription (default off)
@@ -92,6 +97,10 @@ export function parseProxyArgs(args: readonly string[]): ProxyArgsResult {
         return { ok: false, error: '--port must be an integer from 0 to 65535' };
       }
       overrides.port = port;
+    } else if (arg === '--no-qcv' || arg === '--no-virtual-context') {
+      overrides.virtualContext = { ...overrides.virtualContext, enabled: false };
+    } else if (arg === '--virtual-query-fallback') {
+      overrides.virtualContext = { ...overrides.virtualContext, queryFallback: true };
     } else {
       return { ok: false, error: `unknown proxy option: ${arg}` };
     }
@@ -146,6 +155,55 @@ async function cmdExport(paths: string[]): Promise<void> {
   await pixroom.shutdown();
 }
 
+export async function runQcvDemo(): Promise<string> {
+  const pixroom = createPixroom({
+    virtualContext: { enabled: true, queryFallback: false, minChars: 100, protectRecent: 0 },
+    semantic: { enabled: false },
+    optical: { enabled: false },
+    logLevel: 'silent',
+  });
+  const rows = Array.from({ length: 1_000 }, (_, id) => ({
+    id,
+    email: `user${id}@example.com`,
+    active: id % 2 === 0,
+  }));
+  const question = 'What is the email for id 733?';
+  const body = {
+    model: 'claude-haiku-4-5',
+    messages: [
+      { role: 'assistant', content: [{ type: 'tool_use', id: 'data', name: 'read_data', input: {} }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'data', content: JSON.stringify(rows) }] },
+      { role: 'assistant', content: 'Data loaded.' },
+      { role: 'user', content: question },
+    ],
+  };
+
+  try {
+    const routed = await pixroom.route('anthropic', 'claude-haiku-4-5', body, 'payg');
+    const row = routed.report.rows.find((candidate) => candidate.stage === 'virtual');
+    if (!row?.applied) throw new Error(`QCV demo did not apply: ${row?.reason ?? 'missing stage'}`);
+    const savedPercent = row.tokensText > 0 ? (row.tokensSaved / row.tokensText) * 100 : 0;
+    const serialized = JSON.stringify(routed.body);
+    const exact = serialized.includes('user733@example.com');
+    const queryFallback = serialized.includes('"name":"pixroom_query"');
+    return [
+      'pixroom QCV demo (offline)',
+      `dataset: 1,000 exact JSON rows (${JSON.stringify(rows).length.toLocaleString()} chars)`,
+      `question: ${question}`,
+      `dataset region: ${row.tokensText.toLocaleString()} -> ${row.tokensCompressed.toLocaleString()} estimated tokens (${savedPercent.toFixed(1)}% smaller)`,
+      `exact answer materialized: ${exact ? 'user733@example.com' : 'FAILED'}`,
+      `model-driven fallback: ${queryFallback ? 'injected' : 'not needed'}`,
+      'network requests: 0',
+    ].join('\n');
+  } finally {
+    await pixroom.shutdown();
+  }
+}
+
+async function cmdDemo(): Promise<void> {
+  console.log(await runQcvDemo());
+}
+
 async function cmdDoctor(rest: string[]): Promise<void> {
   if (rest[0] === 'copilot') {
     cmdDoctorCopilot();
@@ -170,12 +228,15 @@ async function cmdDoctor(rest: string[]): Promise<void> {
   lines.push('');
   lines.push(`optical enabled:  ${cfg.optical.enabled}`);
   lines.push(`semantic enabled: ${cfg.semantic.enabled}`);
+  lines.push(`QCV exact:        ${cfg.virtualContext.enabled ? 'enabled (safe default)' : 'disabled'}`);
+  lines.push(`QCV fallback:     ${cfg.virtualContext.queryFallback ? 'ENABLED (experimental)' : 'disabled'}`);
+  lines.push(`QCV store limit:  ${cfg.virtualContext.maxEntries} datasets / ${Math.round(cfg.virtualContext.maxStoredBytes / 1024 / 1024)} MiB`);
   lines.push(`optical scope:    ${cfg.optical.allowedModelBases == null ? 'pxpipe default (Fable-5)' : `[${cfg.optical.allowedModelBases.join(', ') || 'none'}]`}`);
   lines.push('');
   lines.push(
     sidecar === 'unavailable'
       ? 'note: semantic stage is degraded (optical still active). Install headroom-ai\n      (PyPI) or set PIXROOM_HEADROOM_URL to a running proxy to enable it.'
-      : 'both stages ready.',
+      : 'enabled optimizer dependencies ready.',
   );
   console.log(lines.join('\n'));
   await pixroom.shutdown();
@@ -312,6 +373,8 @@ export async function main(argv: string[]): Promise<void> {
       return cmdProxy(rest);
     case 'export':
       return cmdExport(rest);
+    case 'demo':
+      return cmdDemo();
     case 'doctor':
       return cmdDoctor(rest);
     case 'stats':

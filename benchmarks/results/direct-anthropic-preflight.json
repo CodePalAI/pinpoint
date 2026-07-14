@@ -1,0 +1,94 @@
+{
+  "evidenceLevel": "offline-real-transform",
+  "kind": "provider-token-count-preflight",
+  "generatedAt": "2026-07-14T09:50:12.738Z",
+  "model": "claude-haiku-4-5-20251001",
+  "pricing": {
+    "input": 1,
+    "output": 5,
+    "source": "Anthropic public pricing"
+  },
+  "paidMessages": 0,
+  "projectedBenchmarkWorstCaseUSD": 0.049458,
+  "capUSD": 0.08,
+  "tasks": [
+    {
+      "id": "json-lookup",
+      "directInputTokens": 11282,
+      "pixroomInputTokens": 5855,
+      "semanticApplied": true,
+      "eligible": true,
+      "inputSavingsFraction": 0.481031731962418,
+      "directWorstCaseUSD": 0.011442,
+      "pixroomWorstCaseUSD": 0.011442,
+      "report": [
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 9377,
+          "tokensCompressed": 4721
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ]
+    },
+    {
+      "id": "log-errors",
+      "directInputTokens": 11332,
+      "pixroomInputTokens": 7328,
+      "semanticApplied": true,
+      "eligible": true,
+      "inputSavingsFraction": 0.35333568655135894,
+      "directWorstCaseUSD": 0.011492,
+      "pixroomWorstCaseUSD": 0.011492,
+      "report": [
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 10575,
+          "tokensCompressed": 6985
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ]
+    },
+    {
+      "id": "prose-needle",
+      "directInputTokens": 1635,
+      "pixroomInputTokens": 1295,
+      "semanticApplied": true,
+      "eligible": true,
+      "inputSavingsFraction": 0.20795107033639149,
+      "directWorstCaseUSD": 0.001795,
+      "pixroomWorstCaseUSD": 0.001795,
+      "report": [
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 1476,
+          "tokensCompressed": 1144
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ]
+    }
+  ]
+}

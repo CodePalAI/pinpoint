@@ -20,6 +20,10 @@ const repetitions = Number(process.env.BENCH_REPS ?? 3);
 const concurrencies = csvNumbers(process.env.BENCH_CONCURRENCIES ?? '1,10,100');
 const payloadBytes = csvNumbers(process.env.BENCH_PAYLOAD_BYTES ?? '1024,102400');
 const warmupRequests = Number(process.env.BENCH_WARMUP ?? 20);
+const protocols = (process.env.BENCH_PROTOCOLS ?? 'openai,anthropic')
+  .split(',')
+  .map((value) => value.trim())
+  .filter((value) => value === 'openai' || value === 'anthropic');
 
 function csvNumbers(raw) {
   return raw
@@ -82,24 +86,33 @@ async function startMockUpstream() {
   };
 }
 
-async function oneRequest(url, body) {
+async function oneRequest(url, body, protocol) {
   const started = performance.now();
-  const response = await fetch(`${url}/v1/chat/completions`, {
+  const response = await fetch(
+    `${url}${protocol === 'anthropic' ? '/v1/messages' : '/v1/chat/completions'}`,
+    {
     method: 'POST',
-    headers: { authorization: 'Bearer benchmark', 'content-type': 'application/json' },
+    headers: protocol === 'anthropic'
+      ? {
+          'x-api-key': 'benchmark',
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        }
+      : { authorization: 'Bearer benchmark', 'content-type': 'application/json' },
     body,
-  });
+    },
+  );
   await response.arrayBuffer();
   return { ms: performance.now() - started, ok: response.ok };
 }
 
-async function warm(url, body) {
+async function warm(url, body, protocol) {
   for (let index = 0; index < warmupRequests; index += 1) {
-    await oneRequest(url, body);
+    await oneRequest(url, body, protocol);
   }
 }
 
-async function runArm({ arm, url, body, concurrency }) {
+async function runArm({ arm, url, body, concurrency, protocol }) {
   const loop = monitorEventLoopDelay({ resolution: 10 });
   loop.enable();
   const cpuBefore = process.cpuUsage();
@@ -120,7 +133,7 @@ async function runArm({ arm, url, body, concurrency }) {
       next += 1;
       if (index >= requests) return;
       try {
-        const result = await oneRequest(url, body);
+        const result = await oneRequest(url, body, protocol);
         samples.push(result.ms);
         if (!result.ok) errors += 1;
       } catch {
@@ -159,7 +172,7 @@ async function main() {
   const proxy = createProxyServer({
     host: '127.0.0.1',
     port: 0,
-    upstreams: { openai: mock.url },
+    upstreams: { openai: mock.url, anthropic: mock.url },
     optical: { enabled: false },
     semantic: { enabled: false, autoSpawn: false, healthTimeoutMs: 50 },
     logLevel: 'silent',
@@ -169,25 +182,27 @@ async function main() {
   const runs = [];
 
   try {
-    for (const size of payloadBytes) {
-      const body = requestBody(size);
-      await warm(mock.url, body);
-      await warm(proxyUrl, body);
-      for (const concurrency of concurrencies) {
-        for (let repetition = 0; repetition < repetitions; repetition += 1) {
-          const armOrder = (size + concurrency + repetition) % 2 === 0
-            ? ['direct', 'pixroom-noop']
-            : ['pixroom-noop', 'direct'];
-          for (const arm of armOrder) {
-            const url = arm === 'direct' ? mock.url : proxyUrl;
-            const result = await runArm({ arm, url, body, concurrency });
-            runs.push({ payloadBytes: Buffer.byteLength(body), repetition, armOrder, ...result });
-            console.log(
-              `${arm.padEnd(13)} bytes=${String(Buffer.byteLength(body)).padStart(7)} ` +
-                `c=${String(concurrency).padStart(3)} rep=${repetition + 1} ` +
-                `p95=${result.latency.p95Ms.toFixed(2)}ms rps=${result.throughputRps.toFixed(0)} ` +
-                `err=${result.errors}`,
-            );
+    for (const protocol of protocols) {
+      for (const size of payloadBytes) {
+        const body = requestBody(size);
+        await warm(mock.url, body, protocol);
+        await warm(proxyUrl, body, protocol);
+        for (const concurrency of concurrencies) {
+          for (let repetition = 0; repetition < repetitions; repetition += 1) {
+            const armOrder = (size + concurrency + repetition + protocol.length) % 2 === 0
+              ? ['direct', 'pixroom-noop']
+              : ['pixroom-noop', 'direct'];
+            for (const arm of armOrder) {
+              const url = arm === 'direct' ? mock.url : proxyUrl;
+              const result = await runArm({ arm, url, body, concurrency, protocol });
+              runs.push({ protocol, payloadBytes: Buffer.byteLength(body), repetition, armOrder, ...result });
+              console.log(
+                `${protocol.padEnd(9)} ${arm.padEnd(13)} bytes=${String(Buffer.byteLength(body)).padStart(7)} ` +
+                  `c=${String(concurrency).padStart(3)} rep=${repetition + 1} ` +
+                  `p95=${result.latency.p95Ms.toFixed(2)}ms rps=${result.throughputRps.toFixed(0)} ` +
+                  `err=${result.errors}`,
+              );
+            }
           }
         }
       }
@@ -198,28 +213,34 @@ async function main() {
   }
 
   const comparisons = [];
-  for (const size of payloadBytes) {
-    for (const concurrency of concurrencies) {
-      const actualSize = Buffer.byteLength(requestBody(size));
-      const cells = runs.filter(
-        (run) => run.payloadBytes === actualSize && run.concurrency === concurrency,
-      );
-      const direct = cells.filter((run) => run.arm === 'direct');
-      const proxied = cells.filter((run) => run.arm === 'pixroom-noop');
-      const directP95 = direct.reduce((sum, run) => sum + run.latency.p95Ms, 0) / direct.length;
-      const proxyP95 = proxied.reduce((sum, run) => sum + run.latency.p95Ms, 0) / proxied.length;
-      comparisons.push({
-        payloadBytes: actualSize,
-        concurrency,
-        directMeanP95Ms: directP95,
-        proxyMeanP95Ms: proxyP95,
-        addedP95Ms: proxyP95 - directP95,
-      });
+  for (const protocol of protocols) {
+    for (const size of payloadBytes) {
+      for (const concurrency of concurrencies) {
+        const actualSize = Buffer.byteLength(requestBody(size));
+        const cells = runs.filter(
+          (run) =>
+            run.protocol === protocol &&
+            run.payloadBytes === actualSize &&
+            run.concurrency === concurrency,
+        );
+        const direct = cells.filter((run) => run.arm === 'direct');
+        const proxied = cells.filter((run) => run.arm === 'pixroom-noop');
+        const directP95 = direct.reduce((sum, run) => sum + run.latency.p95Ms, 0) / direct.length;
+        const proxyP95 = proxied.reduce((sum, run) => sum + run.latency.p95Ms, 0) / proxied.length;
+        comparisons.push({
+          protocol,
+          payloadBytes: actualSize,
+          concurrency,
+          directMeanP95Ms: directP95,
+          proxyMeanP95Ms: proxyP95,
+          addedP95Ms: proxyP95 - directP95,
+        });
+      }
     }
   }
 
   const artifact = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     evidenceLevel: EVIDENCE.OFFLINE_REAL_TRANSFORM,
     generatedAt: new Date().toISOString(),
     gitSha: gitSha(),
@@ -230,7 +251,7 @@ async function main() {
       cpus: os.cpus().map((cpu) => cpu.model),
       totalMemoryBytes: os.totalmem(),
     },
-    config: { requests, repetitions, concurrencies, payloadBytes, warmupRequests },
+    config: { requests, repetitions, protocols, concurrencies, payloadBytes, warmupRequests },
     comparisons,
     runs,
     verdict: { zeroErrors: runs.every((run) => run.errors === 0) },

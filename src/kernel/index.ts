@@ -11,6 +11,7 @@ export type {
   IntegrationId,
   PlanDecision,
   ProcessorIntegration,
+  ProposalCommit,
   ProposalEstimate,
   ProposalValidation,
   RegionKind,

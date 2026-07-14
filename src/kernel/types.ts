@@ -11,6 +11,7 @@ export type RuntimeMode = 'audit' | 'shadow' | 'optimize' | 'enforce';
 
 /** Coarse regions an integration may inspect or propose changing. */
 export type RegionKind =
+  | 'virtual-context'
   | 'system'
   | 'tools'
   | 'history'
@@ -39,6 +40,8 @@ export interface ContextPatch {
   readonly appendReversible?: readonly ReversibleHandle[];
   readonly appendStages?: readonly StageResult[];
   readonly opticalOwnsCacheControl?: boolean;
+  readonly virtualQueryToolNeeded?: boolean;
+  readonly virtualContextIds?: readonly string[];
 }
 
 export interface TransformProposal {
@@ -66,6 +69,11 @@ export interface ProcessorIntegration {
   readonly order: number;
   readonly capabilities: IntegrationCapabilities;
   propose(ctx: Readonly<RequestContext>): Promise<TransformProposal>;
+  commit?(
+    candidate: Readonly<RequestContext>,
+    proposal: Readonly<TransformProposal>,
+    original: Readonly<RequestContext>,
+  ): void | Promise<void>;
 }
 
 export interface PlanDecision {
@@ -77,6 +85,12 @@ export interface PlanDecision {
 export type ProposalValidation = (
   candidate: Readonly<RequestContext>,
   proposal: Readonly<TransformProposal>,
+) => void | Promise<void>;
+
+export type ProposalCommit = (
+  candidate: Readonly<RequestContext>,
+  proposal: Readonly<TransformProposal>,
+  original: Readonly<RequestContext>,
 ) => void | Promise<void>;
 
 export interface TransactionResult {

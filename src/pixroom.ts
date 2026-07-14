@@ -15,14 +15,17 @@ import {
   LegacyCompressorIntegration,
   PXPIPE_OPTICAL_INTEGRATION_ID,
 } from './integrations/legacy-compressor.js';
+import { VirtualContextIntegration } from './integrations/virtual-context.js';
 import { IntegrationPipeline } from './kernel/pipeline.js';
 import { IntegrationRegistry } from './kernel/registry.js';
 import { PolicyStore } from './policy/store.js';
 import { StoreBackedRecorder } from './policy/retrieval-recorder.js';
 import { CrossModalController, DEFAULT_CONTROLLER_CONFIG } from './policy/controller.js';
 import { HeadroomSidecar, type SidecarState } from './sidecar/headroom-sidecar.js';
+import { VirtualContextStore } from './virtual-context/store.js';
 import { ContentRouter, type RouteResult } from './router/content-router.js';
 import type { ProcessorIntegration } from './kernel/types.js';
+import type { ProposalValidation } from './kernel/types.js';
 import type { AuthMode, Provider, SavingsReport } from './types.js';
 
 /** Running session totals for the `stats` view. */
@@ -34,6 +37,7 @@ export interface SessionStats {
   reversibleTotal: number;
   opticalApplied: number;
   semanticApplied: number;
+  virtualApplied: number;
 }
 
 export interface Pixroom {
@@ -42,10 +46,14 @@ export interface Pixroom {
   readonly router: ContentRouter;
   readonly ccr: CcrStore;
   readonly sidecar: HeadroomSidecar;
+  /** Exact local datasets offloaded by the virtual-context integration. */
+  readonly virtualContext: VirtualContextStore;
   /** Request-side optimizer integrations active in this runtime. */
   readonly integrations: IntegrationRegistry;
   /** False means the proxy can forward matched request bytes without decoding. */
   readonly requestOptimizationEnabled: boolean;
+  /** Minimum request inspection needed for a provider under the resolved integration set. */
+  requestInspection(provider: Provider): 'none' | 'tool-results' | 'full';
   /** Persistent cross-modal policy store, when the adaptive path is enabled. */
   readonly policy?: PolicyStore;
   /** Compress + route a parsed provider request body. Never throws (degrades). */
@@ -54,6 +62,7 @@ export interface Pixroom {
     model: string | null,
     body: Record<string, unknown>,
     authMode?: AuthMode,
+    validate?: ProposalValidation,
   ): Promise<RouteResult>;
   /** Retrieve an offloaded original by CCR hash / rec_ id. */
   retrieve(id: string): Promise<string | null>;
@@ -82,9 +91,15 @@ export function createRuntime(options: RuntimeOptions = {}): Pixroom {
   const sidecar = new HeadroomSidecar(config.semantic, log.child('sidecar'));
   const semantic = new SemanticCompressor(config.semantic, sidecar, log.child('semantic'));
   const optical = new OpticalCompressor(config.optical, log.child('optical'));
+  const virtualContext = new VirtualContextStore(
+    Math.max(256, config.virtualContext.maxResultChars),
+    Math.max(1, config.virtualContext.maxEntries),
+    Math.max(1, config.virtualContext.maxStoredBytes),
+  );
   const integrations = new IntegrationRegistry();
   if (options.includeBuiltinIntegrations !== false) {
     integrations
+      .register(new VirtualContextIntegration(config.virtualContext, virtualContext))
       .register(
         new LegacyCompressorIntegration(semantic, {
           id: HEADROOM_SEMANTIC_INTEGRATION_ID,
@@ -112,7 +127,14 @@ export function createRuntime(options: RuntimeOptions = {}): Pixroom {
   const requestOptimizationEnabled =
     (options.includeBuiltinIntegrations !== false &&
       (config.semantic.enabled || config.optical.enabled)) ||
+      (options.includeBuiltinIntegrations !== false && config.virtualContext.enabled) ||
     (options.integrations?.length ?? 0) > 0;
+  const hasCustomIntegrations = (options.integrations?.length ?? 0) > 0;
+  function requestInspection(provider: Provider): 'none' | 'tool-results' | 'full' {
+    if (hasCustomIntegrations || config.semantic.enabled || config.optical.enabled) return 'full';
+    if (provider === 'anthropic' && config.virtualContext.enabled) return 'tool-results';
+    return 'none';
+  }
 
   // Cross-modal policy: only stand up the store + recorder when the adaptive path
   // is enabled or in observe-only mode. Otherwise the recorder is absent and the
@@ -144,6 +166,7 @@ export function createRuntime(options: RuntimeOptions = {}): Pixroom {
     reversibleTotal: 0,
     opticalApplied: 0,
     semanticApplied: 0,
+    virtualApplied: 0,
   };
 
   function accumulate(report: SavingsReport): void {
@@ -155,7 +178,8 @@ export function createRuntime(options: RuntimeOptions = {}): Pixroom {
     for (const row of report.rows) {
       if (!row.applied) continue;
       if (row.stage === 'optical') totals.opticalApplied += 1;
-      else totals.semanticApplied += 1;
+      else if (row.stage === 'semantic') totals.semanticApplied += 1;
+      else totals.virtualApplied += 1;
     }
   }
 
@@ -165,17 +189,19 @@ export function createRuntime(options: RuntimeOptions = {}): Pixroom {
     router,
     ccr,
     sidecar,
+    virtualContext,
     integrations,
     requestOptimizationEnabled,
+    requestInspection,
     policy,
-    async route(provider, model, body, authMode) {
-      const result = await router.route(provider, model, body, authMode);
+    async route(provider, model, body, authMode, validate) {
+      const result = await router.route(provider, model, body, authMode, validate);
       accumulate(result.report);
       return result;
     },
     retrieve: (id) => ccr.retrieve(id),
     async warmup() {
-      await sidecar.ensureHealthy();
+      if (config.semantic.enabled) await sidecar.ensureHealthy();
       return { sidecar: sidecar.status };
     },
     stats: () => ({ ...totals }),

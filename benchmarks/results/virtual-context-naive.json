@@ -1,0 +1,21 @@
+{
+  "evidenceLevel": "live-controlled",
+  "kind": "failed-design-pilot",
+  "generatedAt": "2026-07-14T10:20:03.564Z",
+  "model": "claude-haiku-4-5-20251001",
+  "design": "Manifest-only virtualization with at most one hidden pixroom_query round and max_tokens=32",
+  "summary": {
+    "directCorrect": 2,
+    "pixroomCorrect": 1,
+    "tasks": 3,
+    "directInputTokens": 24249,
+    "pixroomInputTokens": 5067,
+    "inputSavingsFraction": 0.7910429296053445,
+    "directCostUSD": 0.024369000000000002,
+    "pixroomCostUSD": 0.005756999999999999,
+    "costSavingsFraction": 0.7637572325495507,
+    "observedSpendUSD": 0.030125999999999997
+  },
+  "failure": "Haiku spent the bounded round planning or emitted truncated tool-call JSON; JSON lookup regressed and log count remained wrong.",
+  "decision": "Rejected. Replaced by conservative deterministic exact prefetch with the query tool retained only for unresolved questions."
+}

@@ -1,6 +1,6 @@
 # pixroom compression benchmark
 
-_Generated 2026-07-14T08:48:00.085Z._
+_Generated 2026-07-14T11:42:58.491Z._
 
 Measures token consumption (and, for live arms, response correctness) for **headroom-only** (semantic), **pxpipe-only** (optical), and **pixroom** (both), on the same prompts + system context. Results are separated by evidence level; simulations are not presented as product-performance evidence.
 
@@ -15,14 +15,20 @@ Measures token consumption (and, for live arms, response correctness) for **head
 
 Evidence: `offline-real-transform`. Local network mock, 150 requests per arm, 3 repetitions, randomized direct/proxy arm order after 20 warmups.
 
-| payload | concurrency | direct mean p95 | pixroom mean p95 | added p95 |
-| --- | --- | --- | --- | --- |
-| 1024 B | 1 | 0.58 ms | 1.16 ms | 0.58 ms |
-| 1024 B | 10 | 4.88 ms | 5.55 ms | 0.67 ms |
-| 1024 B | 100 | 12.71 ms | 32.82 ms | 20.12 ms |
-| 102400 B | 1 | 0.59 ms | 0.81 ms | 0.22 ms |
-| 102400 B | 10 | 5.89 ms | 8.32 ms | 2.43 ms |
-| 102400 B | 100 | 22.36 ms | 57.45 ms | 35.09 ms |
+| protocol | payload | concurrency | direct mean p95 | pixroom mean p95 | added p95 |
+| --- | --- | --- | --- | --- | --- |
+| openai | 1024 B | 1 | 0.30 ms | 0.49 ms | 0.18 ms |
+| openai | 1024 B | 10 | 2.47 ms | 2.66 ms | 0.18 ms |
+| openai | 1024 B | 100 | 10.22 ms | 25.88 ms | 15.67 ms |
+| openai | 102400 B | 1 | 0.25 ms | 0.46 ms | 0.21 ms |
+| openai | 102400 B | 10 | 4.61 ms | 5.96 ms | 1.35 ms |
+| openai | 102400 B | 100 | 15.33 ms | 34.50 ms | 19.17 ms |
+| anthropic | 1024 B | 1 | 0.14 ms | 0.24 ms | 0.10 ms |
+| anthropic | 1024 B | 10 | 1.41 ms | 2.34 ms | 0.93 ms |
+| anthropic | 1024 B | 100 | 7.09 ms | 19.37 ms | 12.28 ms |
+| anthropic | 102400 B | 1 | 0.24 ms | 0.41 ms | 0.17 ms |
+| anthropic | 102400 B | 10 | 4.29 ms | 6.34 ms | 2.05 ms |
+| anthropic | 102400 B | 100 | 14.63 ms | 39.84 ms | 25.21 ms |
 
 Zero-error verdict: `true`. Raw per-request latency, CPU, RSS, event-loop delay, machine metadata, Node version, config, and git SHA are in `results/proxy-profile.json`.
 
@@ -54,13 +60,13 @@ Model: `claude-fable-5` (pxpipe-supported, so optical engages). headroom sidecar
 | payload | baseline tok | pxpipe-only | headroom-only | pixroom (both) |
 | --- | --- | --- | --- | --- |
 | json-data | 18662 | 15309 (18.0%) | 12537 (32.8%) | **9184 (50.8%)** |
-| build-log | 18309 | 14956 (18.3%) | 14718 (19.6%) | **11365 (37.9%)** |
-| source-code | 10467 | 7114 (32.0%) | 10467 (0.0%) | **7114 (32.0%)** |
-| **TOTAL** | **47438** | **37379 (21.2%)** | **37722 (20.5%)** | **27663 (41.7%)** |
+| build-log | 18309 | 14956 (18.3%) | 13416 (26.7%) | **10063 (45.0%)** |
+| source-code | 12049 | 8696 (27.8%) | 9199 (23.7%) | **5846 (51.5%)** |
+| **TOTAL** | **49020** | **38961 (20.5%)** | **35152 (28.3%)** | **25093 (48.8%)** |
 
 **Reading it:** pxpipe images the static system+tools slab; headroom compresses the tool-result content; pixroom does both and reduces the most. This is the composition thesis, measured.
 
-_Caveat:_ headroom's source-code compressor needs the `headroom-ai[code]` extra (tree-sitter), which is not installed here — so `source-code` shows no semantic savings and optical carries it. JSON and log outputs use the always-on SmartCrusher / Log compressors.
+_Caveat:_ headroom's AST-aware source-code compressor needs the `headroom-ai[code]` extra (tree-sitter), which is not installed here. Its generic semantic fallback still compressed the `source-code` fixture in this run; do not read that row as AST-aware compression.
 
 <details><summary>Per-stage detail (pixroom config)</summary>
 
@@ -68,9 +74,9 @@ _Caveat:_ headroom's source-code compressor needs the `headroom-ai[code]` extra 
 | --- | --- | --- | --- | --- | --- |
 | json-data | semantic | yes | applied | 11714→5888 | tiktoken |
 | json-data | optical | yes | applied | 10975→1259 | estimate |
-| build-log | semantic | yes | applied | 13212→9621 | tiktoken |
+| build-log | semantic | yes | applied | 13212→8718 | tiktoken |
 | build-log | optical | yes | applied | 10975→1259 | estimate |
-| source-code | semantic | no | not_profitable | 5002→5002 | tiktoken |
+| source-code | semantic | yes | applied | 6368→4489 | tiktoken |
 | source-code | optical | yes | applied | 10975→1259 | estimate |
 
 </details>
@@ -172,7 +178,7 @@ Evidence: per row `live-controlled` or `live-agentic`; single-run, fixed-order, 
 
 - Avg total-input **vs native** (− = fewer tokens; includes the proxy's request inflation): headroom-only −43%, pxpipe-only −30%, pixroom −30%.
 - **Optical engages on `claude-fable-5`:** imaging the slab yields a net −30% vs native (it more than offsets the proxy inflation), with identifiers protected by pxpipe's factsheet.
-- **pixroom ≈ pxpipe-only on total here** because these are single-shot sessions: the semantic stage's targets (recent tool outputs) are protected by `protect_recent`, so only optical fires. The full composition win (optical + semantic) shows in **Arm A** (offline, `protect_recent=0`: pixroom 41.7%).
+- **pixroom ≈ pxpipe-only on total here** because these are single-shot sessions: the semantic stage's targets (recent tool outputs) are protected by `protect_recent`, so only optical fires. The full composition win (optical + semantic) shows in **Arm A** (offline, `protect_recent=0`).
 - **Correctness:** `math` was correct natively but **wrong through all three proxies** (incl. passthrough/optical pxpipe) — a Claude-Code custom-base-URL *behaviour change* (likely a disabled reasoning aid), independent of compression. Every retrieval/tool prompt stayed correct.
 
 ### `claude-opus-4-8` — optical off (subscription stealth default)
@@ -211,13 +217,27 @@ Evidence: per row `live-controlled` or `live-agentic`; single-run, fixed-order, 
 
 - Avg total-input **vs native** (− = fewer tokens; includes the proxy's request inflation): headroom-only −6%, pxpipe-only +77%, pixroom +77%.
 - **Optical can't offset the proxy inflation on `claude-opus-4-8`** (out of pxpipe scope / stealth): net +77%. The optical win needs a pxpipe-supported model (compare the fable-5 row / Arm A).
-- **pixroom ≈ pxpipe-only on total here** because these are single-shot sessions: the semantic stage's targets (recent tool outputs) are protected by `protect_recent`, so only optical fires. The full composition win (optical + semantic) shows in **Arm A** (offline, `protect_recent=0`: pixroom 41.7%).
+- **pixroom ≈ pxpipe-only on total here** because these are single-shot sessions: the semantic stage's targets (recent tool outputs) are protected by `protect_recent`, so only optical fires. The full composition win (optical + semantic) shows in **Arm A** (offline, `protect_recent=0`).
 - **Correctness:** `math` was correct natively but **wrong through all three proxies** (incl. passthrough/optical pxpipe) — a Claude-Code custom-base-URL *behaviour change* (likely a disabled reasoning aid), independent of compression. Every retrieval/tool prompt stayed correct.
 
 
-## Arm D — direct-API 3-way
+## Arm D — paid direct Anthropic pilot
 
-_An API key is present in the environment, so this arm is **runnable** — but it makes **paid** direct-API calls (unlike the Copilot subscription), so it was not run autonomously. On request I can run the full direct-API 3-way (headroom vs pxpipe vs pixroom) on opus 4.8 with provider-reported `usage` — the one arm that puts all three on the exact same live model._
+Evidence: `live-controlled`. Model: `claude-haiku-4-5-20251001`; 3 synthetic, exactly graded tasks; one paired run per task; randomized arm order; no retries. Usage is provider-reported.
+
+| task | direct input | pixroom input | input reduction | direct answer | pixroom answer |
+| --- | --- | --- | --- | --- | --- |
+| json-lookup | 11282 | 5855 | 48.1% | ✓ `user73@example.com` | ✓ `user73@example.com` |
+| log-errors | 11332 | 7328 | 35.3% | ✗ `6` | ✗ `6` |
+| prose-needle | 1635 | 1295 | 20.8% | ✓ `SILVER-CEDAR-91` | ✓ `SILVER-CEDAR-91` |
+
+**Result:** provider input 24,249 → 14,478 (**40.3% lower**); modeled billed cost $0.024369 → $0.014598 (**40.1% lower**); quality 2/3 → 2/3.
+
+Actual pilot spend was **$0.038967** across 6 calls (hard caps: $0.08 and 6 calls). The separate canary cost $0.000059.
+
+> **Attribution:** optical was disabled because Haiku 4.5 is outside pxpipe's default model scope. This arm therefore validates pixroom's headroom integration and paid measurement path, but the **40.1% cost reduction is headroom-derived, not independent pixroom IP**. Pixroom's incremental composition value is measured only in Arm A/E on a pxpipe-supported model.
+
+> Both arms answered the log-count task `6` instead of the fixture truth `7`. That is baseline model failure, not a compression regression. With N=3 and one repetition, this pilot supports quality parity only; it provides no confidence interval or interpretable latency comparison.
 
 ## Arm E — constructed additivity check
 
@@ -228,8 +248,8 @@ Follows headroom's benchmarking route (`benchmarks/comprehensive_eval.py`, `real
 | scenario | kind | raw | headroom-only | pxpipe-only | pixroom | vs best single |
 | --- | --- | --- | --- | --- | --- | --- |
 | mixed-json | mixed | 18661 | 12536 (33%) | 15308 (18%) | **9183 (51%)** | **strict win** |
-| mixed-logs | mixed | 18308 | 14717 (20%) | 14955 (18%) | **11364 (38%)** | **strict win** |
-| mixed-code | mixed | 10466 | 10466 (0%) | 7113 (32%) | **7113 (32%)** | ties best |
+| mixed-logs | mixed | 18308 | 13415 (27%) | 14955 (18%) | **10062 (45%)** | **strict win** |
+| mixed-code | mixed | 12048 | 9198 (24%) | 8695 (28%) | **5845 (51%)** | **strict win** |
 | slab-heavy | slab-heavy | 4719 | 4719 (0%) | 1366 (71%) | **1366 (71%)** | ties best |
 | tools-heavy | tools-heavy | 20536 | 11537 (44%) | 20536 (0%) | **11537 (44%)** | ties best |
 
@@ -238,10 +258,10 @@ Follows headroom's benchmarking route (`benchmarks/comprehensive_eval.py`, `real
 | mixed scenario | optical Δtok | semantic Δtok | sum | pixroom Δtok | match |
 | --- | --- | --- | --- | --- | --- |
 | mixed-json | 3353 | 6125 | 9478 | 9478 | exact ✓ |
-| mixed-logs | 3353 | 3591 | 6944 | 6944 | exact ✓ |
-| mixed-code | 3353 | 0 | 3353 | 3353 | exact ✓ |
+| mixed-logs | 3353 | 4893 | 8246 | 8246 | exact ✓ |
+| mixed-code | 3353 | 2850 | 6203 | 6203 | exact ✓ |
 
-**Corpus verdict:** `dominates-all=true` — on these five inputs, pixroom is not worse than the better single transform and is strictly smaller on mixed workloads where both engines actually compress (json, logs); it **ties** the better engine where only one region is compressible (slab-heavy → =pxpipe; tools-heavy → =headroom; mixed-code → =pxpipe, because headroom's code compressor needs the `[code]` extra, not installed here).
+**Corpus verdict:** `dominates-all=true` — on these five inputs, pixroom is not worse than the better single transform and is strictly smaller on mixed workloads where both engines actually compress (JSON, logs, and current source text); it **ties** the better engine where only one region is compressible (slab-heavy → =pxpipe; tools-heavy → =headroom). The source row uses Headroom's generic fallback because the optional AST-aware `[code]` extra is not installed.
 
 > This is an additivity property of the constructed partition, not a general Pareto proof. Real task quality, retries/retrievals, cache behavior, model capability, and transform overhead can reverse a token-only ranking. Those dimensions move to the v2 quality-constrained benchmark.
 
@@ -299,12 +319,47 @@ Evidence: `unit-simulation`. Both retrieval probabilities and characteristic eng
 
 > The current runtime controller is also not yet genuine same-region cross-modal routing: on the slab, selecting semantic means skipping optical and forwarding raw text. It remains **off by default**. Real adaptive claims are gated on shadow proposals and held-out task benchmarks.
 
+## Arm H — Query-Backed Context Virtualization (QCV)
+
+QCV keeps exact large structured tool results in a bounded local content-addressed store. It sends a small typed manifest, deterministically materializes narrow answers for high-confidence explicit questions, and falls through when the safe default cannot answer. The experimental fallback exposes `pixroom_query` only when explicitly enabled. Headroom and pxpipe remain fallbacks for regions QCV does not claim.
+
+Evidence: `offline-real-transform`. The conservative total counts the optimized initial request **plus one complete uncached fallback-query continuation**, even when deterministic prefetch would answer in one request. Exactness is checked against the local store; no model call.
+
+| scenario | current pixroom | QCV initial | fallback continuation | QCV conservative total | further reduction | exact |
+| --- | --- | --- | --- | --- | --- | --- |
+| json-data | 9219 | 1614 | 1736 | 3350 | 63.7% | ✓ |
+| build-log | 10096 | 1578 | 1679 | 3257 | 67.7% | ✓ |
+| source-code | 7253 | 1618 | 1751 | 3369 | 53.6% | ✓ |
+
+Verdict: `exact=true`, `one-uncached-query-smaller=true`. QCV used 53.6-67.7% fewer input tokens than the previous full Headroom+pxpipe stack under this deliberately pessimistic accounting.
+
+**Rejected live design:** the first manifest-only pilot cut input 79.1% but regressed quality 2/3 → 1/3. Haiku spent the bounded round planning or emitted truncated tool-call JSON; JSON lookup regressed and log count remained wrong. The design was rejected, not averaged into the successful result.
+
+**Repaired paid pilot:** evidence `live-controlled`, model `claude-haiku-4-5-20251001`, 2 exactly graded structured tasks, one randomized pair each, no retries. Provider usage includes every request; deterministic prefetch needed no hidden round on these tasks.
+
+| task | raw input | QCV input | reduction | raw answer | QCV answer |
+| --- | --- | --- | --- | --- | --- |
+| json-lookup | 11282 | 323 | 97.1% | ✓ `user73@example.com` | ✓ `user73@example.com` |
+| log-errors | 11332 | 271 | 97.6% | ✗ `5` | ✓ `7` |
+
+Provider input 22,614 → 594 (**97.4% lower**); modeled cost $0.022684 → $0.000664 (**97.1% lower**); quality 1/2 → 2/2. Actual four-call spend: $0.023348.
+
+On the same fixture definitions, the earlier Headroom-only paid arm used 13,183 input tokens and $0.013253. QCV used 95.5% fewer input tokens and 95.0% lower modeled cost than that semantic path. These are separate single-run pilots, so treat quality differences as directional.
+
+> Scope: the deterministic exact subset defaults on for first-party Anthropic Messages, PAYG, non-streaming, old large JSON/log/code tool results. Ambiguous questions pass through by default; `PIXROOM_VIRTUAL_QUERY_FALLBACK=1` separately enables the bounded query tool. Streaming and subscription traffic pass through. N=2 is breakthrough-candidate evidence, not a universal claim.
+
+**Default-safety checks:** proposal inspection retains no data; storage commits atomically after request validation; historical manifests remain byte-identical across different current questions; query capabilities are request-scoped; memory is bounded by entries and bytes; delimiter injection is escaped; repeated/range/negative/multi-dataset selectors fall through; mixed tools, transport failure, invalid continuation output, and round-cap exhaustion replay the original request. These are automated regression tests, not quality evidence.
+
+> **Related work:** LeanCTX already combines exact content-addressed archives, `ctx_expand` JSON/search recovery, and query-conditioned context modes. QCV's narrower distinction is drop-in virtualization of arbitrary intercepted provider tool results, deterministic exact current-question prefetch, conditional tool exposure, and transparent continuation inside a transactional multi-optimizer runtime. This report does not claim globally novel ingredients.
+
 ## Findings
 
-- **Offline (claude-fable-5):** pxpipe-only 21.2%, headroom-only 20.5%, **pixroom 41.7%** overall input-token reduction. The two engines target disjoint regions (optical→system slab, semantic→tool outputs), so composing them beats either alone.
+- **Offline (claude-fable-5):** pxpipe-only 20.5%, headroom-only 28.3%, **pixroom 48.8%** overall input-token reduction. The two engines target disjoint regions (optical→system slab, semantic→tool outputs), so composing them beats either alone.
 - **Live Copilot (claude-opus-4.8):** wrapping works end-to-end on the real subscription; correctness is preserved. For Copilot specifically, pixroom's value is headroom's semantic engine (optical is out of scope for these models).
 - **Live Claude Code (fable-5):** optical genuinely engages — pxpipe/pixroom image the static slab for a **net total-input cut vs native** despite the proxy's request inflation, correctness preserved (except a base-URL arithmetic quirk that hits *all* proxies, not compression). On opus (out of optical scope) the same proxying nets *more* tokens. The decisive subscription concern is the **prompt cache**: aggressive/lossy restructuring interacts with Claude Code's cache, so pixroom goes stealth there. See Arm C; the full optical+semantic composition is Arm A.
-- **Constructed additivity (Arm E):** `dominates-all=true` on five synthetic disjoint-region inputs; strict token wins on mixed-json + mixed-logs. This is transform arithmetic, not a task-quality or universal product claim.
+- **Paid direct Anthropic (claude-haiku-4-5-20251001):** provider input fell 40.3% and modeled cost fell 40.1%, with equal 2/3 quality. This was a three-task, one-repetition pilot and used headroom semantic compression only, so it validates the integration rather than independent pixroom value.
+- **QCV paid pilot (claude-haiku-4-5-20251001):** input fell 97.4%, modeled cost fell 97.1%, and exact score improved 1/2 → 2/2. This is the first pixroom-owned optimizer result, but it remains a two-task, one-repetition pilot.
+- **Constructed additivity (Arm E):** `dominates-all=true` on five synthetic disjoint-region inputs; strict token wins on mixed-json + mixed-logs + mixed-code. This is transform arithmetic, not a task-quality or universal product claim.
 - **Prose (Arm F): fills the gap** — a large user-message prose block is compressed **0%** by pxpipe, headroom-tools, and default pixroom, but `PIXROOM_SEMANTIC_PROSE=1` routes it to headroom's Kompress for a real, reversible cut (~6–21% of prose tokens by redundancy), **additive** with the optical + tool_result regions and a **no-op** when there's no prose.
 - **Controller simulation (Arm G):** the policy loop recovers a hand-authored 2×2 allocation under its own oracle. It is retained as a deterministic mechanism test and excluded from competitive claims.
 - **Right-sizing:** use optical where you control an Anthropic model in pxpipe's scope; use headroom (semantic) everywhere, including Copilot; use pixroom to get both automatically where both apply.
@@ -321,6 +376,11 @@ node benchmarks/proof.mjs             # Arm E (constructed additivity check)
 node benchmarks/prose.mjs             # Arm F (prose region, needs transformers in the sidecar)
 node benchmarks/rd_frontier.mjs       # Arm G (simulated RD surface)
 node benchmarks/adaptive.mjs          # Arm G (controller simulation)
+npm run bench:virtual                 # Arm H (QCV, free conservative accounting)
 npm run bench:profile                 # v2 local proxy overhead profile
+npm run bench:anthropic:self-test     # no network
+npm run bench:anthropic:preflight     # model discovery + token counts, no generation
+BENCH_ALLOW_PAID=1 BENCH_MAX_USD=0.01 BENCH_MAX_REQUESTS=1 npm run bench:anthropic:canary
+BENCH_ALLOW_PAID=1 BENCH_MAX_USD=0.08 BENCH_MAX_REQUESTS=6 npm run bench:anthropic
 node benchmarks/report.mjs            # regenerate this file
 ```

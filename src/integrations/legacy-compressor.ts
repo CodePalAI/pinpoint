@@ -51,6 +51,26 @@ export class LegacyCompressorIntegration implements ProcessorIntegration {
   }
 
   async propose(ctx: Readonly<RequestContext>): Promise<TransformProposal> {
+    const preflight = await this.compressor.preflight?.(ctx);
+    if (preflight) {
+      return {
+        id: `${this.id}:${ctx.stages.length}`,
+        integrationId: this.id,
+        regions: [],
+        fidelity: this.capabilities.fidelity,
+        cacheImpact: 'preserve',
+        estimate: {
+          tokensBefore: preflight.counterfactual.tokensText,
+          tokensAfter: preflight.counterfactual.tokensCompressed,
+          basis: preflight.counterfactual.basis,
+        },
+        patch: {
+          appendStages: [preflight],
+          opticalOwnsCacheControl: ctx.opticalOwnsCacheControl,
+        },
+      };
+    }
+
     const candidate = cloneRequestContext(ctx);
     const reversibleStart = candidate.reversible.length;
     let result: StageResult;

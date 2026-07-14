@@ -76,6 +76,10 @@ export class SemanticCompressor implements Compressor, CcrRetriever {
     private readonly log: Logger,
   ) {}
 
+  preflight(_ctx: Readonly<RequestContext>): StageResult | undefined {
+    return this.cfg.enabled ? undefined : passthroughResult('semantic', 'disabled');
+  }
+
   async applicable(_ctx: RequestContext): Promise<boolean> {
     if (!this.cfg.enabled) return false;
     return this.sidecar.ensureHealthy();
@@ -87,9 +91,8 @@ export class SemanticCompressor implements Compressor, CcrRetriever {
       return { context: ctx, result };
     };
 
-    if (!this.cfg.enabled) {
-      return finish(passthroughResult('semantic', 'disabled'));
-    }
+    const preflight = this.preflight(ctx);
+    if (preflight) return finish(preflight);
     if (!(await this.sidecar.ensureHealthy())) {
       return finish(passthroughResult('semantic', 'degraded', 'headroom sidecar unavailable'));
     }
@@ -112,7 +115,7 @@ export class SemanticCompressor implements Compressor, CcrRetriever {
     const toolTargets = collectToolResultTargets(ctx.body, {
       protectRecent: this.cfg.protectRecent,
       minChars: SEMANTIC_MIN_BLOCK_CHARS,
-    });
+    }).filter((target) => !target.text.startsWith('<<pixroom_virtual '));
     const proseTargets = this.cfg.includeUserProse
       ? collectProseTargets(ctx.body, {
           protectRecent: this.cfg.protectRecent,

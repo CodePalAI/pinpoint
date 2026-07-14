@@ -1,0 +1,180 @@
+{
+  "evidenceLevel": "live-controlled",
+  "kind": "paid-paired-pilot",
+  "generatedAt": "2026-07-14T10:34:30.703Z",
+  "model": "claude-haiku-4-5-20251001",
+  "variant": "virtual",
+  "pricing": {
+    "input": 1,
+    "output": 5,
+    "source": "Anthropic public pricing"
+  },
+  "methodology": {
+    "repetitions": 1,
+    "syntheticCorrectnessTasks": 2,
+    "randomizedArmOrder": true,
+    "retries": 0,
+    "pixroom": "virtual exact prefetch enabled with at most one hidden query fallback, semantic fallback, optical disabled",
+    "limitation": "Controlled pilot only; not statistical or agentic competitor evidence."
+  },
+  "summary": {
+    "directCorrect": 1,
+    "pixroomCorrect": 2,
+    "directInputTokens": 22614,
+    "pixroomInputTokens": 594,
+    "inputSavingsFraction": 0.9737330856991244,
+    "directCostUSD": 0.022684000000000003,
+    "pixroomCostUSD": 0.000664,
+    "costSavingsFraction": 0.9707282666196438
+  },
+  "budget": {
+    "maxUSD": 0.05,
+    "maxRequests": 4,
+    "paidRequests": 4,
+    "observedUSD": 0.023348000000000004,
+    "conservativeExposureUSD": 0.023347999999999997
+  },
+  "runs": [
+    {
+      "id": "json-lookup",
+      "expected": "user73@example.com",
+      "order": [
+        "pixroom",
+        "direct"
+      ],
+      "preflight": {
+        "id": "json-lookup",
+        "directInputTokens": 11282,
+        "pixroomInputTokens": 323,
+        "semanticApplied": false,
+        "virtualApplied": true,
+        "queryToolInjected": false,
+        "providerRequestBound": 1,
+        "eligible": true,
+        "inputSavingsFraction": 0.9713703244105655,
+        "directWorstCaseUSD": 0.011442,
+        "pixroomWorstCaseUSD": 0.011442,
+        "report": [
+          {
+            "stage": "virtual",
+            "applied": true,
+            "reason": "applied",
+            "tokensText": 6300,
+            "tokensCompressed": 163
+          },
+          {
+            "stage": "semantic",
+            "applied": false,
+            "reason": "not_profitable",
+            "tokensText": 185,
+            "tokensCompressed": 185
+          },
+          {
+            "stage": "optical",
+            "applied": false,
+            "reason": "disabled",
+            "tokensText": 0,
+            "tokensCompressed": 0
+          }
+        ]
+      },
+      "results": {
+        "pixroom": {
+          "latencyMs": 762.7070000000003,
+          "usage": {
+            "input": 323,
+            "cacheCreate": 0,
+            "cacheRead": 0,
+            "output": 9
+          },
+          "costUSD": 0.000368,
+          "stopReason": "end_turn",
+          "text": "user73@example.com",
+          "toolCalls": [],
+          "correct": true
+        },
+        "direct": {
+          "latencyMs": 1025.2952910000004,
+          "usage": {
+            "input": 11282,
+            "cacheCreate": 0,
+            "cacheRead": 0,
+            "output": 9
+          },
+          "costUSD": 0.011327,
+          "stopReason": "end_turn",
+          "text": "user73@example.com",
+          "toolCalls": [],
+          "correct": true
+        }
+      }
+    },
+    {
+      "id": "log-errors",
+      "expected": "7",
+      "order": [
+        "direct",
+        "pixroom"
+      ],
+      "preflight": {
+        "id": "log-errors",
+        "directInputTokens": 11332,
+        "pixroomInputTokens": 271,
+        "semanticApplied": false,
+        "virtualApplied": true,
+        "queryToolInjected": false,
+        "providerRequestBound": 1,
+        "eligible": true,
+        "inputSavingsFraction": 0.9760854218143311,
+        "directWorstCaseUSD": 0.011492,
+        "pixroomWorstCaseUSD": 0.011492,
+        "report": [
+          {
+            "stage": "virtual",
+            "applied": true,
+            "reason": "applied",
+            "tokensText": 6549,
+            "tokensCompressed": 129
+          },
+          {
+            "stage": "optical",
+            "applied": false,
+            "reason": "disabled",
+            "tokensText": 0,
+            "tokensCompressed": 0
+          }
+        ]
+      },
+      "results": {
+        "direct": {
+          "latencyMs": 1108.024958,
+          "usage": {
+            "input": 11332,
+            "cacheCreate": 0,
+            "cacheRead": 0,
+            "output": 5
+          },
+          "costUSD": 0.011357,
+          "stopReason": "end_turn",
+          "text": "5",
+          "toolCalls": [],
+          "correct": false
+        },
+        "pixroom": {
+          "latencyMs": 1149.0782500000005,
+          "usage": {
+            "input": 271,
+            "cacheCreate": 0,
+            "cacheRead": 0,
+            "output": 5
+          },
+          "costUSD": 0.000296,
+          "stopReason": "end_turn",
+          "text": "7",
+          "toolCalls": [],
+          "correct": true
+        }
+      }
+    }
+  ]
+}

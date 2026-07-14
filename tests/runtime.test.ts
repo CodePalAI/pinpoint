@@ -4,6 +4,21 @@ import { createRuntime } from '../src/pixroom.js';
 import type { ProcessorIntegration } from '../src/kernel/types.js';
 
 describe('createRuntime', () => {
+  it('limits QCV-only request inspection to Anthropic tool results', async () => {
+    const runtime = createRuntime({
+      config: {
+        virtualContext: { enabled: true },
+        semantic: { enabled: false },
+        optical: { enabled: false },
+        logLevel: 'silent',
+      },
+    });
+
+    expect(runtime.requestInspection('openai')).toBe('none');
+    expect(runtime.requestInspection('anthropic')).toBe('tool-results');
+    await runtime.shutdown();
+  });
+
   it('runs a third-party integration without built-in compressors or router edits', async () => {
     const integration: ProcessorIntegration = {
       id: 'example.lossless-prefix',

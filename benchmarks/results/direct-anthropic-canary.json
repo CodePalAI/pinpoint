@@ -1,0 +1,34 @@
+{
+  "evidenceLevel": "live-controlled",
+  "kind": "paid-canary",
+  "generatedAt": "2026-07-14T09:46:35.825Z",
+  "model": "claude-haiku-4-5-20251001",
+  "pricing": {
+    "input": 1,
+    "output": 5,
+    "source": "Anthropic public pricing"
+  },
+  "inputTokens": 19,
+  "projectedWorstCaseUSD": 0.000059,
+  "result": {
+    "latencyMs": 1289.4888749999998,
+    "usage": {
+      "input": 19,
+      "cacheCreate": 0,
+      "cacheRead": 0,
+      "output": 8
+    },
+    "costUSD": 0.000059,
+    "stopReason": "end_turn",
+    "text": "CANARY_OK",
+    "toolCalls": [],
+    "correct": true
+  },
+  "budget": {
+    "maxUSD": 0.01,
+    "maxRequests": 1,
+    "paidRequests": 1,
+    "observedUSD": 0.000059,
+    "conservativeExposureUSD": 0.000059
+  }
+}

@@ -1,0 +1,44 @@
+name: Optimizer proposal
+description: Propose a new optimization integration or a change to QCV behavior.
+title: "optimizer: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Context waste being addressed
+      description: Identify the concrete request/response region and why existing integrations cannot handle it.
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Proposed contract
+      description: State region ownership, fidelity class, cache impact, reversibility, and failure behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: quality
+    attributes:
+      label: Quality gate
+      description: Explain the task metric and the check that would falsify the optimization.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Existing evidence
+      description: Label it unit-simulation, offline-real-transform, live-controlled, or live-agentic.
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: The proposal fails open and has an explicit kill switch.
+          required: true
+        - label: Costs include retries, retrievals, continuations, and cache effects where applicable.
+          required: true
+        - label: The proposal does not claim novelty for upstream or prior-art components.
+          required: true

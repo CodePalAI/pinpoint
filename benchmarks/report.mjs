@@ -11,6 +11,7 @@ const load = (name) => {
   const p = join(here, 'results', name);
   return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null;
 };
+const inlineCode = (value) => `\`${value}\``;
 
 const offline = load('offline.json');
 const copilot = load('copilot.json');
@@ -20,6 +21,10 @@ const prose = load('prose.json');
 const rdFrontier = load('rd-frontier.json');
 const adaptive = load('adaptive.json');
 const proxyProfile = load('proxy-profile.json');
+const directAnthropic = load('direct-anthropic.json');
+const virtualContext = load('virtual-context.json');
+const directAnthropicVirtual = load('direct-anthropic-virtual.json');
+const virtualContextNaive = load('virtual-context-naive.json');
 const out = [];
 
 function loadClaudeResults() {
@@ -65,8 +70,9 @@ if (!proxyProfile) {
   out.push('');
   out.push(
     mdTable(
-      ['payload', 'concurrency', 'direct mean p95', 'pixroom mean p95', 'added p95'],
+      ['protocol', 'payload', 'concurrency', 'direct mean p95', 'pixroom mean p95', 'added p95'],
       proxyProfile.comparisons.map((row) => [
+        row.protocol ?? 'openai',
         `${row.payloadBytes} B`,
         String(row.concurrency),
         `${row.directMeanP95Ms.toFixed(2)} ms`,
@@ -187,9 +193,9 @@ if (!offline) {
   );
   out.push('');
   out.push(
-    "_Caveat:_ headroom's source-code compressor needs the `headroom-ai[code]` extra (tree-sitter), " +
-      'which is not installed here — so `source-code` shows no semantic savings and optical carries it. ' +
-      'JSON and log outputs use the always-on SmartCrusher / Log compressors.',
+    "_Caveat:_ headroom's AST-aware source-code compressor needs the `headroom-ai[code]` extra " +
+      '(tree-sitter), which is not installed here. Its generic semantic fallback still compressed the ' +
+      '`source-code` fixture in this run; do not read that row as AST-aware compression.',
   );
   out.push('');
   // Per-stage detail
@@ -411,7 +417,7 @@ function renderClaudeArm(c) {
   out.push(
     "- **pixroom ≈ pxpipe-only on total here** because these are single-shot sessions: the semantic stage's " +
       'targets (recent tool outputs) are protected by `protect_recent`, so only optical fires. The full ' +
-      'composition win (optical + semantic) shows in **Arm A** (offline, `protect_recent=0`: pixroom 41.7%).',
+      'composition win (optical + semantic) shows in **Arm A** (offline, `protect_recent=0`).',
   );
   const math = c.runs.find((r) => r.id === 'math');
   if (
@@ -433,19 +439,68 @@ function renderClaudeArm(c) {
   out.push('');
 }
 
-out.push('## Arm D — direct-API 3-way');
+out.push('## Arm D — paid direct Anthropic pilot');
 out.push('');
-const hasKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
-out.push(
-  hasKey
-    ? '_An API key is present in the environment, so this arm is **runnable** — but it makes **paid** ' +
-        'direct-API calls (unlike the Copilot subscription), so it was not run autonomously. On request I ' +
-        'can run the full direct-API 3-way (headroom vs pxpipe vs pixroom) on opus 4.8 with ' +
-        'provider-reported `usage` — the one arm that puts all three on the exact same live model._'
-    : '_Skipped — no `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` in the environment. This is the only arm that ' +
-        'could put pxpipe and pixroom on the exact same live model as headroom with provider-reported ' +
-        'usage. Provide a key to enable it._',
-);
+if (!directAnthropic) {
+  out.push('_Not run. Use the staged preflight/canary/benchmark commands below._');
+} else {
+  const summary = directAnthropic.summary;
+  const budget = directAnthropic.budget;
+  out.push(
+    `Evidence: ${inlineCode(directAnthropic.evidenceLevel)}. Model: ${inlineCode(directAnthropic.model)}; ` +
+      `${directAnthropic.methodology.syntheticCorrectnessTasks} synthetic, exactly graded tasks; one paired ` +
+      'run per task; randomized arm order; no retries. Usage is provider-reported.',
+  );
+  out.push('');
+  out.push(
+    mdTable(
+      ['task', 'direct input', 'pixroom input', 'input reduction', 'direct answer', 'pixroom answer'],
+      directAnthropic.runs.map((run) => {
+        const direct = run.results.direct;
+        const pixroom = run.results.pixroom;
+        const directInput = direct.usage.input + direct.usage.cacheCreate + direct.usage.cacheRead;
+        const pixroomInput = pixroom.usage.input + pixroom.usage.cacheCreate + pixroom.usage.cacheRead;
+        const reduction = directInput > 0 ? (directInput - pixroomInput) / directInput : 0;
+        return [
+          run.id,
+          String(directInput),
+          String(pixroomInput),
+          pct(reduction),
+          `${direct.correct ? '✓' : '✗'} ${inlineCode(direct.text)}`,
+          `${pixroom.correct ? '✓' : '✗'} ${inlineCode(pixroom.text)}`,
+        ];
+      }),
+    ),
+  );
+  out.push('');
+  out.push(
+    `**Result:** provider input ${summary.directInputTokens.toLocaleString()} → ` +
+      `${summary.pixroomInputTokens.toLocaleString()} (**${pct(summary.inputSavingsFraction)} lower**); ` +
+      `modeled billed cost $${summary.directCostUSD.toFixed(6)} → $${summary.pixroomCostUSD.toFixed(6)} ` +
+      `(**${pct(summary.costSavingsFraction)} lower**); quality ` +
+      `${summary.directCorrect}/${directAnthropic.runs.length} → ` +
+      `${summary.pixroomCorrect}/${directAnthropic.runs.length}.`,
+  );
+  out.push('');
+  out.push(
+    `Actual pilot spend was **$${budget.observedUSD.toFixed(6)}** across ${budget.paidRequests} calls ` +
+      `(hard caps: $${budget.maxUSD.toFixed(2)} and ${budget.maxRequests} calls). The separate canary cost ` +
+      '$0.000059.',
+  );
+  out.push('');
+  out.push(
+    '> **Attribution:** optical was disabled because Haiku 4.5 is outside pxpipe\'s default model scope. ' +
+      'This arm therefore validates pixroom\'s headroom integration and paid measurement path, but the ' +
+      '**40.1% cost reduction is headroom-derived, not independent pixroom IP**. Pixroom\'s incremental ' +
+      'composition value is measured only in Arm A/E on a pxpipe-supported model.',
+  );
+  out.push('');
+  out.push(
+    '> Both arms answered the log-count task `6` instead of the fixture truth `7`. That is baseline ' +
+      'model failure, not a compression regression. With N=3 and one repetition, this pilot supports ' +
+      'quality parity only; it provides no confidence interval or interpretable latency comparison.',
+  );
+}
 out.push('');
 
 // ── Conclusion ───────────────────────────────────────────────────────────────
@@ -507,9 +562,9 @@ if (!proof) {
   out.push(
     `**Corpus verdict:** \`dominates-all=${proof.verdict.dominatesAll}\` — on these five inputs, pixroom is not worse than the ` +
       'better single transform and is strictly smaller on mixed workloads where ' +
-      'both engines actually compress (json, logs); it **ties** the better engine where only one region is ' +
-      'compressible (slab-heavy → =pxpipe; tools-heavy → =headroom; mixed-code → =pxpipe, because headroom\'s ' +
-      'code compressor needs the `[code]` extra, not installed here).',
+      'both engines actually compress (JSON, logs, and current source text); it **ties** the better engine ' +
+      'where only one region is compressible (slab-heavy → =pxpipe; tools-heavy → =headroom). The source ' +
+      'row uses Headroom\'s generic fallback because the optional AST-aware `[code]` extra is not installed.',
   );
   out.push('');
   out.push(
@@ -662,6 +717,150 @@ if (!rdFrontier && !adaptive) {
 }
 out.push('');
 
+out.push('## Arm H — Query-Backed Context Virtualization (QCV)');
+out.push('');
+out.push(
+  'QCV keeps exact large structured tool results in a bounded local content-addressed store. It sends a ' +
+    'small typed manifest, deterministically materializes narrow answers for high-confidence explicit ' +
+    'questions, and falls through when the safe default cannot answer. The experimental fallback exposes ' +
+    '`pixroom_query` only when explicitly enabled. ' +
+    'Headroom and pxpipe remain fallbacks for regions QCV does not claim.',
+);
+out.push('');
+if (!virtualContext) {
+  out.push('_Offline QCV benchmark not run._');
+} else {
+  out.push(
+    `Evidence: ${inlineCode(virtualContext.evidenceLevel)}. The conservative total counts the optimized ` +
+      'initial request **plus one complete uncached fallback-query continuation**, even when deterministic ' +
+      'prefetch would answer in one request. Exactness is checked against the local store; no model call.',
+  );
+  out.push('');
+  out.push(
+    mdTable(
+      ['scenario', 'current pixroom', 'QCV initial', 'fallback continuation', 'QCV conservative total', 'further reduction', 'exact'],
+      virtualContext.scenarios.map((scenario) => [
+        scenario.name,
+        String(scenario.currentTokens),
+        String(scenario.virtualInitialTokens),
+        String(scenario.continuationTokens),
+        String(scenario.virtualOneQueryTokens),
+        pct(scenario.reductionVsCurrent),
+        scenario.exact ? '✓' : '✗',
+      ]),
+    ),
+  );
+  out.push('');
+  const reductions = virtualContext.scenarios.map((scenario) => scenario.reductionVsCurrent);
+  const minReduction = Math.min(...reductions);
+  const maxReduction = Math.max(...reductions);
+  out.push(
+    `Verdict: ${inlineCode(`exact=${virtualContext.verdict.exact}`)}, ` +
+      `${inlineCode(`one-uncached-query-smaller=${virtualContext.verdict.oneUncachedQuerySmaller}`)}. ` +
+      `QCV used ${(minReduction * 100).toFixed(1)}-${(maxReduction * 100).toFixed(1)}% fewer input tokens ` +
+      'than the previous full Headroom+pxpipe stack under this ' +
+      'deliberately pessimistic accounting.',
+  );
+  out.push('');
+}
+
+if (virtualContextNaive) {
+  const failed = virtualContextNaive.summary;
+  out.push(
+    `**Rejected live design:** the first manifest-only pilot cut input ${pct(failed.inputSavingsFraction)} ` +
+      `but regressed quality ${failed.directCorrect}/${failed.tasks} → ${failed.pixroomCorrect}/${failed.tasks}. ` +
+      `${virtualContextNaive.failure} The design was rejected, not averaged into the successful result.`,
+  );
+  out.push('');
+}
+
+if (!directAnthropicVirtual) {
+  out.push('_Repaired paid QCV pilot not run._');
+} else {
+  const summary = directAnthropicVirtual.summary;
+  out.push(
+    `**Repaired paid pilot:** evidence ${inlineCode(directAnthropicVirtual.evidenceLevel)}, model ` +
+      `${inlineCode(directAnthropicVirtual.model)}, ${directAnthropicVirtual.methodology.syntheticCorrectnessTasks} ` +
+      'exactly graded structured tasks, one randomized pair each, no retries. Provider usage includes every ' +
+      'request; deterministic prefetch needed no hidden round on these tasks.',
+  );
+  out.push('');
+  out.push(
+    mdTable(
+      ['task', 'raw input', 'QCV input', 'reduction', 'raw answer', 'QCV answer'],
+      directAnthropicVirtual.runs.map((run) => {
+        const direct = run.results.direct;
+        const qcv = run.results.pixroom;
+        const directInput = direct.usage.input + direct.usage.cacheCreate + direct.usage.cacheRead;
+        const qcvInput = qcv.usage.input + qcv.usage.cacheCreate + qcv.usage.cacheRead;
+        return [
+          run.id,
+          String(directInput),
+          String(qcvInput),
+          pct(1 - qcvInput / directInput),
+          `${direct.correct ? '✓' : '✗'} ${inlineCode(direct.text)}`,
+          `${qcv.correct ? '✓' : '✗'} ${inlineCode(qcv.text)}`,
+        ];
+      }),
+    ),
+  );
+  out.push('');
+  out.push(
+    `Provider input ${summary.directInputTokens.toLocaleString()} → ` +
+      `${summary.pixroomInputTokens.toLocaleString()} (**${pct(summary.inputSavingsFraction)} lower**); ` +
+      `modeled cost $${summary.directCostUSD.toFixed(6)} → $${summary.pixroomCostUSD.toFixed(6)} ` +
+      `(**${pct(summary.costSavingsFraction)} lower**); quality ` +
+      `${summary.directCorrect}/${directAnthropicVirtual.runs.length} → ` +
+      `${summary.pixroomCorrect}/${directAnthropicVirtual.runs.length}. Actual four-call spend: ` +
+      `$${directAnthropicVirtual.budget.observedUSD.toFixed(6)}.`,
+  );
+  out.push('');
+  if (directAnthropic) {
+    const ids = new Set(directAnthropicVirtual.runs.map((run) => run.id));
+    const semanticRuns = directAnthropic.runs.filter((run) => ids.has(run.id));
+    const semanticInput = semanticRuns.reduce((total, run) => {
+      const usage = run.results.pixroom.usage;
+      return total + usage.input + usage.cacheCreate + usage.cacheRead;
+    }, 0);
+    const semanticCost = semanticRuns.reduce(
+      (total, run) => total + run.results.pixroom.costUSD,
+      0,
+    );
+    out.push(
+      `On the same fixture definitions, the earlier Headroom-only paid arm used ` +
+        `${semanticInput.toLocaleString()} input tokens and $${semanticCost.toFixed(6)}. QCV used ` +
+        `${pct(1 - summary.pixroomInputTokens / semanticInput)} fewer input tokens and ` +
+        `${pct(1 - summary.pixroomCostUSD / semanticCost)} lower modeled cost than that semantic path. ` +
+        'These are separate single-run pilots, so treat quality differences as directional.',
+    );
+    out.push('');
+  }
+  out.push(
+    '> Scope: the deterministic exact subset defaults on for first-party Anthropic Messages, PAYG, ' +
+      'non-streaming, old large JSON/log/code tool results. Ambiguous questions pass through by default; ' +
+      '`PIXROOM_VIRTUAL_QUERY_FALLBACK=1` separately enables the bounded query tool. Streaming and ' +
+      'subscription traffic pass through. N=2 is breakthrough-candidate evidence, not a universal claim.',
+  );
+  out.push('');
+  out.push(
+    '**Default-safety checks:** proposal inspection retains no data; storage commits atomically after ' +
+      'request validation; historical manifests remain byte-identical across different current questions; ' +
+      'query capabilities are request-scoped; memory is bounded by entries and bytes; delimiter injection ' +
+      'is escaped; repeated/range/negative/multi-dataset selectors fall through; mixed tools, transport ' +
+      'failure, invalid continuation output, and round-cap exhaustion replay the original request. These ' +
+      'are automated regression tests, not quality evidence.',
+  );
+  out.push('');
+  out.push(
+    '> **Related work:** LeanCTX already combines exact content-addressed archives, `ctx_expand` ' +
+      'JSON/search recovery, and query-conditioned context modes. QCV\'s narrower distinction is drop-in ' +
+      'virtualization of arbitrary intercepted provider tool results, deterministic exact current-question ' +
+      'prefetch, conditional tool exposure, and transparent continuation inside a transactional ' +
+      'multi-optimizer runtime. This report does not claim globally novel ingredients.',
+  );
+}
+out.push('');
+
 out.push('## Findings');
 out.push('');
 if (offline) {
@@ -695,6 +894,25 @@ if (claudeResults.find((c) => c.model.includes('fable'))) {
   );
 } else if (claudeResults.length) {
   out.push(`- **Live Claude Code:** ran on ${claudeResults.map((c) => c.model).join(', ')} — see Arm C.`);
+}
+if (directAnthropic) {
+  const s = directAnthropic.summary;
+  out.push(
+    `- **Paid direct Anthropic (${directAnthropic.model}):** provider input fell ${pct(s.inputSavingsFraction)} ` +
+      `and modeled cost fell ${pct(s.costSavingsFraction)}, with equal ${s.directCorrect}/${directAnthropic.runs.length} ` +
+      'quality. This was a three-task, one-repetition pilot and used headroom semantic compression only, ' +
+      'so it validates the integration rather than independent pixroom value.',
+  );
+}
+if (directAnthropicVirtual) {
+  const s = directAnthropicVirtual.summary;
+  out.push(
+    `- **QCV paid pilot (${directAnthropicVirtual.model}):** input fell ${pct(s.inputSavingsFraction)}, ` +
+      `modeled cost fell ${pct(s.costSavingsFraction)}, and exact score improved ` +
+      `${s.directCorrect}/${directAnthropicVirtual.runs.length} → ` +
+      `${s.pixroomCorrect}/${directAnthropicVirtual.runs.length}. This is the first pixroom-owned ` +
+      'optimizer result, but it remains a two-task, one-repetition pilot.',
+  );
 }
 if (proof) {
   const strictMixed = proof.scenarios.filter((e) => e.category === 'mixed' && e.strictWin).map((e) => e.name);
@@ -735,7 +953,12 @@ out.push('node benchmarks/proof.mjs             # Arm E (constructed additivity 
 out.push('node benchmarks/prose.mjs             # Arm F (prose region, needs transformers in the sidecar)');
 out.push('node benchmarks/rd_frontier.mjs       # Arm G (simulated RD surface)');
 out.push('node benchmarks/adaptive.mjs          # Arm G (controller simulation)');
+out.push('npm run bench:virtual                 # Arm H (QCV, free conservative accounting)');
 out.push('npm run bench:profile                 # v2 local proxy overhead profile');
+out.push('npm run bench:anthropic:self-test     # no network');
+out.push('npm run bench:anthropic:preflight     # model discovery + token counts, no generation');
+out.push('BENCH_ALLOW_PAID=1 BENCH_MAX_USD=0.01 BENCH_MAX_REQUESTS=1 npm run bench:anthropic:canary');
+out.push('BENCH_ALLOW_PAID=1 BENCH_MAX_USD=0.08 BENCH_MAX_REQUESTS=6 npm run bench:anthropic');
 out.push('node benchmarks/report.mjs            # regenerate this file');
 out.push('```');
 out.push('');

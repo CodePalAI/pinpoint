@@ -1,0 +1,82 @@
+{
+  "evidenceLevel": "offline-real-transform",
+  "kind": "provider-token-count-preflight",
+  "generatedAt": "2026-07-14T10:34:26.654Z",
+  "model": "claude-haiku-4-5-20251001",
+  "variant": "virtual",
+  "pricing": {
+    "input": 1,
+    "output": 5,
+    "source": "Anthropic public pricing"
+  },
+  "paidMessages": 0,
+  "projectedBenchmarkWorstCaseUSD": 0.045868000000000006,
+  "capUSD": 0.05,
+  "tasks": [
+    {
+      "id": "json-lookup",
+      "directInputTokens": 11282,
+      "pixroomInputTokens": 323,
+      "semanticApplied": false,
+      "virtualApplied": true,
+      "queryToolInjected": false,
+      "providerRequestBound": 1,
+      "eligible": true,
+      "inputSavingsFraction": 0.9713703244105655,
+      "directWorstCaseUSD": 0.011442,
+      "pixroomWorstCaseUSD": 0.011442,
+      "report": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6300,
+          "tokensCompressed": 163
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "not_profitable",
+          "tokensText": 185,
+          "tokensCompressed": 185
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ]
+    },
+    {
+      "id": "log-errors",
+      "directInputTokens": 11332,
+      "pixroomInputTokens": 271,
+      "semanticApplied": false,
+      "virtualApplied": true,
+      "queryToolInjected": false,
+      "providerRequestBound": 1,
+      "eligible": true,
+      "inputSavingsFraction": 0.9760854218143311,
+      "directWorstCaseUSD": 0.011492,
+      "pixroomWorstCaseUSD": 0.011492,
+      "report": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6549,
+          "tokensCompressed": 129
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ]
+    }
+  ]
+}

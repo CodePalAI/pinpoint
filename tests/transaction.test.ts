@@ -13,6 +13,8 @@ function context(): RequestContext {
     reversible: [],
     stages: [],
     opticalOwnsCacheControl: false,
+    virtualQueryToolNeeded: false,
+    virtualContextIds: [],
   };
 }
 
@@ -78,5 +80,16 @@ describe('transactProposal', () => {
     };
     replacement.messages[0]!.content = 'mutated later';
     expect(ctx.body).toEqual({ messages: [{ role: 'user', content: 'changed' }] });
+  });
+
+  it('rolls back the candidate when an integration commit hook fails', async () => {
+    const ctx = context();
+    const original = structuredClone(ctx);
+    const result = await transactProposal(ctx, proposal(), undefined, () => {
+      throw new Error('external commit failed');
+    });
+
+    expect(result).toMatchObject({ status: 'rolled-back', error: 'external commit failed' });
+    expect(ctx).toEqual(original);
   });
 });

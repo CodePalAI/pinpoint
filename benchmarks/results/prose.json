@@ -1,7 +1,8 @@
 {
+  "evidenceLevel": "offline-real-transform",
   "model": "claude-fable-5",
   "sidecar": true,
-  "generatedAt": "2026-07-12T10:46:09.604Z",
+  "generatedAt": "2026-07-14T09:56:26.044Z",
   "scenarios": [
     {
       "name": "rag-doc",

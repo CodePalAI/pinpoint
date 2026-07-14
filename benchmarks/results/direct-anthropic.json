@@ -1,0 +1,230 @@
+{
+  "evidenceLevel": "live-controlled",
+  "kind": "paid-paired-pilot",
+  "generatedAt": "2026-07-14T09:50:29.118Z",
+  "model": "claude-haiku-4-5-20251001",
+  "pricing": {
+    "input": 1,
+    "output": 5,
+    "source": "Anthropic public pricing"
+  },
+  "methodology": {
+    "repetitions": 1,
+    "syntheticCorrectnessTasks": 3,
+    "randomizedArmOrder": true,
+    "retries": 0,
+    "pixroom": "semantic enabled, prose enabled, optical disabled, protectRecent=1",
+    "limitation": "Controlled pilot only; not statistical or agentic competitor evidence."
+  },
+  "summary": {
+    "directCorrect": 2,
+    "pixroomCorrect": 2,
+    "directInputTokens": 24249,
+    "pixroomInputTokens": 14478,
+    "inputSavingsFraction": 0.40294445131758005,
+    "directCostUSD": 0.024369000000000002,
+    "pixroomCostUSD": 0.014598000000000002,
+    "costSavingsFraction": 0.40096023636587463
+  },
+  "budget": {
+    "maxUSD": 0.08,
+    "maxRequests": 6,
+    "paidRequests": 6,
+    "observedUSD": 0.038966999999999995,
+    "conservativeExposureUSD": 0.038966999999999995
+  },
+  "runs": [
+    {
+      "id": "json-lookup",
+      "expected": "user73@example.com",
+      "order": [
+        "pixroom",
+        "direct"
+      ],
+      "preflight": {
+        "id": "json-lookup",
+        "directInputTokens": 11282,
+        "pixroomInputTokens": 5855,
+        "semanticApplied": true,
+        "eligible": true,
+        "inputSavingsFraction": 0.481031731962418,
+        "directWorstCaseUSD": 0.011442,
+        "pixroomWorstCaseUSD": 0.011442,
+        "report": [
+          {
+            "stage": "semantic",
+            "applied": true,
+            "reason": "applied",
+            "tokensText": 9377,
+            "tokensCompressed": 4721
+          },
+          {
+            "stage": "optical",
+            "applied": false,
+            "reason": "disabled",
+            "tokensText": 0,
+            "tokensCompressed": 0
+          }
+        ]
+      },
+      "results": {
+        "pixroom": {
+          "latencyMs": 779.2248749999999,
+          "usage": {
+            "input": 5855,
+            "cacheCreate": 0,
+            "cacheRead": 0,
+            "output": 9
+          },
+          "costUSD": 0.0059,
+          "stopReason": "end_turn",
+          "text": "user73@example.com",
+          "toolCalls": [],
+          "correct": true
+        },
+        "direct": {
+          "latencyMs": 1206.7466669999994,
+          "usage": {
+            "input": 11282,
+            "cacheCreate": 0,
+            "cacheRead": 0,
+            "output": 9
+          },
+          "costUSD": 0.011327,
+          "stopReason": "end_turn",
+          "text": "user73@example.com",
+          "toolCalls": [],
+          "correct": true
+        }
+      }
+    },
+    {
+      "id": "log-errors",
+      "expected": "7",
+      "order": [
+        "direct",
+        "pixroom"
+      ],
+      "preflight": {
+        "id": "log-errors",
+        "directInputTokens": 11332,
+        "pixroomInputTokens": 7328,
+        "semanticApplied": true,
+        "eligible": true,
+        "inputSavingsFraction": 0.35333568655135894,
+        "directWorstCaseUSD": 0.011492,
+        "pixroomWorstCaseUSD": 0.011492,
+        "report": [
+          {
+            "stage": "semantic",
+            "applied": true,
+            "reason": "applied",
+            "tokensText": 10575,
+            "tokensCompressed": 6985
+          },
+          {
+            "stage": "optical",
+            "applied": false,
+            "reason": "disabled",
+            "tokensText": 0,
+            "tokensCompressed": 0
+          }
+        ]
+      },
+      "results": {
+        "direct": {
+          "latencyMs": 3885.072959000001,
+          "usage": {
+            "input": 11332,
+            "cacheCreate": 0,
+            "cacheRead": 0,
+            "output": 5
+          },
+          "costUSD": 0.011357,
+          "stopReason": "end_turn",
+          "text": "6",
+          "toolCalls": [],
+          "correct": false
+        },
+        "pixroom": {
+          "latencyMs": 1183.8139999999985,
+          "usage": {
+            "input": 7328,
+            "cacheCreate": 0,
+            "cacheRead": 0,
+            "output": 5
+          },
+          "costUSD": 0.007353,
+          "stopReason": "end_turn",
+          "text": "6",
+          "toolCalls": [],
+          "correct": false
+        }
+      }
+    },
+    {
+      "id": "prose-needle",
+      "expected": "SILVER-CEDAR-91",
+      "order": [
+        "pixroom",
+        "direct"
+      ],
+      "preflight": {
+        "id": "prose-needle",
+        "directInputTokens": 1635,
+        "pixroomInputTokens": 1295,
+        "semanticApplied": true,
+        "eligible": true,
+        "inputSavingsFraction": 0.20795107033639149,
+        "directWorstCaseUSD": 0.001795,
+        "pixroomWorstCaseUSD": 0.001795,
+        "report": [
+          {
+            "stage": "semantic",
+            "applied": true,
+            "reason": "applied",
+            "tokensText": 1476,
+            "tokensCompressed": 1144
+          },
+          {
+            "stage": "optical",
+            "applied": false,
+            "reason": "disabled",
+            "tokensText": 0,
+            "tokensCompressed": 0
+          }
+        ]
+      },
+      "results": {
+        "pixroom": {
+          "latencyMs": 1229.4177500000005,
+          "usage": {
+            "input": 1295,
+            "cacheCreate": 0,
+            "cacheRead": 0,
+            "output": 10
+          },
+          "costUSD": 0.001345,
+          "stopReason": "end_turn",
+          "text": "SILVER-CEDAR-91",
+          "toolCalls": [],
+          "correct": true
+        },
+        "direct": {
+          "latencyMs": 8092.568124999998,
+          "usage": {
+            "input": 1635,
+            "cacheCreate": 0,
+            "cacheRead": 0,
+            "output": 10
+          },
+          "costUSD": 0.001685,
+          "stopReason": "end_turn",
+          "text": "SILVER-CEDAR-91",
+          "toolCalls": [],
+          "correct": true
+        }
+      }
+    }
+  ]
+}

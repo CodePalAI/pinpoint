@@ -64,6 +64,29 @@ export interface CcrConfig {
   readonly injectRetrieveTool: boolean;
 }
 
+export interface VirtualContextConfig {
+  /** Replace safely answerable structured tool results with exact local manifests. */
+  readonly enabled: boolean;
+  /** Allow unresolved questions to use model-driven pixroom_query continuation. */
+  readonly queryFallback: boolean;
+  /** Recent messages protected from virtualization. */
+  readonly protectRecent: number;
+  /** Per-tool-result character floor. */
+  readonly minChars: number;
+  /** Per-tool-result character ceiling; larger results fall through. */
+  readonly maxChars: number;
+  /** Maximum characters returned by one local query. */
+  readonly maxResultChars: number;
+  /** Maximum exact datasets retained in one runtime process. */
+  readonly maxEntries: number;
+  /** Maximum exact dataset bytes retained in one runtime process. */
+  readonly maxStoredBytes: number;
+  /** Maximum datasets virtualized by one provider request. */
+  readonly maxDatasetsPerRequest: number;
+  /** Maximum hidden model continuation rounds for local queries. */
+  readonly maxQueryRounds: number;
+}
+
 export interface AdaptiveConfig {
   /**
    * Master switch for the adaptive cross-modal controller. When on, the router may
@@ -89,6 +112,7 @@ export interface PixroomConfig {
   readonly upstreams: Readonly<Record<Provider, string>>;
   readonly optical: OpticalConfig;
   readonly semantic: SemanticConfig;
+  readonly virtualContext: VirtualContextConfig;
   readonly ccr: CcrConfig;
   readonly adaptive: AdaptiveConfig;
   readonly logLevel: LogLevel;
@@ -102,6 +126,7 @@ export interface PixroomConfigOverrides {
   upstreams?: Partial<Record<Provider, string>>;
   optical?: Partial<OpticalConfig>;
   semantic?: Partial<SemanticConfig>;
+  virtualContext?: Partial<VirtualContextConfig>;
   ccr?: Partial<CcrConfig>;
   adaptive?: Partial<AdaptiveConfig>;
   logLevel?: LogLevel;
@@ -195,6 +220,18 @@ export function loadConfig(overrides: PixroomConfigOverrides = {}): PixroomConfi
       includeUserProse: envBool('PIXROOM_SEMANTIC_PROSE', false),
       proseMinChars: envInt('PIXROOM_SEMANTIC_PROSE_MIN_CHARS', 800),
     },
+    virtualContext: {
+      enabled: envBool('PIXROOM_VIRTUAL_CONTEXT', true),
+      queryFallback: envBool('PIXROOM_VIRTUAL_QUERY_FALLBACK', false),
+      protectRecent: envInt('PIXROOM_VIRTUAL_PROTECT_RECENT', 1),
+      minChars: envInt('PIXROOM_VIRTUAL_MIN_CHARS', 6_000),
+      maxChars: envInt('PIXROOM_VIRTUAL_MAX_CHARS', 2_000_000),
+      maxResultChars: envInt('PIXROOM_VIRTUAL_MAX_RESULT_CHARS', 12_000),
+      maxEntries: envInt('PIXROOM_VIRTUAL_MAX_ENTRIES', 256),
+      maxStoredBytes: envInt('PIXROOM_VIRTUAL_MAX_STORED_BYTES', 64 * 1024 * 1024),
+      maxDatasetsPerRequest: envInt('PIXROOM_VIRTUAL_MAX_DATASETS_PER_REQUEST', 8),
+      maxQueryRounds: envInt('PIXROOM_VIRTUAL_MAX_QUERY_ROUNDS', 4),
+    },
     ccr: {
       injectRetrieveTool: envBool('PIXROOM_CCR_TOOL', true),
     },
@@ -212,6 +249,7 @@ export function loadConfig(overrides: PixroomConfigOverrides = {}): PixroomConfi
     upstreams: { ...base.upstreams, ...overrides.upstreams },
     optical: { ...base.optical, ...overrides.optical },
     semantic: { ...base.semantic, ...overrides.semantic },
+    virtualContext: { ...base.virtualContext, ...overrides.virtualContext },
     ccr: { ...base.ccr, ...overrides.ccr },
     adaptive: { ...base.adaptive, ...overrides.adaptive },
   };

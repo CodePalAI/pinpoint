@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { withPixroom as withPixroomAnthropic } from '../src/sdk/anthropic.js';
 import { withPixroom as withPixroomOpenAI } from '../src/sdk/openai.js';
 import type { ProcessorIntegration } from '../src/kernel/types.js';
+import { closeTestServer } from './helpers/http.js';
 
 interface ReceivedRequest {
   readonly path: string;
@@ -62,7 +63,7 @@ async function listen(
   if (address == null || typeof address === 'string') throw new Error('missing test server address');
   return {
     baseURL: `http://127.0.0.1:${address.port}`,
-    close: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
+    close: () => closeTestServer(server),
   };
 }
 

@@ -3,15 +3,12 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createPixroom } from '../src/pixroom.js';
+import { closeTestServer } from './helpers/http.js';
 
 const servers: http.Server[] = [];
 
 afterEach(async () => {
-  await Promise.all(
-    servers.splice(0).map(
-      (server) => new Promise<void>((resolve) => server.close(() => resolve())),
-    ),
-  );
+  await Promise.all(servers.splice(0).map(closeTestServer));
 });
 
 async function listen(server: http.Server): Promise<string> {

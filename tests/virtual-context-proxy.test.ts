@@ -4,17 +4,14 @@ import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createProxyServer, type ProxyServer } from '../src/proxy/server.js';
+import { closeTestServer } from './helpers/http.js';
 
 const proxies: ProxyServer[] = [];
 const upstreams: http.Server[] = [];
 
 afterEach(async () => {
   await Promise.all(proxies.splice(0).map((proxy) => proxy.close()));
-  await Promise.all(
-    upstreams.splice(0).map(
-      (server) => new Promise<void>((resolve) => server.close(() => resolve())),
-    ),
-  );
+  await Promise.all(upstreams.splice(0).map(closeTestServer));
 });
 
 function readJson(req: http.IncomingMessage): Promise<Record<string, unknown>> {

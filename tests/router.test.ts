@@ -3,6 +3,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createPixroom } from '../src/pixroom.js';
 import { CCR_TOOL_NAME } from '../src/ccr/store.js';
+import { closeTestServer } from './helpers/http.js';
 
 interface FakeSidecar {
   url: string;
@@ -59,7 +60,7 @@ async function startFakeSidecar(): Promise<FakeSidecar> {
   const { port } = server.address() as AddressInfo;
   return {
     url: `http://127.0.0.1:${port}`,
-    close: () => new Promise<void>((r) => server.close(() => r())),
+    close: () => closeTestServer(server),
   };
 }
 

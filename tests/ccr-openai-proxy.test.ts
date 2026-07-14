@@ -5,17 +5,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ProcessorIntegration } from '../src/kernel/types.js';
 import { counterfactual } from '../src/measurement/savings.js';
 import { createProxyServer, type ProxyServer } from '../src/proxy/server.js';
+import { closeTestServer } from './helpers/http.js';
 
 const proxies: ProxyServer[] = [];
 const upstreams: http.Server[] = [];
 
 afterEach(async () => {
   await Promise.all(proxies.splice(0).map((proxy) => proxy.close()));
-  await Promise.all(
-    upstreams.splice(0).map(
-      (server) => new Promise<void>((resolve) => server.close(() => resolve())),
-    ),
-  );
+  await Promise.all(upstreams.splice(0).map(closeTestServer));
 });
 
 function readJson(request: http.IncomingMessage): Promise<Record<string, unknown>> {

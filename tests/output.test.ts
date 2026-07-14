@@ -9,6 +9,7 @@ import { CcrRetrievalOutputIntegration } from '../src/output/ccr.js';
 import { OutputIntegrationRegistry } from '../src/output/registry.js';
 import type { OutputEventContext, ResponseEvent } from '../src/output/types.js';
 import { createProxyServer, type ProxyServer } from '../src/proxy/server.js';
+import { closeTestServer } from './helpers/http.js';
 
 const context: OutputEventContext = {
   exchangeId: 'exchange-1',
@@ -60,11 +61,7 @@ const upstreams: http.Server[] = [];
 
 afterEach(async () => {
   await Promise.all(proxies.splice(0).map((proxy) => proxy.close()));
-  await Promise.all(
-    upstreams.splice(0).map(
-      (server) => new Promise<void>((resolve) => server.close(() => resolve())),
-    ),
-  );
+  await Promise.all(upstreams.splice(0).map(closeTestServer));
 });
 
 describe('proxy output integration surface', () => {

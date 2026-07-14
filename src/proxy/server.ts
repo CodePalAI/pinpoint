@@ -947,9 +947,11 @@ export function createProxyServer(
       return { host: config.host, port };
     },
     async close() {
-      await new Promise<void>((resolve, reject) =>
+      const closePromise = new Promise<void>((resolve, reject) =>
         server.close((err) => (err ? reject(err) : resolve())),
       );
+      server.closeIdleConnections?.();
+      await closePromise;
       httpAgent.destroy();
       httpsAgent.destroy();
       await pixroom.shutdown();

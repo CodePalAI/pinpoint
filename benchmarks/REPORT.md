@@ -1,6 +1,6 @@
 # pixroom compression benchmark
 
-_Generated 2026-07-14T12:19:04.321Z._
+_Generated 2026-07-14T12:29:13.180Z._
 
 Measures token consumption (and, for live arms, response correctness) for **headroom-only** (semantic), **pxpipe-only** (optical), and **pixroom** (both), on the same prompts + system context. Results are separated by evidence level; simulations are not presented as product-performance evidence.
 
@@ -40,20 +40,20 @@ Evidence: `offline-real-transform`. Load generator, Pixroom, and mock provider r
 
 | protocol | payload | concurrency | direct mean p95 | pixroom mean p95 | added p95 |
 | --- | --- | --- | --- | --- | --- |
-| openai | 1024 B | 1 | 0.37 ms | 0.84 ms | 0.48 ms |
-| openai | 1024 B | 10 | 2.81 ms | 3.68 ms | 0.87 ms |
-| openai | 1024 B | 100 | 19.43 ms | 30.54 ms | 11.11 ms |
-| openai | 102400 B | 1 | 0.30 ms | 0.72 ms | 0.42 ms |
-| openai | 102400 B | 10 | 2.13 ms | 4.37 ms | 2.24 ms |
-| openai | 102400 B | 100 | 15.89 ms | 25.87 ms | 9.98 ms |
-| anthropic | 1024 B | 1 | 0.27 ms | 0.52 ms | 0.25 ms |
-| anthropic | 1024 B | 10 | 2.06 ms | 2.09 ms | 0.02 ms |
-| anthropic | 1024 B | 100 | 6.69 ms | 21.27 ms | 14.58 ms |
-| anthropic | 102400 B | 1 | 0.30 ms | 0.68 ms | 0.38 ms |
-| anthropic | 102400 B | 10 | 2.04 ms | 4.86 ms | 2.82 ms |
-| anthropic | 102400 B | 100 | 12.82 ms | 27.57 ms | 14.75 ms |
+| openai | 1024 B | 1 | 0.44 ms | 0.86 ms | 0.42 ms |
+| openai | 1024 B | 10 | 4.05 ms | 5.97 ms | 1.92 ms |
+| openai | 1024 B | 100 | 23.29 ms | 51.72 ms | 28.43 ms |
+| openai | 102400 B | 1 | 0.41 ms | 1.94 ms | 1.53 ms |
+| openai | 102400 B | 10 | 2.30 ms | 5.32 ms | 3.02 ms |
+| openai | 102400 B | 100 | 16.11 ms | 32.53 ms | 16.42 ms |
+| anthropic | 1024 B | 1 | 0.22 ms | 0.43 ms | 0.21 ms |
+| anthropic | 1024 B | 10 | 1.70 ms | 2.91 ms | 1.22 ms |
+| anthropic | 1024 B | 100 | 7.78 ms | 22.43 ms | 14.65 ms |
+| anthropic | 102400 B | 1 | 0.34 ms | 0.86 ms | 0.51 ms |
+| anthropic | 102400 B | 10 | 2.17 ms | 4.23 ms | 2.06 ms |
+| anthropic | 102400 B | 100 | 16.05 ms | 33.06 ms | 17.01 ms |
 
-Verdict: `zero-errors=true`, `below-5ms-at-c100=false`, `max-added-p95-at-c100=14.75ms`. The isolated run removes same-event-loop contention but does not meet the saturation target; the extra local HTTP hop remains visible and is not presented as solved.
+Verdict: `zero-errors=true`, `below-5ms-at-c100=false`, `max-added-p95-at-c100=28.43ms`. The isolated run removes same-event-loop contention but does not meet the saturation target; the extra local HTTP hop remains visible and is not presented as solved.
 
 ## Legacy benchmark arms
 
@@ -386,7 +386,7 @@ Evidence: `offline-real-transform`. 36 deterministic tasks across 6 categories, 
 | table-json | 6 | 6/6 | 6/6 | 0 |
 | nested-projection | 6 | 6/6 | 6/6 | 0 |
 
-Result: 36/36 exact, 36/36 virtualized, 0 fallback tools; dataset-region estimate 104,018 → 5,964 tokens (94.3% lower). Verdict: `atLeastThirtyTasks=true`, `sixCategories=true`, `allExact=true`, `allVirtualized=true`, `noFallback=true`.
+Result: 36/36 exact, 36/36 virtualized, 0 fallback tools; dataset-region estimate 104,018 → 5,964 tokens (94.3% lower). Adversarial controls: 12/12 safely refused without fallback. Verdict: `atLeastThirtyTasks=true`, `sixCategories=true`, `allExact=true`, `allVirtualized=true`, `noFallback=true`, `allNegativeControlsRefused=true`.
 
 ## Findings
 
@@ -395,7 +395,7 @@ Result: 36/36 exact, 36/36 virtualized, 0 fallback tools; dataset-region estimat
 - **Live Claude Code (fable-5):** optical genuinely engages — pxpipe/pixroom image the static slab for a **net total-input cut vs native** despite the proxy's request inflation, correctness preserved (except a base-URL arithmetic quirk that hits *all* proxies, not compression). On opus (out of optical scope) the same proxying nets *more* tokens. The decisive subscription concern is the **prompt cache**: aggressive/lossy restructuring interacts with Claude Code's cache, so pixroom goes stealth there. See Arm C; the full optical+semantic composition is Arm A.
 - **Paid direct Anthropic (claude-haiku-4-5-20251001):** provider input fell 40.3% and modeled cost fell 40.1%, with equal 2/3 quality. This was a three-task, one-repetition pilot and used headroom semantic compression only, so it validates the integration rather than independent pixroom value.
 - **QCV paid pilot (claude-haiku-4-5-20251001):** input fell 97.4%, modeled cost fell 97.1%, and exact score improved 1/2 → 2/2. This is the first pixroom-owned optimizer result, but it remains a two-task, one-repetition pilot.
-- **QCV breadth:** 36/36 deterministic tasks materialized exact results across 6 structured categories without exposing fallback. This broadens operation coverage but is not live-model non-inferiority evidence.
+- **QCV breadth:** 36/36 deterministic tasks materialized exact results across 6 structured categories without exposing fallback; 12/12 ambiguous or multi-dataset controls were refused. This broadens operation coverage but is not live-model non-inferiority evidence.
 - **Constructed additivity (Arm E):** `dominates-all=true` on five synthetic disjoint-region inputs; strict token wins on mixed-json + mixed-logs + mixed-code. This is transform arithmetic, not a task-quality or universal product claim.
 - **Prose (Arm F): fills the gap** — a large user-message prose block is compressed **0%** by pxpipe, headroom-tools, and default pixroom, but `PIXROOM_SEMANTIC_PROSE=1` routes it to headroom's Kompress for a real, reversible cut (~6–21% of prose tokens by redundancy), **additive** with the optical + tool_result regions and a **no-op** when there's no prose.
 - **Controller simulation (Arm G):** the policy loop recovers a hand-authored 2×2 allocation under its own oracle. It is retained as a deterministic mechanism test and excluded from competitive claims.

@@ -75,6 +75,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx src/cli/main.ts",
     "demo:qcv": "npm run build && node bin/cli.js demo",
+    "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "bench:profile": "npm run build && node benchmarks/v2/profile_proxy.mjs",

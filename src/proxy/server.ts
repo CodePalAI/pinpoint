@@ -260,7 +260,11 @@ function openAiResponsesJsonToSse(response: Readonly<Record<string, unknown>>): 
     }
     events.push(openAiSseEvent('response.output_item.done', { output_index: outputIndex, item: raw }));
   }
-  events.push(openAiSseEvent('response.completed', { response }));
+  events.push(
+    openAiSseEvent('response.completed', {
+      response: { ...structuredClone(response), status: 'completed' },
+    }),
+  );
   return Buffer.from(events.join(''));
 }
 

@@ -56,7 +56,7 @@ The repaired pilot reduced input 97.4% and cost 97.1%. QCV returned the exact se
 
 The conservative offline benchmark counts an initial optimized request plus one complete uncached fallback continuation even though the safe exact cases need no second provider request. QCV still used 63.7-67.7% fewer tokens than the existing Headroom+pxpipe stack on JSON, logs, and current source text.
 
-A separate 36-task deterministic suite spans JSON lookup, filtered counts, logs, source exports, tabular JSON, and nested projections. It produced 36/36 exact materializations, 36/36 virtualizations, and zero fallback tools, with dataset-region estimates reduced from 104,018 to 5,964 tokens. This is operation-breadth evidence without provider calls, not live-model quality evidence.
+A separate 36-task deterministic suite spans JSON lookup, filtered counts, logs, source exports, tabular JSON, and nested projections. It produced 36/36 exact materializations, 36/36 virtualizations, and zero fallback tools, with dataset-region estimates reduced from 104,018 to 5,964 tokens. Twelve ambiguous-selector and multi-dataset controls were all refused without fallback. This is operation-breadth evidence without provider calls, not live-model quality evidence.
 
 These are small synthetic pilots, not universal quality evidence.
 

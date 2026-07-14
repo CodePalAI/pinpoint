@@ -933,7 +933,8 @@ if (!qcvQuality) {
     `Result: ${summary.exact}/${summary.tasks} exact, ${summary.virtualized}/${summary.tasks} virtualized, ` +
       `${summary.fallbackInjected} fallback tools; dataset-region estimate ` +
       `${summary.tokensText.toLocaleString()} → ${summary.tokensCompressed.toLocaleString()} tokens ` +
-      `(${pct(summary.tokensSaved / summary.tokensText)} lower). Verdict: ` +
+      `(${pct(summary.tokensSaved / summary.tokensText)} lower). Adversarial controls: ` +
+      `${summary.refused}/${summary.negativeControls} safely refused without fallback. Verdict: ` +
       Object.entries(qcvQuality.verdict).map(([key, value]) => inlineCode(`${key}=${value}`)).join(', ') + '.',
   );
 }
@@ -996,7 +997,9 @@ if (qcvQuality) {
   out.push(
     `- **QCV breadth:** ${qcvQuality.summary.exact}/${qcvQuality.summary.tasks} deterministic tasks ` +
       `materialized exact results across ${qcvQuality.methodology.categories.length} structured categories ` +
-      'without exposing fallback. This broadens operation coverage but is not live-model non-inferiority evidence.',
+      `without exposing fallback; ${qcvQuality.summary.refused}/${qcvQuality.summary.negativeControls} ` +
+      'ambiguous or multi-dataset controls were refused. This broadens operation coverage but is not ' +
+      'live-model non-inferiority evidence.',
   );
 }
 if (proof) {

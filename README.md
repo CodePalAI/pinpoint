@@ -198,7 +198,7 @@ The offline corpus runs real Pixroom transforms over agent-shaped requests and c
 
 This offline result validates transform and token accounting, not model quality. The paid pilots are also small: synthetic fixtures, one model, one randomized pair per task, and no retries. Cache behavior, retrievals, model choice, and workload eligibility can change the net saving.
 
-The broader exact-QCV suite runs 36 deterministic tasks across JSON lookup, filtered counts, logs, source exports, tabular JSON, and nested projections. It produced 36/36 exact materializations, 36/36 virtualizations, and zero fallback tools, reducing the measured dataset regions from 104,018 to 5,964 estimated tokens. This is offline operation coverage, not live-model quality evidence.
+The broader exact-QCV suite runs 36 deterministic tasks across JSON lookup, filtered counts, logs, source exports, tabular JSON, and nested projections. It produced 36/36 exact materializations, 36/36 virtualizations, and zero fallback tools, reducing the measured dataset regions from 104,018 to 5,964 estimated tokens. It also refused 12/12 ambiguous or multi-dataset controls without exposing fallback. This is offline operation coverage, not live-model quality evidence.
 
 The full [benchmark report](./benchmarks/REPORT.md) keeps live, offline, agentic, and simulated evidence separate. It also preserves failed experiments instead of averaging them into successful results.
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "evidenceLevel": "offline-real-transform",
-  "generatedAt": "2026-07-14T12:11:37.104Z",
+  "generatedAt": "2026-07-14T12:26:31.877Z",
   "methodology": {
     "providerCalls": 0,
     "modelQuality": "not measured; deterministic exact materialization only",
@@ -12,6 +12,10 @@
       "source-code",
       "table-json",
       "nested-projection"
+    ],
+    "negativeCategories": [
+      "ambiguous-selector",
+      "multiple-datasets"
     ]
   },
   "summary": {
@@ -21,7 +25,9 @@
     "fallbackInjected": 0,
     "tokensText": 104018,
     "tokensCompressed": 5964,
-    "tokensSaved": 98054
+    "tokensSaved": 98054,
+    "negativeControls": 12,
+    "refused": 12
   },
   "results": [
     {
@@ -385,11 +391,86 @@
       "tokensSaved": 3506
     }
   ],
+  "negativeResults": [
+    {
+      "id": "refuse-ambiguous-1",
+      "category": "ambiguous-selector",
+      "refused": true,
+      "fallbackInjected": false
+    },
+    {
+      "id": "refuse-ambiguous-2",
+      "category": "ambiguous-selector",
+      "refused": true,
+      "fallbackInjected": false
+    },
+    {
+      "id": "refuse-ambiguous-3",
+      "category": "ambiguous-selector",
+      "refused": true,
+      "fallbackInjected": false
+    },
+    {
+      "id": "refuse-ambiguous-4",
+      "category": "ambiguous-selector",
+      "refused": true,
+      "fallbackInjected": false
+    },
+    {
+      "id": "refuse-ambiguous-5",
+      "category": "ambiguous-selector",
+      "refused": true,
+      "fallbackInjected": false
+    },
+    {
+      "id": "refuse-ambiguous-6",
+      "category": "ambiguous-selector",
+      "refused": true,
+      "fallbackInjected": false
+    },
+    {
+      "id": "refuse-multi-dataset-1",
+      "category": "multiple-datasets",
+      "refused": true,
+      "fallbackInjected": false
+    },
+    {
+      "id": "refuse-multi-dataset-2",
+      "category": "multiple-datasets",
+      "refused": true,
+      "fallbackInjected": false
+    },
+    {
+      "id": "refuse-multi-dataset-3",
+      "category": "multiple-datasets",
+      "refused": true,
+      "fallbackInjected": false
+    },
+    {
+      "id": "refuse-multi-dataset-4",
+      "category": "multiple-datasets",
+      "refused": true,
+      "fallbackInjected": false
+    },
+    {
+      "id": "refuse-multi-dataset-5",
+      "category": "multiple-datasets",
+      "refused": true,
+      "fallbackInjected": false
+    },
+    {
+      "id": "refuse-multi-dataset-6",
+      "category": "multiple-datasets",
+      "refused": true,
+      "fallbackInjected": false
+    }
+  ],
   "verdict": {
     "atLeastThirtyTasks": true,
     "sixCategories": true,
     "allExact": true,
     "allVirtualized": true,
-    "noFallback": true
+    "noFallback": true,
+    "allNegativeControlsRefused": true
   }
 }

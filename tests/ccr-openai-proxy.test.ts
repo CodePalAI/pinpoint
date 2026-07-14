@@ -248,4 +248,70 @@ describe('OpenAI server-side CCR continuation', () => {
     expect(result.usage).toEqual({ prompt_tokens: 100, completion_tokens: 8, total_tokens: 108 });
     expect(JSON.stringify(result)).toContain('chat retrieved');
   });
+
+  it('replays the original Responses request when internal and client tools are mixed', async () => {
+    const forwarded: Record<string, unknown>[] = [];
+    const port = await proxyFor(
+      http.createServer((request, response) => {
+        void readJson(request).then((body) => {
+          forwarded.push(body);
+          response.writeHead(200, { 'content-type': 'application/json' });
+          response.end(JSON.stringify(
+            forwarded.length === 1
+              ? {
+                  id: 'resp_mixed',
+                  object: 'response',
+                  output: [
+                    {
+                      type: 'function_call',
+                      id: 'fc_internal',
+                      call_id: 'call_internal',
+                      name: 'headroom_retrieve',
+                      arguments: '{"id":"rec_openai_test"}',
+                    },
+                    {
+                      type: 'function_call',
+                      id: 'fc_client',
+                      call_id: 'call_client',
+                      name: 'client_tool',
+                      arguments: '{}',
+                    },
+                  ],
+                  usage: { input_tokens: 100, output_tokens: 5, total_tokens: 105 },
+                }
+              : {
+                  id: 'resp_replay',
+                  object: 'response',
+                  status: 'completed',
+                  output: [{
+                    type: 'message',
+                    role: 'assistant',
+                    content: [{ type: 'output_text', text: 'clean replay' }],
+                  }],
+                  usage: { input_tokens: 30, output_tokens: 2, total_tokens: 32 },
+                },
+          ));
+        });
+      }),
+    );
+    const original = {
+      model: 'gpt-5',
+      stream: false,
+      input: 'Use compressed context.',
+      tools: [{ type: 'function', name: 'client_tool', parameters: { type: 'object' } }],
+    };
+
+    const response = await fetch(`http://127.0.0.1:${port}/v1/responses`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer test', 'content-type': 'application/json' },
+      body: JSON.stringify(original),
+    });
+    const result = (await response.json()) as Record<string, unknown>;
+
+    expect(forwarded).toHaveLength(2);
+    expect(forwarded[1]).toEqual(original);
+    expect(JSON.stringify(result)).toContain('clean replay');
+    expect(JSON.stringify(result)).not.toContain('headroom_retrieve');
+    expect(result.usage).toEqual({ input_tokens: 130, output_tokens: 7, total_tokens: 137 });
+  });
 });

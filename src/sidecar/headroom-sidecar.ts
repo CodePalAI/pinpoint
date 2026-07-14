@@ -7,8 +7,8 @@
  * to "unavailable" (semantic stage becomes a no-op) rather than failing closed when
  * headroom is not installed.
  *
- * The spawned sidecar needs NO upstream API keys and makes no egress: in the
- * `/v1/compress` model it never calls the LLM (planning/end_product.md §4.4).
+ * The spawned sidecar needs no upstream API keys: `/v1/compress` never calls the
+ * provider. Headroom may still download optional local model assets on first use.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';

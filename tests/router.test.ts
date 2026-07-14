@@ -177,6 +177,7 @@ describe('ContentRouter end-to-end', () => {
     expect(await px.retrieve('hung-hash')).toBeNull();
 
     await px.shutdown();
+    server.closeAllConnections?.();
     await closeTestServer(server);
   });
 });

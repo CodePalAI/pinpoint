@@ -9,7 +9,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg">
        <a href="https://github.com/CodePalAI/pinpoint/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/CodePalAI/pinpoint/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A518-brightgreen.svg">
+       <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg">
        <img alt="status" src="https://img.shields.io/badge/status-experimental-orange.svg">
          <a href="https://codepal.ai"><img alt="Built by CodePal" src="https://img.shields.io/badge/built%20by-CodePal-2563eb.svg"></a>
 </p>
@@ -42,7 +42,7 @@
 
 ## Try the exact path offline
 
-You need Node.js 18 or newer and Git. Until the first npm release is live, use a cloned checkout:
+You need Node.js 22 or newer and Git. Until the first npm release is live, use a cloned checkout:
 
 ```bash
 git clone https://github.com/CodePalAI/pinpoint.git
@@ -132,6 +132,8 @@ cd /path/to/your-app && npm install /path/to/pinpoint
 ```
 
 <!-- LAUNCH(npm): Replace the checkout flow above with `npm install @codepal/pinpoint` after registry verification. -->
+
+Pinpoint is ESM-only. TypeScript projects should use `"module": "NodeNext"` and `"moduleResolution": "NodeNext"`; JavaScript projects should set `"type": "module"` or use `.mjs` files.
 
 Wrap an Anthropic client:
 
@@ -405,7 +407,9 @@ Wrappers are included for Claude Code, Codex, Aider, OpenCode, Goose, OpenHands,
 
 - Pinpoint binds to `127.0.0.1` by default. It has no public login or access-control layer, so do not expose it directly to the internet.
 - Provider credentials are forwarded to the configured provider and are not stored by Pinpoint.
-- Pinpoint stores only the old tool output it replaces, and stores it in process memory only. The default cap is 256 datasets or 64 MiB, with least-recently-used eviction.
+- QCV stores replaced tool results in process memory with a default cap of 256 datasets or 64 MiB and least-recently-used eviction.
+- Reversible compression handles are separately limited to 1,000 entries or 64 MiB, expire after 30 minutes, and are cleared at shutdown. A request is left unchanged if its own reversible batch cannot fit.
+- A Headroom process started by Pinpoint is forced to loopback, one worker, stateless mode, and in-memory CCR; provider credential variables are not inherited. A custom `PINPOINT_HEADROOM_URL` follows that external service's network and retention policy and receives the selected content sent for compression.
 - Audit and shadow modes preview changes without storing exact datasets or changing requests.
 - Failed changes, unavailable modules, unsupported traffic, and unsafe questions leave the affected content unchanged.
 - The experimental model-planned fallback is disabled by default and has a separate switch.
@@ -477,7 +481,7 @@ pip install headroom-ai
 pinpoint doctor
 ```
 
-If that background process is unavailable, its stage does nothing while the exact-data path and other available modules continue. Configure an existing process with `PINPOINT_HEADROOM_URL`, or disable auto-start with `PINPOINT_HEADROOM_AUTOSPAWN=0`. See [UPSTREAM.md](./UPSTREAM.md) for versioning and attribution.
+If that background process is unavailable, its stage does nothing while the exact-data path and other available modules continue. Configure an existing process with `PINPOINT_HEADROOM_URL`, or disable auto-start with `PINPOINT_HEADROOM_AUTOSPAWN=0`. Only use an external sidecar you trust with the selected tool output and prose sent for compression. See [UPSTREAM.md](./UPSTREAM.md) for versioning and attribution.
 
 ## Contributing
 

@@ -51,6 +51,10 @@ export interface RouteResult {
   readonly virtualQueryToolNeeded: boolean;
   /** Exact dataset capabilities available to this routed request. */
   readonly virtualContextIds: readonly string[];
+  /** True when Pixroom should execute its injected CCR retrieval tool locally. */
+  readonly ccrToolNeeded: boolean;
+  /** CCR handle capabilities available to this routed request only. */
+  readonly ccrContextIds: readonly string[];
   /** Proposal/transaction trace for audit, shadow, and explain surfaces. */
   readonly pipeline: PipelineResult;
   /** Cross-modal controller decision for the slab region, when the adaptive path is on. */
@@ -68,6 +72,18 @@ function toolName(tool: unknown): string | undefined {
   return undefined;
 }
 
+function ccrReferences(body: Readonly<Record<string, unknown>>): string[] {
+  const serialized = JSON.stringify(body);
+  const ids = new Set<string>();
+  for (const match of serialized.matchAll(/<<ccr:([^>]{1,512})>>/g)) {
+    if (match[1]) ids.add(match[1]);
+  }
+  for (const match of serialized.matchAll(/\b(rec_[A-Za-z0-9_-]{1,500})\b/g)) {
+    if (match[1]) ids.add(match[1]);
+  }
+  return [...ids];
+}
+
 export class ContentRouter {
   constructor(
     private readonly pipeline: IntegrationPipeline,
@@ -76,6 +92,10 @@ export class ContentRouter {
     private readonly mode: RuntimeMode = 'optimize',
     /** Optional adaptive controller; when present, may defer optical for a slab type. */
     private readonly controller?: CrossModalController,
+    private readonly ccrOptions: {
+      readonly injectRetrieveTool: boolean;
+      readonly continueToolCalls: boolean;
+    } = { injectRetrieveTool: true, continueToolCalls: true },
   ) {}
 
   async route(
@@ -129,8 +149,17 @@ export class ContentRouter {
     this.ccr.registerReversible(ctx.reversible);
 
     // Inject the retrieve tool last so its description isn't imaged by pxpipe.
-    if (this.ccr.hasOffloaded()) {
+    let ccrToolNeeded = false;
+    const ccrContextIds = new Set(ctx.reversible.map((handle) => handle.id));
+    for (const id of ccrReferences(ctx.body)) {
+      if (this.ccr.has(id)) ccrContextIds.add(id);
+    }
+    if (
+      this.ccrOptions.injectRetrieveTool &&
+      ccrContextIds.size > 0
+    ) {
       this.injectCcrTool(ctx);
+      ccrToolNeeded = this.ccrOptions.continueToolCalls;
     }
     if (ctx.virtualQueryToolNeeded) {
       this.injectVirtualQueryTool(ctx);
@@ -147,6 +176,8 @@ export class ContentRouter {
       virtualized: report.rows.some((row) => row.stage === 'virtual' && row.applied),
       virtualQueryToolNeeded: ctx.virtualQueryToolNeeded,
       virtualContextIds: ctx.virtualContextIds,
+      ccrToolNeeded,
+      ccrContextIds: [...ccrContextIds],
       pipeline: pipelineResult,
       adaptive,
     };

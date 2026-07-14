@@ -69,6 +69,8 @@ COMMON ENV
   PIXROOM_VIRTUAL_QUERY_FALLBACK      model-driven QCV continuation (default off)
   PIXROOM_CAPTURE_PATH                durable JSONL decision capture (default off)
   PIXROOM_CAPTURE_BODIES              include sensitive bodies for replay (default off)
+  PIXROOM_OTLP_ENDPOINT               OTLP/HTTP traces endpoint (default off)
+  PIXROOM_CCR_CONTINUATION             execute retrieve tools locally (default on)
   PIXROOM_HEADROOM_URL               headroom sidecar base URL (default http://127.0.0.1:8787)
   PIXROOM_HEADROOM_AUTOSPAWN         auto-start 'headroom proxy' if not reachable (default on)
   PIXROOM_OPTICAL_ON_SUBSCRIPTION    allow lossy optical on oauth/subscription (default off)
@@ -262,6 +264,11 @@ async function cmdDoctor(rest: string[]): Promise<void> {
   lines.push(`QCV exact:        ${cfg.virtualContext.enabled ? 'enabled (safe default)' : 'disabled'}`);
   lines.push(`QCV fallback:     ${cfg.virtualContext.queryFallback ? 'ENABLED (experimental)' : 'disabled'}`);
   lines.push(`QCV store limit:  ${cfg.virtualContext.maxEntries} datasets / ${Math.round(cfg.virtualContext.maxStoredBytes / 1024 / 1024)} MiB`);
+  lines.push(`CCR continuation: ${cfg.ccr.continueToolCalls ? 'enabled' : 'disabled'}`);
+  lines.push(
+    `capture:          ${cfg.capture.path ? `${cfg.capture.includeBodies ? 'bodies' : 'metadata'} -> ${cfg.capture.path}` : 'disabled'}`,
+  );
+  lines.push(`OTLP traces:      ${cfg.telemetry.endpoint || 'disabled'}`);
   lines.push(`optical scope:    ${cfg.optical.allowedModelBases == null ? 'pxpipe default (Fable-5)' : `[${cfg.optical.allowedModelBases.join(', ') || 'none'}]`}`);
   lines.push('');
   lines.push(

@@ -29,9 +29,16 @@ import { classifyAuthMode } from './auth-mode.js';
 import type { Provider } from '../types.js';
 import {
   aggregateAnthropicUsage,
-  continueVirtualAnthropicTurn,
-  hasVirtualAnthropicToolUse,
 } from '../virtual-context/anthropic.js';
+import {
+  continueInternalAnthropicTurn,
+  hasInternalAnthropicToolUse,
+} from '../continuation/anthropic.js';
+import {
+  aggregateOpenAiUsage,
+  continueInternalOpenAiTurn,
+  hasInternalOpenAiToolUse,
+} from '../continuation/openai.js';
 
 /** Request headers we must not forward verbatim (hop-by-hop + recomputed).
  *  Note: `accept-encoding` is deliberately preserved so the forwarded request
@@ -57,6 +64,17 @@ const STRIP_RESPONSE_HEADERS = new Set([
 ]);
 
 const VIRTUAL_RESPONSE_LIMIT_BYTES = 4_000_000;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function contentLength(headers: http.IncomingHttpHeaders): number | undefined {
+  const raw = headers['content-length'];
+  if (Array.isArray(raw) || raw == null) return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : undefined;
+}
 
 function detectProvider(pathname: string, headers: http.IncomingHttpHeaders): Provider {
   if (headers['x-api-key'] != null || headers['anthropic-version'] != null) return 'anthropic';
@@ -94,6 +112,182 @@ function responseHeaders(
     out[key] = Array.isArray(value) ? [...value] : value;
   }
   return out;
+}
+
+function anthropicSseEvent(name: string, payload: Record<string, unknown>): string {
+  return `event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`;
+}
+
+function anthropicJsonToSse(response: Readonly<Record<string, unknown>>): Buffer {
+  const events: string[] = [];
+  const content = Array.isArray(response.content) ? response.content : [];
+  const usage = isRecord(response.usage) ? response.usage : {};
+  const startUsage = { ...usage, output_tokens: 0 };
+  events.push(
+    anthropicSseEvent('message_start', {
+      type: 'message_start',
+      message: {
+        ...structuredClone(response),
+        content: [],
+        stop_reason: null,
+        stop_sequence: null,
+        usage: startUsage,
+      },
+    }),
+  );
+  for (let index = 0; index < content.length; index += 1) {
+    const raw = content[index];
+    if (!isRecord(raw) || typeof raw.type !== 'string') continue;
+    let startBlock: Record<string, unknown> = structuredClone(raw);
+    let delta: Record<string, unknown> | undefined;
+    if (raw.type === 'text' && typeof raw.text === 'string') {
+      startBlock = { ...startBlock, text: '' };
+      delta = { type: 'text_delta', text: raw.text };
+    } else if (raw.type === 'thinking' && typeof raw.thinking === 'string') {
+      startBlock = { ...startBlock, thinking: '', signature: undefined };
+      delta = { type: 'thinking_delta', thinking: raw.thinking };
+    } else if (raw.type === 'tool_use') {
+      startBlock = { ...startBlock, input: {} };
+      delta = { type: 'input_json_delta', partial_json: JSON.stringify(raw.input ?? {}) };
+    }
+    events.push(
+      anthropicSseEvent('content_block_start', {
+        type: 'content_block_start',
+        index,
+        content_block: startBlock,
+      }),
+    );
+    if (delta) {
+      events.push(
+        anthropicSseEvent('content_block_delta', {
+          type: 'content_block_delta',
+          index,
+          delta,
+        }),
+      );
+    }
+    if (raw.type === 'thinking' && typeof raw.signature === 'string') {
+      events.push(
+        anthropicSseEvent('content_block_delta', {
+          type: 'content_block_delta',
+          index,
+          delta: { type: 'signature_delta', signature: raw.signature },
+        }),
+      );
+    }
+    events.push(
+      anthropicSseEvent('content_block_stop', { type: 'content_block_stop', index }),
+    );
+  }
+  events.push(
+    anthropicSseEvent('message_delta', {
+      type: 'message_delta',
+      delta: {
+        stop_reason: response.stop_reason ?? 'end_turn',
+        stop_sequence: response.stop_sequence ?? null,
+      },
+      usage: { output_tokens: usage.output_tokens ?? 0 },
+    }),
+  );
+  events.push(anthropicSseEvent('message_stop', { type: 'message_stop' }));
+  return Buffer.from(events.join(''));
+}
+
+function openAiSseEvent(type: string, payload: Record<string, unknown>): string {
+  return `event: ${type}\ndata: ${JSON.stringify({ type, ...payload })}\n\n`;
+}
+
+function openAiResponsesJsonToSse(response: Readonly<Record<string, unknown>>): Buffer {
+  const events: string[] = [];
+  events.push(
+    openAiSseEvent('response.created', {
+      response: { ...structuredClone(response), output: [], status: 'in_progress' },
+    }),
+  );
+  const output = Array.isArray(response.output) ? response.output : [];
+  for (let outputIndex = 0; outputIndex < output.length; outputIndex += 1) {
+    const raw = output[outputIndex];
+    if (!isRecord(raw)) continue;
+    const addedItem = raw.type === 'message' ? { ...structuredClone(raw), content: [] } : structuredClone(raw);
+    events.push(openAiSseEvent('response.output_item.added', { output_index: outputIndex, item: addedItem }));
+    if (raw.type === 'message' && Array.isArray(raw.content)) {
+      for (let contentIndex = 0; contentIndex < raw.content.length; contentIndex += 1) {
+        const part = raw.content[contentIndex];
+        if (!isRecord(part)) continue;
+        const emptyPart = part.type === 'output_text' ? { ...structuredClone(part), text: '' } : structuredClone(part);
+        events.push(
+          openAiSseEvent('response.content_part.added', {
+            output_index: outputIndex,
+            content_index: contentIndex,
+            part: emptyPart,
+          }),
+        );
+        if (part.type === 'output_text' && typeof part.text === 'string') {
+          events.push(
+            openAiSseEvent('response.output_text.delta', {
+              output_index: outputIndex,
+              content_index: contentIndex,
+              delta: part.text,
+            }),
+            openAiSseEvent('response.output_text.done', {
+              output_index: outputIndex,
+              content_index: contentIndex,
+              text: part.text,
+            }),
+          );
+        }
+        events.push(
+          openAiSseEvent('response.content_part.done', {
+            output_index: outputIndex,
+            content_index: contentIndex,
+            part,
+          }),
+        );
+      }
+    } else if (raw.type === 'function_call' && typeof raw.arguments === 'string') {
+      events.push(
+        openAiSseEvent('response.function_call_arguments.delta', {
+          item_id: raw.id,
+          output_index: outputIndex,
+          delta: raw.arguments,
+        }),
+        openAiSseEvent('response.function_call_arguments.done', {
+          item_id: raw.id,
+          output_index: outputIndex,
+          arguments: raw.arguments,
+        }),
+      );
+    }
+    events.push(openAiSseEvent('response.output_item.done', { output_index: outputIndex, item: raw }));
+  }
+  events.push(openAiSseEvent('response.completed', { response }));
+  return Buffer.from(events.join(''));
+}
+
+function openAiChatJsonToSse(response: Readonly<Record<string, unknown>>): Buffer {
+  const chunks: string[] = [];
+  const base = {
+    id: response.id,
+    object: 'chat.completion.chunk',
+    created: response.created,
+    model: response.model,
+  };
+  const choices = Array.isArray(response.choices) ? response.choices : [];
+  for (const raw of choices) {
+    if (!isRecord(raw)) continue;
+    const index = typeof raw.index === 'number' ? raw.index : 0;
+    const message = isRecord(raw.message) ? raw.message : {};
+    chunks.push(`data: ${JSON.stringify({ ...base, choices: [{ index, delta: { role: message.role ?? 'assistant' }, finish_reason: null }] })}\n\n`);
+    if (typeof message.content === 'string' && message.content.length > 0) {
+      chunks.push(`data: ${JSON.stringify({ ...base, choices: [{ index, delta: { content: message.content }, finish_reason: null }] })}\n\n`);
+    }
+    if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+      chunks.push(`data: ${JSON.stringify({ ...base, choices: [{ index, delta: { tool_calls: message.tool_calls }, finish_reason: null }] })}\n\n`);
+    }
+    chunks.push(`data: ${JSON.stringify({ ...base, choices: [{ index, delta: {}, finish_reason: raw.finish_reason ?? 'stop' }], usage: response.usage })}\n\n`);
+  }
+  chunks.push('data: [DONE]\n\n');
+  return Buffer.from(chunks.join(''));
 }
 
 export interface ProxyServer {
@@ -142,12 +336,23 @@ export function createProxyServer(
     const protocol = protocols.match({ method: req.method, pathname });
     const provider = protocol?.provider ?? detectProvider(pathname, req.headers);
     const inspection = protocol ? pixroom.requestInspection(provider) : 'none';
+    const knownLength = contentLength(req.headers);
+    const inspectRequest =
+      inspection !== 'none' &&
+      !(
+        inspection === 'tool-results' &&
+        knownLength !== undefined &&
+        knownLength < Math.max(1, config.virtualContext.minChars)
+      );
     let outBytes: Uint8Array | undefined;
     let originalBodyBytes: Uint8Array | undefined;
-    let virtualized = false;
+    let localAnthropicContinuation = false;
+    let localOpenAiContinuation = false;
+    let ccrContinuation = false;
     let virtualContextIds: readonly string[] = [];
+    let ccrContextIds: readonly string[] = [];
 
-    if (protocol && inspection !== 'none') {
+    if (protocol && inspectRequest) {
       const bodyBytes = await readBody(req);
       originalBodyBytes = bodyBytes;
       outBytes = bodyBytes;
@@ -155,7 +360,7 @@ export function createProxyServer(
         try {
           if (
             inspection === 'tool-results' &&
-            !['tool_result', 'function_call_output', '"role":"tool"'].some((marker) =>
+            !['tool_result', 'function_call_output', '"tool"'].some((marker) =>
               Buffer.from(bodyBytes.buffer, bodyBytes.byteOffset, bodyBytes.byteLength).includes(marker),
             )
           ) {
@@ -188,7 +393,12 @@ export function createProxyServer(
           outBytes = JSON.stringify(routed.body) === JSON.stringify(parsed)
             ? bodyBytes
             : protocol.encodeRequest(routed.body);
-          virtualized = routed.virtualized && routed.virtualQueryToolNeeded;
+          localAnthropicContinuation =
+            provider === 'anthropic' &&
+            (routed.virtualQueryToolNeeded || routed.ccrToolNeeded);
+          ccrContinuation = provider === 'anthropic' && routed.ccrToolNeeded;
+          localOpenAiContinuation = provider === 'openai' && routed.ccrToolNeeded;
+          ccrContextIds = routed.ccrContextIds;
           virtualContextIds = routed.virtualContextIds;
         } catch (err) {
           // Never fail closed — forward the original request.
@@ -198,8 +408,8 @@ export function createProxyServer(
       }
     }
 
-    if (virtualized && provider === 'anthropic' && outBytes !== undefined) {
-      await forwardVirtualAnthropic(
+    if (localAnthropicContinuation && provider === 'anthropic' && outBytes !== undefined) {
+      await forwardInternalAnthropic(
         req,
         res,
         pathname + url.search,
@@ -208,6 +418,21 @@ export function createProxyServer(
         protocol?.id,
         randomUUID(),
         new Set(virtualContextIds),
+        ccrContinuation,
+        new Set(ccrContextIds),
+      );
+      return;
+    }
+    if (localOpenAiContinuation && provider === 'openai' && outBytes !== undefined) {
+      await forwardInternalOpenAi(
+        req,
+        res,
+        pathname + url.search,
+        outBytes,
+        originalBodyBytes ?? outBytes,
+        protocol?.id,
+        randomUUID(),
+        new Set(ccrContextIds),
       );
       return;
     }
@@ -261,7 +486,7 @@ export function createProxyServer(
     });
   }
 
-  async function forwardVirtualAnthropic(
+  async function forwardInternalAnthropic(
     req: http.IncomingMessage,
     res: http.ServerResponse,
     pathAndQuery: string,
@@ -270,11 +495,15 @@ export function createProxyServer(
     protocolId: string | undefined,
     exchangeId: string,
     allowedIds: ReadonlySet<string>,
+    ccrEnabled: boolean,
+    allowedCcrIds: ReadonlySet<string>,
   ): Promise<void> {
     const target = new URL(`${config.upstreams.anthropic.replace(/\/+$/, '')}${pathAndQuery}`);
     const headers = requestHeaders(req.headers);
     const responses: Record<string, unknown>[] = [];
     let requestBody = JSON.parse(new TextDecoder().decode(bodyBytes)) as Record<string, unknown>;
+    const clientRequestedStream = requestBody.stream === true;
+    if (clientRequestedStream) requestBody = { ...requestBody, stream: false };
     let upstream: BufferedUpstreamResponse | undefined;
     let replayOriginal = false;
     let replayReason = '';
@@ -290,7 +519,14 @@ export function createProxyServer(
       }
     };
 
-    const maxQueryRounds = Math.max(0, config.virtualContext.maxQueryRounds);
+    const maxQueryRounds = Math.max(
+      0,
+      allowedIds.size > 0 && ccrEnabled
+        ? Math.max(config.virtualContext.maxQueryRounds, config.ccr.maxContinuationRounds)
+        : allowedIds.size > 0
+          ? config.virtualContext.maxQueryRounds
+          : config.ccr.maxContinuationRounds,
+    );
     for (let round = 0; round <= maxQueryRounds; round++) {
       if (req.aborted) throw new Error('client aborted');
       try {
@@ -312,16 +548,12 @@ export function createProxyServer(
       const encoding = upstream.headers['content-encoding'];
       const contentType = upstream.headers['content-type'];
       const isJson = (Array.isArray(contentType) ? contentType[0] : contentType)?.includes('application/json');
-      if (
-        upstream.statusCode < 200 ||
-        upstream.statusCode >= 300 ||
-        encoding != null ||
-        !isJson
-      ) {
-        if (responses.length > 0) {
-          replayOriginal = true;
-          replayReason = 'continuation returned an uninspectable response';
-        }
+      if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
+        break;
+      }
+      if (encoding != null || !isJson) {
+        replayOriginal = true;
+        replayReason = 'local continuation returned an uninspectable response';
         break;
       }
 
@@ -329,23 +561,25 @@ export function createProxyServer(
       try {
         parsed = JSON.parse(upstream.body.toString()) as Record<string, unknown>;
       } catch {
-        if (responses.length > 0) {
-          replayOriginal = true;
-          replayReason = 'continuation returned invalid JSON';
-        }
+        replayOriginal = true;
+        replayReason = 'local continuation returned invalid JSON';
         break;
       }
       responses.push(parsed);
       finalInspectable = true;
-      const hasVirtualCall = hasVirtualAnthropicToolUse(parsed);
-      const continuation = continueVirtualAnthropicTurn(
+      const hasInternalCall = hasInternalAnthropicToolUse(parsed);
+      const continuation = await continueInternalAnthropicTurn(
         requestBody,
         parsed,
-        pixroom.virtualContext,
-        allowedIds,
+        {
+          ccr: pixroom.ccr,
+          virtualContext: pixroom.virtualContext,
+          allowedVirtualIds: allowedIds,
+          allowedCcrIds,
+        },
       );
       if (!continuation) {
-        if (hasVirtualCall) {
+        if (hasInternalCall) {
           replayOriginal = true;
           replayReason = 'response mixed internal and client-owned tools';
         } else {
@@ -355,14 +589,14 @@ export function createProxyServer(
       }
       if (round === maxQueryRounds) {
         replayOriginal = true;
-        replayReason = 'query round limit reached';
+        replayReason = 'local continuation round limit reached';
         break;
       }
       requestBody = continuation;
     }
 
     if (replayOriginal) {
-      log.warn(`virtual continuation degraded (${replayReason}); replaying original request`);
+      log.warn(`local continuation degraded (${replayReason}); replaying original request`);
       try {
         upstream = await requestBuffered(
           target,
@@ -391,10 +625,10 @@ export function createProxyServer(
           finalInspectable = true;
           aggregateUsage = responses.length > 1;
         } catch {
-          log.warn('virtual replay usage could not be aggregated: invalid JSON response');
+          log.warn('local replay usage could not be aggregated: invalid JSON response');
         }
       } else if (responses.length > 0) {
-        log.warn('virtual replay usage could not be aggregated: uninspectable response');
+        log.warn('local replay usage could not be aggregated: uninspectable response');
       }
     }
     if (!upstream) throw new Error('virtual upstream returned no response');
@@ -404,6 +638,13 @@ export function createProxyServer(
     }
     const outgoingHeaders = responseHeaders(upstream.headers);
     if (aggregateUsage) delete outgoingHeaders['content-encoding'];
+    if (clientRequestedStream && finalInspectable) {
+      const finalResponse = JSON.parse(finalBody.toString()) as Record<string, unknown>;
+      finalBody = anthropicJsonToSse(finalResponse);
+      delete outgoingHeaders['content-encoding'];
+      outgoingHeaders['content-type'] = 'text/event-stream';
+      outgoingHeaders['cache-control'] = 'no-cache';
+    }
     outgoingHeaders['content-length'] = String(finalBody.byteLength);
 
     if (finalInspectable) {
@@ -417,6 +658,155 @@ export function createProxyServer(
       decoder.end();
     }
 
+    res.writeHead(upstream.statusCode, outgoingHeaders);
+    res.end(finalBody);
+  }
+
+  async function forwardInternalOpenAi(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    pathAndQuery: string,
+    bodyBytes: Uint8Array,
+    originalBodyBytes: Uint8Array,
+    protocolId: string | undefined,
+    exchangeId: string,
+    allowedCcrIds: ReadonlySet<string>,
+  ): Promise<void> {
+    const target = new URL(`${config.upstreams.openai.replace(/\/+$/, '')}${pathAndQuery}`);
+    const headers = requestHeaders(req.headers);
+    const responses: Record<string, unknown>[] = [];
+    let requestBody = JSON.parse(new TextDecoder().decode(bodyBytes)) as Record<string, unknown>;
+    const clientRequestedStream = requestBody.stream === true;
+    if (clientRequestedStream) requestBody = { ...requestBody, stream: false };
+    let upstream: BufferedUpstreamResponse | undefined;
+    let replayOriginal = false;
+    let replayReason = '';
+    let finalInspectable = false;
+    let aggregateUsage = false;
+
+    const sendUpstreamError = (error: unknown): void => {
+      if (req.aborted) return;
+      log.error(`upstream request failed: ${error instanceof Error ? error.message : String(error)}`);
+      if (!res.headersSent) {
+        res.writeHead(502, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: { type: 'upstream_error', message: 'failed to reach upstream' } }));
+      }
+    };
+
+    const maxRounds = Math.max(0, config.ccr.maxContinuationRounds);
+    for (let round = 0; round <= maxRounds; round += 1) {
+      if (req.aborted) throw new Error('client aborted');
+      try {
+        upstream = await requestBuffered(
+          target,
+          req.method ?? 'POST',
+          headers,
+          new TextEncoder().encode(JSON.stringify(requestBody)),
+        );
+      } catch (error) {
+        if (responses.length === 0) {
+          sendUpstreamError(error);
+          return;
+        }
+        replayOriginal = true;
+        replayReason = 'continuation transport failed';
+        break;
+      }
+      const encoding = upstream.headers['content-encoding'];
+      const contentType = upstream.headers['content-type'];
+      const isJson = (Array.isArray(contentType) ? contentType[0] : contentType)?.includes('application/json');
+      if (upstream.statusCode < 200 || upstream.statusCode >= 300) break;
+      if (encoding != null || !isJson) {
+        replayOriginal = true;
+        replayReason = 'local continuation returned an uninspectable response';
+        break;
+      }
+
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(upstream.body.toString()) as Record<string, unknown>;
+      } catch {
+        replayOriginal = true;
+        replayReason = 'local continuation returned invalid JSON';
+        break;
+      }
+      responses.push(parsed);
+      finalInspectable = true;
+      const hasInternalCall = hasInternalOpenAiToolUse(parsed);
+      const continuation = await continueInternalOpenAiTurn(
+        requestBody,
+        parsed,
+        pixroom.ccr,
+        allowedCcrIds,
+      );
+      if (!continuation) {
+        if (hasInternalCall) {
+          replayOriginal = true;
+          replayReason = 'response mixed internal and client-owned tools';
+        } else {
+          aggregateUsage = responses.length > 1;
+        }
+        break;
+      }
+      if (round === maxRounds) {
+        replayOriginal = true;
+        replayReason = 'local continuation round limit reached';
+        break;
+      }
+      requestBody = continuation;
+    }
+
+    if (replayOriginal) {
+      log.warn(`local continuation degraded (${replayReason}); replaying original request`);
+      try {
+        upstream = await requestBuffered(target, req.method ?? 'POST', headers, originalBodyBytes);
+      } catch (error) {
+        sendUpstreamError(error);
+        return;
+      }
+      finalInspectable = false;
+      const encoding = upstream.headers['content-encoding'];
+      const contentType = upstream.headers['content-type'];
+      const isJson = (Array.isArray(contentType) ? contentType[0] : contentType)?.includes('application/json');
+      if (upstream.statusCode >= 200 && upstream.statusCode < 300 && encoding == null && isJson) {
+        try {
+          responses.push(JSON.parse(upstream.body.toString()) as Record<string, unknown>);
+          finalInspectable = true;
+          aggregateUsage = responses.length > 1;
+        } catch {
+          log.warn('local replay usage could not be aggregated: invalid JSON response');
+        }
+      } else if (responses.length > 0) {
+        log.warn('local replay usage could not be aggregated: uninspectable response');
+      }
+    }
+
+    if (!upstream) throw new Error('local upstream returned no response');
+    let finalBody = upstream.body;
+    if (aggregateUsage) finalBody = Buffer.from(JSON.stringify(aggregateOpenAiUsage(responses)));
+    const outgoingHeaders = responseHeaders(upstream.headers);
+    if (aggregateUsage) delete outgoingHeaders['content-encoding'];
+
+    if (finalInspectable) {
+      const eventContext = { exchangeId, provider: 'openai' as const, protocolId, pathname: pathAndQuery };
+      const decoder = createResponseEventDecoder({
+        provider: 'openai',
+        contentType: 'application/json',
+        onEvent: (event) => outputs.dispatch(event, eventContext),
+      });
+      decoder.push(finalBody);
+      decoder.end();
+    }
+    if (clientRequestedStream && finalInspectable) {
+      const finalResponse = JSON.parse(finalBody.toString()) as Record<string, unknown>;
+      finalBody = protocolId?.includes('responses')
+        ? openAiResponsesJsonToSse(finalResponse)
+        : openAiChatJsonToSse(finalResponse);
+      delete outgoingHeaders['content-encoding'];
+      outgoingHeaders['content-type'] = 'text/event-stream';
+      outgoingHeaders['cache-control'] = 'no-cache';
+    }
+    outgoingHeaders['content-length'] = String(finalBody.byteLength);
     res.writeHead(upstream.statusCode, outgoingHeaders);
     res.end(finalBody);
   }

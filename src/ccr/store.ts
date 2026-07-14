@@ -85,6 +85,10 @@ export class CcrStore {
     return this.inline.size + this.hashes.size;
   }
 
+  has(id: string): boolean {
+    return this.inline.has(id) || this.hashes.has(id);
+  }
+
   /** True when anything has been offloaded (⇒ the retrieve tool is worth injecting). */
   hasOffloaded(): boolean {
     return this.size > 0;

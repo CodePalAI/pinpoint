@@ -18,11 +18,11 @@ Recommendation: center the next validation cycle on QCV and the neutral optimize
 | --- | --- | --- | --- |
 | Repaired paid QCV pilot, Haiku 4.5, 2 paired tasks | 22,614 -> 594 provider input tokens; 97.1% modeled cost reduction; 1/2 -> 2/2 score | Pixroom QCV | Original optimizer can beat raw context and improve an exact aggregation answer |
 | Rejected naive QCV pilot | 79.1% input reduction; quality 2/3 -> 1/3 | Pixroom QCV v0 | Model-planned retrieval under a tiny output cap is not safe; design correctly rejected |
-| Conservative offline QCV, 3 fixtures | 53.6-67.7% fewer tokens than current full stack, counting one complete uncached fallback continuation | Pixroom QCV | QCV remains smaller even when query-round cost is pessimistically included |
+| Conservative offline QCV, 3 fixtures | 63.7-67.7% fewer tokens than current full stack, counting one complete uncached fallback continuation | Pixroom QCV | QCV remains smaller even when query-round cost is pessimistically included |
 | Paid Anthropic pilot, Haiku 4.5, 3 paired tasks | 24,249 -> 14,478 provider input tokens; 40.1% modeled cost reduction; 2/3 -> 2/3 score | Headroom semantic path | Integration and measurement work on paid traffic |
 | Offline Fable-5, 3 mixed fixtures | Headroom 28.3%; pxpipe 20.5%; pixroom 48.8% input reduction | Composition of both upstream engines | Multiple disjoint optimizers can add value |
 | Transaction/runtime tests | Custom integration works without router edits; rollback, audit, and shadow pass | Pixroom kernel | A credible plugin-host foundation |
-| No-op proxy profile, OpenAI + Anthropic | Added p95 0.10-0.21 ms at concurrency 1; 0.18-2.05 ms at concurrency 10; 12.28-25.21 ms at concurrency 100 | Pixroom transport | Fine for local interactive use; saturated two-hop gateway use still needs an isolated architecture benchmark |
+| Isolated no-op proxy profile, OpenAI + Anthropic | Added p95 0.25-0.48 ms at concurrency 1; 0.02-2.82 ms at concurrency 10; 9.98-14.75 ms at concurrency 100 | Pixroom transport | Fine for local interactive use; the saturated two-hop path remains above the sub-5 ms target |
 | Adaptive benchmark | Learns a hand-authored oracle | Simulation only | Plumbing works; no market or quality claim |
 
 The repaired QCV pilot cost $0.023348 for four calls. Raw Haiku returned `5` on the seven-error fixture; QCV deterministically counted the exact local lines and returned `7`. The prior semantic pilot cost $0.038967 plus a $0.000059 canary. All live results remain directional because each task ran once.
@@ -128,9 +128,9 @@ Do not add more generic gateway features before these gates pass:
 
 1. **QCV efficacy:** on at least 30 representative structured tasks with repeated randomized pairs, QCV beats Headroom-only by at least 25% of total billed cost while the quality non-inferiority bound stays within 2 percentage points.
 2. **Real traffic:** replay at least 10 sanitized Claude Code/Codex/Copilot traces, including caching, retrievals, retries, tool continuation, and long sessions.
-3. **External extensibility:** two useful integrations are authored outside pixroom core, and one is not compression (for example semantic cache or redaction).
-4. **Operational path:** add OpenAI Responses QCV, streaming-compatible continuation, durable capture/replay, and OTLP export.
-5. **Performance:** isolate load generation, proxy, and upstream into separate processes, then reduce no-op added p95 at concurrency 100 from the current 12-25 ms range to below 5 ms, with zero errors.
+3. **External extensibility:** two examples now run outside core through public exports, including non-compression redaction; the gate remains open until independent authors ship and operate integrations.
+4. **Operational path:** OpenAI Responses/Chat QCV, streaming exact prefetch, cross-provider CCR continuation, durable capture/replay, and OTLP export are implemented. Remaining work is provider-conformance soak testing on real traces.
+5. **Performance:** the isolated three-process benchmark is implemented and zero-error, but still misses the sub-5 ms concurrency-100 target. The extra local HTTP hop remains a measured architectural cost rather than a solved gate.
 6. **Demand:** three external teams run shadow mode on real traffic; at least one asks to deploy it rather than merely starring the repository.
 
 Time-box this to six weeks. If gates 1, 3, and 6 do not show traction, stop treating pixroom as a standalone product. Offer the transactional kernel/protocol work upstream to Headroom or pxpipe, retain the benchmark harness as a neutral OSS project, and avoid maintaining a redundant proxy indefinitely.
@@ -139,4 +139,4 @@ Time-box this to six weeks. If gates 1, 3, and 6 do not show traction, stop trea
 
 Pixroom now has something potentially valuable beyond integration glue: QCV produced an order-of-magnitude token reduction and corrected an exact aggregation failure in a paid controlled pilot. It is the first result that can plausibly support an independent product.
 
-The rational next move is focused replication, not celebration: broaden QCV across tasks, models, OpenAI Responses, streaming, cache behavior, and adversarial questions. If those replications hold, pixroom has a distinct product. If they do not, retain QCV as a specialized plugin and keep the runtime/upstreaming fallback.
+The rational next move is external replication, not more local feature breadth: run repeated live-model tasks, replay sanitized production traces, validate synthesized streaming behavior against real SDKs, and recruit independent integration authors. If those replications hold, pixroom has a distinct product. If they do not, retain QCV as a specialized plugin and keep the runtime/upstreaming fallback.

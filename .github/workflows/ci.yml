@@ -34,5 +34,9 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - if: matrix.node == 22
+        run: npm run bench:anthropic:self-test
+      - if: matrix.node == 22
+        run: npm run bench:qcv-quality
       - run: node bin/cli.js --help
       - run: npm pack --dry-run

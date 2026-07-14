@@ -1,6 +1,6 @@
 {
   "evidenceLevel": "offline-real-transform",
-  "generatedAt": "2026-07-14T11:42:40.926Z",
+  "generatedAt": "2026-07-14T12:17:56.619Z",
   "model": "claude-fable-5",
   "methodology": {
     "current": "headroom semantic + pxpipe optical",
@@ -91,22 +91,22 @@
     },
     {
       "name": "source-code",
-      "rawTokens": 14450,
-      "currentTokens": 7253,
-      "virtualInitialTokens": 1618,
-      "continuationTokens": 1751,
-      "virtualOneQueryTokens": 3369,
-      "reductionVsCurrent": 0.5355025506686888,
+      "rawTokens": 18725,
+      "currentTokens": 9569,
+      "virtualInitialTokens": 1608,
+      "continuationTokens": 1738,
+      "virtualOneQueryTokens": 3346,
+      "reductionVsCurrent": 0.650329188002926,
       "exact": true,
-      "queryResult": "{\"matches\":[{\"line\":625,\"text\":\"export class ContentRouter {\"}],\"count\":1,\"truncated\":false}",
+      "queryResult": "{\"matches\":[{\"line\":1024,\"text\":\"export class ContentRouter {\"}],\"count\":1,\"truncated\":false}",
       "stages": [
         {
           "stage": "virtual",
           "applied": true,
           "reason": "applied",
-          "tokensText": 9086,
-          "tokensCompressed": 163,
-          "tokensSaved": 8923,
+          "tokensText": 13158,
+          "tokensCompressed": 164,
+          "tokensSaved": 12994,
           "basis": "estimate"
         },
         {

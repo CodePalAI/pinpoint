@@ -113,13 +113,13 @@ QCV does not summarize the stored dataset. It keeps the original bytes in proces
 
 QCV applies only when all of these conditions hold:
 
-1. The request is non-streaming Anthropic Messages traffic using PAYG/API-key auth.
+1. The request is Anthropic Messages, OpenAI Chat, or OpenAI Responses traffic using PAYG/API-key auth. Deterministic exact prefetch also works when the response is streamed.
 2. Exactly one eligible historical dataset matches one explicit selector or supported exact count.
 3. The local operation returns a complete, bounded, unambiguous result.
 4. Manifest plus current-turn prefetch is smaller than the original tool result.
 5. Every referenced dataset fits the per-request and process memory budgets.
 
-Repeated selectors, ranges, negation, multiple matching datasets, malformed values, streaming requests, and subscription traffic pass through unchanged. Disable QCV with `PIXROOM_VIRTUAL_CONTEXT=0` or `pixroom proxy --no-qcv`.
+Repeated selectors, ranges, negation, multiple matching datasets, malformed values, and subscription traffic pass through unchanged. The model-driven fallback remains unavailable on streaming requests. Disable QCV with `PIXROOM_VIRTUAL_CONTEXT=0` or `pixroom proxy --no-qcv`.
 
 The model-driven `pixroom_query` fallback is separate and off by default. An early version saved tokens but reduced task quality, so the default now uses only conservative exact prefetch. See the [QCV design note](./planning/query_backed_context.md) for supported operations, safety limits, and the rejected design.
 
@@ -131,6 +131,7 @@ pixroom wrap claude                     # launch a supported agent through Pixro
 pixroom agent list                      # show wrapper coverage
 pixroom integration list                # show active optimizer capabilities
 pixroom export README.md                # inspect savings without an LLM call
+pixroom replay capture.jsonl            # replay body-enabled captures offline
 pixroom mcp                             # expose compress, retrieve, and stats tools
 ```
 
@@ -138,6 +139,19 @@ Use shadow mode to measure proposals without changing requests:
 
 ```bash
 pixroom proxy --mode shadow --port 8788
+```
+
+Capture replayable requests only on a trusted machine. Bodies are never captured unless explicitly enabled:
+
+```bash
+PIXROOM_CAPTURE_PATH=.pixroom/capture.jsonl PIXROOM_CAPTURE_BODIES=1 pixroom proxy
+pixroom replay .pixroom/capture.jsonl
+```
+
+Export content-free optimization spans to an OTLP/HTTP collector:
+
+```bash
+PIXROOM_OTLP_ENDPOINT=http://127.0.0.1:4318/v1/traces pixroom proxy
 ```
 
 Or embed the Node/TypeScript runtime:
@@ -156,7 +170,7 @@ console.log(body);
 console.log(report.tokensSavedTotal, report.savedFraction);
 ```
 
-Public subpaths expose the integration kernel, protocol registry, normalized output events, agent registry, and virtual-context APIs.
+Public subpaths expose the integration kernel, protocol registry, normalized output events, agent registry, virtual-context APIs, capture/replay, and OTLP telemetry.
 
 ## Proof
 
@@ -184,6 +198,8 @@ The offline corpus runs real Pixroom transforms over agent-shaped requests and c
 
 This offline result validates transform and token accounting, not model quality. The paid pilots are also small: synthetic fixtures, one model, one randomized pair per task, and no retries. Cache behavior, retrievals, model choice, and workload eligibility can change the net saving.
 
+The broader exact-QCV suite runs 36 deterministic tasks across JSON lookup, filtered counts, logs, source exports, tabular JSON, and nested projections. It produced 36/36 exact materializations, 36/36 virtualizations, and zero fallback tools, reducing the measured dataset regions from 104,018 to 5,964 estimated tokens. This is offline operation coverage, not live-model quality evidence.
+
 The full [benchmark report](./benchmarks/REPORT.md) keeps live, offline, agentic, and simulated evidence separate. It also preserves failed experiments instead of averaging them into successful results.
 
 ## Agent compatibility
@@ -196,7 +212,7 @@ The full [benchmark report](./benchmarks/REPORT.md) keeps live, offline, agentic
 | Use an existing subscription login | GitHub Copilot | `pixroom wrap copilot` |
 | Print the base URL configuration | Cursor, Cline, Continue | `pixroom wrap <agent>` |
 
-Run `pixroom agent list` for the exact traffic, delegation, and configuration coverage of each wrapper. Exact QCV currently applies to first-party Anthropic Messages requests that use API-key auth and do not stream. Other traffic can use the remaining registered optimizers or pass through unchanged.
+Run `pixroom agent list` for the exact traffic, delegation, and configuration coverage of each wrapper. Exact QCV applies to first-party Anthropic Messages, OpenAI Chat, and OpenAI Responses requests using API-key auth. Other traffic can use the remaining registered optimizers or pass through unchanged.
 
 ## Safety and privacy
 
@@ -206,6 +222,9 @@ Run `pixroom agent list` for the exact traffic, delegation, and configuration co
 - Audit and shadow modes inspect proposals without retaining QCV datasets or changing requests.
 - Failed proposals leave their regions unchanged; unavailable optimizers, unsupported traffic, and unsafe QCV questions pass through to the next eligible path.
 - The experimental model-driven QCV fallback is disabled by default and has a separate switch.
+- `headroom_retrieve` calls are executed inside the proxy only when every tool call in the response is Pixroom-owned. Mixed tool ownership replays the original request.
+- Durable capture is off by default and records metadata only unless `PIXROOM_CAPTURE_BODIES=1` is explicitly set. Body-enabled files contain private prompts and are forced to mode `0600`.
+- OTLP spans never include request or response content.
 
 See the [security policy](./SECURITY.md) before exposing the proxy outside a trusted machine or network.
 
@@ -221,6 +240,13 @@ See the [security policy](./SECURITY.md) before exposing the proxy outside a tru
 | `PIXROOM_VIRTUAL_MAX_ENTRIES` / `PIXROOM_VIRTUAL_MAX_STORED_BYTES` | in-process exact-store limits | `256` / `67108864` |
 | `PIXROOM_VIRTUAL_MAX_DATASETS_PER_REQUEST` | maximum datasets virtualized in one request | `8` |
 | `PIXROOM_VIRTUAL_MAX_QUERY_ROUNDS` | hidden query fallback round cap | `4` |
+| `PIXROOM_CCR_CONTINUATION` | execute pure `headroom_retrieve` calls inside the proxy | `on` |
+| `PIXROOM_CCR_MAX_CONTINUATION_ROUNDS` | hidden CCR continuation round cap | `3` |
+| `PIXROOM_CAPTURE_PATH` | fsynced JSONL optimization capture | unset |
+| `PIXROOM_CAPTURE_BODIES` | include sensitive bodies required for replay | `off` |
+| `PIXROOM_CAPTURE_MAX_BYTES` / `PIXROOM_CAPTURE_MAX_FILES` | bounded JSONL rotation | `268435456` / `3` |
+| `PIXROOM_OTLP_ENDPOINT` | OTLP/HTTP traces endpoint | unset |
+| `PIXROOM_OTLP_HEADERS` | collector headers as comma-separated `key=value` pairs | unset |
 | `PIXROOM_OPTICAL` / `PIXROOM_SEMANTIC` | built-in integration switches | `on` |
 | `PIXROOM_MODELS` | optical integration model allowlist; `off` disables it | integration default |
 | `PIXROOM_SEMANTIC_PROSE` | include large prose from non-recent user turns | `off` |
@@ -232,6 +258,8 @@ Advanced QCV limits are documented in the [design note](./planning/query_backed_
 ## Integrations
 
 Pixroom owns the proxy, QCV, protocol adapters, transactional request planning, and savings reports. Its public integration kernel also lets specialized optimizers propose changes without taking over the product's routing or safety policy.
+
+Two standalone examples live in [`examples/integrations`](./examples/integrations/README.md): a non-compression secret-redaction policy and a deterministic JSON tool-output minifier. They import only public package exports and run with built-ins disabled.
 
 The default distribution includes [pxpipe](https://github.com/teamchong/pxpipe) for in-process optical compression and [Headroom](https://github.com/headroomlabs-ai/headroom) for optional semantic compression through a local sidecar. Install the optional sidecar with:
 
@@ -251,12 +279,14 @@ node benchmarks/proof.mjs       # constructed additivity check
 node benchmarks/rd_frontier.mjs # simulated RD surface
 node benchmarks/adaptive.mjs    # controller simulation
 npm run bench:virtual           # QCV vs current full stack, no provider calls
+npm run bench:qcv-quality       # 36 exact structured tasks, no provider calls
 npm run bench:profile           # paired direct-vs-proxy local profile + raw samples
+npm run bench:profile:isolated  # separate load, proxy, and upstream processes
 ```
 
 ## Status
 
-**Experimental optimizer runtime.** The transactional integration kernel, audit/shadow modes, Anthropic Messages, OpenAI Chat/Responses adapters, normalized output events, and agent registry are implemented. The remaining release gates are durable capture/replay, OTLP export, server-side CCR continuation, lower high-concurrency overhead, external integrations, and repeated quality-constrained evidence. The candid standalone-product decision is in [the product assessment](./planning/product_assessment.md).
+**Experimental optimizer runtime.** The transactional kernel, cross-provider exact QCV, streaming-safe exact prefetch, server-side CCR continuation, durable capture/replay, OTLP export, normalized output events, agent registry, and external integration examples are implemented. Remaining proof gates are lower saturated two-hop latency, repeated live-model non-inferiority, sanitized production trace replay, and independent external adoption. The candid standalone-product decision is in [the product assessment](./planning/product_assessment.md).
 
 ## License
 

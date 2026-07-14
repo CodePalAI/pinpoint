@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { CcrStore, CCR_TOOL_NAME } from '../src/ccr/store.js';
 import type { ReversibleHandle } from '../src/types.js';
+import { continueInternalAnthropicTurn } from '../src/continuation/anthropic.js';
+import { VirtualContextStore } from '../src/virtual-context/store.js';
 
 describe('CcrStore', () => {
   it('registers inline pxpipe originals and retrieves them locally', async () => {
@@ -37,5 +39,32 @@ describe('CcrStore', () => {
     expect(openai.type).toBe('function');
     expect(openai.function.name).toBe(CCR_TOOL_NAME);
     expect(openai.function.parameters).toBeDefined();
+  });
+
+  it('rejects a CCR handle that is not scoped to the current request', async () => {
+    const store = new CcrStore();
+    store.registerReversible([
+      { id: 'rec_foreign', origin: 'optical', original: 'FOREIGN SECRET' },
+    ]);
+    const continuation = await continueInternalAnthropicTurn(
+      { messages: [{ role: 'user', content: 'hello' }] },
+      {
+        content: [{
+          type: 'tool_use',
+          id: 'toolu_retrieve',
+          name: 'headroom_retrieve',
+          input: { id: 'rec_foreign' },
+        }],
+      },
+      {
+        ccr: store,
+        virtualContext: new VirtualContextStore(),
+        allowedVirtualIds: new Set(),
+        allowedCcrIds: new Set(),
+      },
+    );
+
+    expect(JSON.stringify(continuation)).toContain('invalid or unavailable');
+    expect(JSON.stringify(continuation)).not.toContain('FOREIGN SECRET');
   });
 });

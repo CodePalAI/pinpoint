@@ -2,10 +2,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   chmodSync,
   closeSync,
+  existsSync,
   fsyncSync,
   mkdirSync,
   openSync,
   readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
   writeSync,
 } from 'node:fs';
 import { dirname } from 'node:path';
@@ -122,10 +126,12 @@ export class CaptureWriter {
 
     try {
       mkdirSync(dirname(this.config.path), { recursive: true, mode: 0o700 });
+      const line = `${JSON.stringify(record)}\n`;
+      this.rotateIfNeeded(Buffer.byteLength(line));
       const descriptor = openSync(this.config.path, 'a', 0o600);
       try {
         chmodSync(this.config.path, 0o600);
-        writeSync(descriptor, `${JSON.stringify(record)}\n`);
+        writeSync(descriptor, line);
         if (this.config.fsync) fsyncSync(descriptor);
       } finally {
         closeSync(descriptor);
@@ -134,6 +140,36 @@ export class CaptureWriter {
     } catch (error) {
       this.failures += 1;
       this.onError?.(error);
+    }
+  }
+
+  private rotateIfNeeded(incomingBytes: number): void {
+    const maxBytes = Math.max(1, this.config.maxBytes);
+    if (incomingBytes > maxBytes) {
+      throw new Error(`capture record exceeds PIXROOM_CAPTURE_MAX_BYTES (${incomingBytes} > ${maxBytes})`);
+    }
+    const currentBytes = existsSync(this.config.path) ? statSync(this.config.path).size : 0;
+    if (currentBytes + incomingBytes <= maxBytes) return;
+
+    const maxFiles = Math.max(1, this.config.maxFiles);
+    if (maxFiles === 1) {
+      rmSync(this.config.path, { force: true });
+      return;
+    }
+    for (let suffix = maxFiles - 1; suffix >= 1; suffix -= 1) {
+      const source = suffix === 1 ? this.config.path : `${this.config.path}.${suffix - 1}`;
+      const destination = `${this.config.path}.${suffix}`;
+      if (!existsSync(source)) continue;
+      rmSync(destination, { force: true });
+      renameSync(source, destination);
+    }
+    if (this.config.fsync) {
+      const directory = openSync(dirname(this.config.path), 'r');
+      try {
+        fsyncSync(directory);
+      } finally {
+        closeSync(directory);
+      }
     }
   }
 }

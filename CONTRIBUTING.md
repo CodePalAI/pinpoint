@@ -34,6 +34,10 @@ New optimizers must:
 
 Paid benchmarks are disabled unless `BENCH_ALLOW_PAID=1` and explicit request and dollar caps are set. Never commit API keys. Preserve failed designs and quality regressions as evidence rather than deleting them.
 
+External integration examples belong under `examples/integrations` and must import only published Pixroom subpaths. At least one test must run each example with built-ins disabled.
+
+Capture fixtures must remain metadata-only or contain synthetic bodies. Never commit real body-enabled capture files.
+
 ## Pull requests
 
 Keep changes scoped, document configuration changes, and include the command used to validate them. Run `npm pack --dry-run` when changing exports, CLI behavior, or package metadata. Security issues follow [`SECURITY.md`](./SECURITY.md), not the public issue tracker.

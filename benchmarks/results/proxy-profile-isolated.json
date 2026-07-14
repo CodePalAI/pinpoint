@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "evidenceLevel": "offline-real-transform",
+  "generatedAt": "2026-07-14T12:25:29.345Z",
+  "gitSha": "c9c5cf57db3e9bb56df3d69b8317086f3e3c4557",
+  "system": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v26.0.0",
+    "cpus": [
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro",
+      "Apple M4 Pro"
+    ],
+    "totalMemoryBytes": 51539607552
+  },
+  "config": {
+    "requests": 5,
+    "repetitions": 1,
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "concurrencies": [
+      1
+    ],
+    "payloadBytes": [
+      1024
+    ],
+    "warmupRequests": 1
+  },
+  "comparisons": [
+    {
+      "protocol": "openai",
+      "payloadBytes": 1024,
+      "concurrency": 1,
+      "directMeanP95Ms": 1.727125000000001,
+      "proxyMeanP95Ms": 2.3568750000000023,
+      "addedP95Ms": 0.6297500000000014
+    },
+    {
+      "protocol": "anthropic",
+      "payloadBytes": 1024,
+      "concurrency": 1,
+      "directMeanP95Ms": 0.6013750000000186,
+      "proxyMeanP95Ms": 1.0080829999999992,
+      "addedP95Ms": 0.40670799999998053
+    }
+  ],
+  "runs": [
+    {
+      "protocol": "openai",
+      "payloadBytes": 1024,
+      "repetition": 0,
+      "armOrder": [
+        "pixroom-noop",
+        "direct"
+      ],
+      "arm": "pixroom-noop",
+      "concurrency": 1,
+      "requests": 5,
+      "errors": 0,
+      "durationMs": 7.671958000000018,
+      "throughputRps": 651.724110064209,
+      "latency": {
+        "n": 5,
+        "minMs": 1.2590000000000146,
+        "meanMs": 1.5279832000000055,
+        "p50Ms": 1.3428329999999846,
+        "p95Ms": 2.3568750000000023,
+        "p99Ms": 2.3568750000000023,
+        "maxMs": 2.3568750000000023
+      },
+      "rawLatencyMs": [
+        2.3568750000000023,
+        1.3989579999999933,
+        1.3428329999999846,
+        1.2590000000000146,
+        1.2822500000000332
+      ]
+    },
+    {
+      "protocol": "openai",
+      "payloadBytes": 1024,
+      "repetition": 0,
+      "armOrder": [
+        "pixroom-noop",
+        "direct"
+      ],
+      "arm": "direct",
+      "concurrency": 1,
+      "requests": 5,
+      "errors": 0,
+      "durationMs": 3.96550000000002,
+      "throughputRps": 1260.8750472828078,
+      "latency": {
+        "n": 5,
+        "minMs": 0.316915999999992,
+        "meanMs": 0.7889080000000035,
+        "p50Ms": 0.7524160000000393,
+        "p95Ms": 1.727125000000001,
+        "p99Ms": 1.727125000000001,
+        "maxMs": 1.727125000000001
+      },
+      "rawLatencyMs": [
+        0.7602079999999773,
+        1.727125000000001,
+        0.7524160000000393,
+        0.3878750000000082,
+        0.316915999999992
+      ]
+    },
+    {
+      "protocol": "anthropic",
+      "payloadBytes": 1024,
+      "repetition": 0,
+      "armOrder": [
+        "direct",
+        "pixroom-noop"
+      ],
+      "arm": "direct",
+      "concurrency": 1,
+      "requests": 5,
+      "errors": 0,
+      "durationMs": 2.0566670000000045,
+      "throughputRps": 2431.1179204022765,
+      "latency": {
+        "n": 5,
+        "minMs": 0.287083999999993,
+        "meanMs": 0.408166800000015,
+        "p50Ms": 0.3587500000000432,
+        "p95Ms": 0.6013750000000186,
+        "p99Ms": 0.6013750000000186,
+        "maxMs": 0.6013750000000186
+      },
+      "rawLatencyMs": [
+        0.6013750000000186,
+        0.4375830000000178,
+        0.287083999999993,
+        0.3587500000000432,
+        0.3560420000000022
+      ]
+    },
+    {
+      "protocol": "anthropic",
+      "payloadBytes": 1024,
+      "repetition": 0,
+      "armOrder": [
+        "direct",
+        "pixroom-noop"
+      ],
+      "arm": "pixroom-noop",
+      "concurrency": 1,
+      "requests": 5,
+      "errors": 0,
+      "durationMs": 3.7743749999999636,
+      "throughputRps": 1324.7226361980588,
+      "latency": {
+        "n": 5,
+        "minMs": 0.46674999999999045,
+        "meanMs": 0.7520831999999927,
+        "p50Ms": 0.8541250000000105,
+        "p95Ms": 1.0080829999999992,
+        "p99Ms": 1.0080829999999992,
+        "maxMs": 1.0080829999999992
+      },
+      "rawLatencyMs": [
+        1.0080829999999992,
+        0.8541250000000105,
+        0.8952919999999835,
+        0.5361659999999802,
+        0.46674999999999045
+      ]
+    }
+  ],
+  "verdict": {
+    "zeroErrors": true,
+    "belowFiveMsAtConcurrency100": null,
+    "maxAddedP95AtConcurrency100": null
+  },
+  "limitations": [
+    "Load generator, proxy, and mock upstream use separate OS processes on one host.",
+    "This measures local HTTP/JSON overhead, not provider latency or model quality."
+  ]
+}

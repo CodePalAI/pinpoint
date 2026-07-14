@@ -4,7 +4,7 @@
 
 Compression asks which bytes can be removed while leaving enough information for the model. Query-Backed Context Virtualization (QCV) changes the contract: a large structured tool result becomes an exact local dataset, and the model receives only the answer surface needed for the current turn.
 
-QCV currently handles non-recent JSON, line-oriented logs, and source-like tool results on first-party Anthropic PAYG non-streaming traffic. Its conservative exact subset is on by default. The model-driven query fallback is a separate opt-in experiment.
+QCV handles non-recent JSON, line-oriented logs, and source-like tool results on first-party Anthropic Messages, OpenAI Chat, and OpenAI Responses PAYG traffic. Its conservative exact subset is on by default and works with streaming responses because it needs no hidden model round. The Anthropic model-driven query fallback is a separate opt-in experiment and remains non-streaming.
 
 ## Data flow
 
@@ -17,7 +17,7 @@ QCV currently handles non-recent JSON, line-oriented logs, and source-like tool 
    - explicit log-level count -> boundary-aware line count;
    - otherwise -> no prefetch.
 5. Default-on QCV selects a candidate only when exactly one dataset yields one complete exact answer and the transformed request is smaller. Repeated selectors, ranges, negation, and multiple matching datasets are refused.
-6. The transaction validates a cloned request, atomically retains every selected dataset within entry/byte limits, commits stable manifests into historical tool-result positions, and appends escaped exact data only to the current user turn.
+6. The transaction validates a cloned request, atomically retains every selected dataset within entry/byte limits, commits stable manifests into Anthropic `tool_result`, OpenAI Chat `role:tool`, or Responses `function_call_output` positions, and appends escaped exact data to the current provider-native user turn.
 7. Within exact-query turns, historical manifest bytes depend only on the dataset and configuration, not the selector, preserving that transformed prefix. An ambiguous turn intentionally falls back to the original and can therefore change applicability.
 8. Unresolved questions fall through by default. With `PIXROOM_VIRTUAL_QUERY_FALLBACK=1`, pixroom injects `pixroom_query`; pure internal calls receive bounded local `schema`, `json_select`, `count`, `grep`, or `slice` results and continue transparently.
 9. Headroom and pxpipe remain available for every unclaimed region. QCV owns the dedicated `virtual-context` planner region rather than all tool results.
@@ -54,7 +54,9 @@ Paid Haiku 4.5, two structured fixtures, one randomized pair each:
 
 The repaired pilot reduced input 97.4% and cost 97.1%. QCV returned the exact seven-error count where raw Haiku returned five.
 
-The conservative offline benchmark counts an initial optimized request plus one complete uncached fallback continuation even though the safe exact cases need no second provider request. QCV still used 53.6-67.7% fewer tokens than the existing Headroom+pxpipe stack on JSON, logs, and current source text.
+The conservative offline benchmark counts an initial optimized request plus one complete uncached fallback continuation even though the safe exact cases need no second provider request. QCV still used 63.7-67.7% fewer tokens than the existing Headroom+pxpipe stack on JSON, logs, and current source text.
+
+A separate 36-task deterministic suite spans JSON lookup, filtered counts, logs, source exports, tabular JSON, and nested projections. It produced 36/36 exact materializations, 36/36 virtualizations, and zero fallback tools, with dataset-region estimates reduced from 104,018 to 5,964 tokens. This is operation-breadth evidence without provider calls, not live-model quality evidence.
 
 These are small synthetic pilots, not universal quality evidence.
 
@@ -73,7 +75,7 @@ The ingredients have prior art. The current claim is a distinct integration and 
 - deterministic exact subset enabled by default; `PIXROOM_VIRTUAL_CONTEXT=0` is the kill switch;
 - model-driven fallback disabled by default (`PIXROOM_VIRTUAL_QUERY_FALLBACK=1` opts in);
 - PAYG only; OAuth/subscription pass through;
-- non-streaming only;
+- deterministic exact prefetch supports streaming; model-driven fallback is non-streaming;
 - minimum 6,000 and maximum 2,000,000 characters per dataset by default;
 - at most 8 datasets per request, 256 retained datasets, 64 MiB retained bytes, and 12,000 characters per query result by default;
 - proposal and shadow analysis retain no data; storage occurs only inside transaction commit;
@@ -90,8 +92,8 @@ The ingredients have prior art. The current claim is a distinct integration and 
 
 ## Next evidence gates
 
-1. At least 30 repeated structured tasks across JSON, logs, code, tables, and nested objects.
-2. Quality non-inferiority within two percentage points versus raw and Headroom-only.
-3. Real Claude Code/Codex trace replay with cache reads/writes and repeated turns.
-4. OpenAI Responses support and streaming-compatible continuation.
-5. Adversarial question parsing, prompt-injection fixtures, eviction pressure, and multi-dataset joins.
+1. Repeat at least 30 live-model structured tasks with randomized arm order and confidence intervals.
+2. Demonstrate quality non-inferiority within two percentage points versus raw and Headroom-only.
+3. Replay sanitized Claude Code/Codex traces with cache reads/writes, retries, and repeated turns using durable capture.
+4. Validate provider conformance and soak behavior for synthesized Anthropic/OpenAI continuation streams.
+5. Expand deterministic planning to safe multi-dataset joins without weakening the current ambiguity refusal.

@@ -1,6 +1,6 @@
 # pixroom compression benchmark
 
-_Generated 2026-07-14T11:42:58.491Z._
+_Generated 2026-07-14T12:19:04.321Z._
 
 Measures token consumption (and, for live arms, response correctness) for **headroom-only** (semantic), **pxpipe-only** (optical), and **pixroom** (both), on the same prompts + system context. Results are separated by evidence level; simulations are not presented as product-performance evidence.
 
@@ -17,22 +17,43 @@ Evidence: `offline-real-transform`. Local network mock, 150 requests per arm, 3 
 
 | protocol | payload | concurrency | direct mean p95 | pixroom mean p95 | added p95 |
 | --- | --- | --- | --- | --- | --- |
-| openai | 1024 B | 1 | 0.30 ms | 0.49 ms | 0.18 ms |
-| openai | 1024 B | 10 | 2.47 ms | 2.66 ms | 0.18 ms |
-| openai | 1024 B | 100 | 10.22 ms | 25.88 ms | 15.67 ms |
-| openai | 102400 B | 1 | 0.25 ms | 0.46 ms | 0.21 ms |
-| openai | 102400 B | 10 | 4.61 ms | 5.96 ms | 1.35 ms |
-| openai | 102400 B | 100 | 15.33 ms | 34.50 ms | 19.17 ms |
-| anthropic | 1024 B | 1 | 0.14 ms | 0.24 ms | 0.10 ms |
-| anthropic | 1024 B | 10 | 1.41 ms | 2.34 ms | 0.93 ms |
-| anthropic | 1024 B | 100 | 7.09 ms | 19.37 ms | 12.28 ms |
-| anthropic | 102400 B | 1 | 0.24 ms | 0.41 ms | 0.17 ms |
-| anthropic | 102400 B | 10 | 4.29 ms | 6.34 ms | 2.05 ms |
-| anthropic | 102400 B | 100 | 14.63 ms | 39.84 ms | 25.21 ms |
+| openai | 1024 B | 1 | 0.56 ms | 1.43 ms | 0.87 ms |
+| openai | 1024 B | 10 | 4.99 ms | 14.09 ms | 9.10 ms |
+| openai | 1024 B | 100 | 27.08 ms | 60.09 ms | 33.01 ms |
+| openai | 102400 B | 1 | 0.37 ms | 0.63 ms | 0.26 ms |
+| openai | 102400 B | 10 | 5.64 ms | 7.62 ms | 1.98 ms |
+| openai | 102400 B | 100 | 15.60 ms | 66.64 ms | 51.03 ms |
+| anthropic | 1024 B | 1 | 0.20 ms | 0.38 ms | 0.17 ms |
+| anthropic | 1024 B | 10 | 1.56 ms | 3.08 ms | 1.52 ms |
+| anthropic | 1024 B | 100 | 7.64 ms | 38.42 ms | 30.78 ms |
+| anthropic | 102400 B | 1 | 0.30 ms | 0.61 ms | 0.31 ms |
+| anthropic | 102400 B | 10 | 4.84 ms | 6.41 ms | 1.56 ms |
+| anthropic | 102400 B | 100 | 15.35 ms | 60.33 ms | 44.98 ms |
 
 Zero-error verdict: `true`. Raw per-request latency, CPU, RSS, event-loop delay, machine metadata, Node version, config, and git SHA are in `results/proxy-profile.json`.
 
-> This is a local smoke profile, not a 1k-RPS release benchmark. Direct mock and proxy share one process, so CPU/RSS are diagnostic. The full v2 matrix will isolate containers and add SSE, WebSocket, 1 MB payloads, soak, and competitor gateways.
+> This is a local smoke profile, not a 1k-RPS release benchmark. Direct mock and proxy share one process, so CPU/RSS are diagnostic. The isolated-process profile follows; future work still needs SSE, WebSocket, 1 MB payloads, soak, and competitor gateways.
+
+### Isolated-process profile
+
+Evidence: `offline-real-transform`. Load generator, Pixroom, and mock provider run in separate OS processes; 150 requests per arm, 3 repetitions, randomized arm order.
+
+| protocol | payload | concurrency | direct mean p95 | pixroom mean p95 | added p95 |
+| --- | --- | --- | --- | --- | --- |
+| openai | 1024 B | 1 | 0.37 ms | 0.84 ms | 0.48 ms |
+| openai | 1024 B | 10 | 2.81 ms | 3.68 ms | 0.87 ms |
+| openai | 1024 B | 100 | 19.43 ms | 30.54 ms | 11.11 ms |
+| openai | 102400 B | 1 | 0.30 ms | 0.72 ms | 0.42 ms |
+| openai | 102400 B | 10 | 2.13 ms | 4.37 ms | 2.24 ms |
+| openai | 102400 B | 100 | 15.89 ms | 25.87 ms | 9.98 ms |
+| anthropic | 1024 B | 1 | 0.27 ms | 0.52 ms | 0.25 ms |
+| anthropic | 1024 B | 10 | 2.06 ms | 2.09 ms | 0.02 ms |
+| anthropic | 1024 B | 100 | 6.69 ms | 21.27 ms | 14.58 ms |
+| anthropic | 102400 B | 1 | 0.30 ms | 0.68 ms | 0.38 ms |
+| anthropic | 102400 B | 10 | 2.04 ms | 4.86 ms | 2.82 ms |
+| anthropic | 102400 B | 100 | 12.82 ms | 27.57 ms | 14.75 ms |
+
+Verdict: `zero-errors=true`, `below-5ms-at-c100=false`, `max-added-p95-at-c100=14.75ms`. The isolated run removes same-event-loop contention but does not meet the saturation target; the extra local HTTP hop remains visible and is not presented as solved.
 
 ## Legacy benchmark arms
 
@@ -329,9 +350,9 @@ Evidence: `offline-real-transform`. The conservative total counts the optimized 
 | --- | --- | --- | --- | --- | --- | --- |
 | json-data | 9219 | 1614 | 1736 | 3350 | 63.7% | ✓ |
 | build-log | 10096 | 1578 | 1679 | 3257 | 67.7% | ✓ |
-| source-code | 7253 | 1618 | 1751 | 3369 | 53.6% | ✓ |
+| source-code | 9569 | 1608 | 1738 | 3346 | 65.0% | ✓ |
 
-Verdict: `exact=true`, `one-uncached-query-smaller=true`. QCV used 53.6-67.7% fewer input tokens than the previous full Headroom+pxpipe stack under this deliberately pessimistic accounting.
+Verdict: `exact=true`, `one-uncached-query-smaller=true`. QCV used 63.7-67.7% fewer input tokens than the previous full Headroom+pxpipe stack under this deliberately pessimistic accounting.
 
 **Rejected live design:** the first manifest-only pilot cut input 79.1% but regressed quality 2/3 → 1/3. Haiku spent the bounded round planning or emitted truncated tool-call JSON; JSON lookup regressed and log count remained wrong. The design was rejected, not averaged into the successful result.
 
@@ -346,11 +367,26 @@ Provider input 22,614 → 594 (**97.4% lower**); modeled cost $0.022684 → $0.0
 
 On the same fixture definitions, the earlier Headroom-only paid arm used 13,183 input tokens and $0.013253. QCV used 95.5% fewer input tokens and 95.0% lower modeled cost than that semantic path. These are separate single-run pilots, so treat quality differences as directional.
 
-> Scope: the deterministic exact subset defaults on for first-party Anthropic Messages, PAYG, non-streaming, old large JSON/log/code tool results. Ambiguous questions pass through by default; `PIXROOM_VIRTUAL_QUERY_FALLBACK=1` separately enables the bounded query tool. Streaming and subscription traffic pass through. N=2 is breakthrough-candidate evidence, not a universal claim.
+> Scope: the deterministic exact subset defaults on for first-party Anthropic Messages, OpenAI Chat, and OpenAI Responses PAYG traffic, including streaming responses. Ambiguous questions pass through by default; `PIXROOM_VIRTUAL_QUERY_FALLBACK=1` separately enables the bounded Anthropic query tool for non-streaming requests. Subscription traffic passes through. N=2 is breakthrough-candidate evidence, not a universal claim.
 
 **Default-safety checks:** proposal inspection retains no data; storage commits atomically after request validation; historical manifests remain byte-identical across different current questions; query capabilities are request-scoped; memory is bounded by entries and bytes; delimiter injection is escaped; repeated/range/negative/multi-dataset selectors fall through; mixed tools, transport failure, invalid continuation output, and round-cap exhaustion replay the original request. These are automated regression tests, not quality evidence.
 
 > **Related work:** LeanCTX already combines exact content-addressed archives, `ctx_expand` JSON/search recovery, and query-conditioned context modes. QCV's narrower distinction is drop-in virtualization of arbitrary intercepted provider tool results, deterministic exact current-question prefetch, conditional tool exposure, and transparent continuation inside a transactional multi-optimizer runtime. This report does not claim globally novel ingredients.
+
+## Arm I — Exact QCV breadth suite
+
+Evidence: `offline-real-transform`. 36 deterministic tasks across 6 categories, with zero provider calls. This grades exact local materialization and fallback suppression, not model-answer quality.
+
+| category | tasks | exact | virtualized | fallback |
+| --- | --- | --- | --- | --- |
+| json-lookup | 6 | 6/6 | 6/6 | 0 |
+| filtered-count | 6 | 6/6 | 6/6 | 0 |
+| log-count | 6 | 6/6 | 6/6 | 0 |
+| source-code | 6 | 6/6 | 6/6 | 0 |
+| table-json | 6 | 6/6 | 6/6 | 0 |
+| nested-projection | 6 | 6/6 | 6/6 | 0 |
+
+Result: 36/36 exact, 36/36 virtualized, 0 fallback tools; dataset-region estimate 104,018 → 5,964 tokens (94.3% lower). Verdict: `atLeastThirtyTasks=true`, `sixCategories=true`, `allExact=true`, `allVirtualized=true`, `noFallback=true`.
 
 ## Findings
 
@@ -359,6 +395,7 @@ On the same fixture definitions, the earlier Headroom-only paid arm used 13,183 
 - **Live Claude Code (fable-5):** optical genuinely engages — pxpipe/pixroom image the static slab for a **net total-input cut vs native** despite the proxy's request inflation, correctness preserved (except a base-URL arithmetic quirk that hits *all* proxies, not compression). On opus (out of optical scope) the same proxying nets *more* tokens. The decisive subscription concern is the **prompt cache**: aggressive/lossy restructuring interacts with Claude Code's cache, so pixroom goes stealth there. See Arm C; the full optical+semantic composition is Arm A.
 - **Paid direct Anthropic (claude-haiku-4-5-20251001):** provider input fell 40.3% and modeled cost fell 40.1%, with equal 2/3 quality. This was a three-task, one-repetition pilot and used headroom semantic compression only, so it validates the integration rather than independent pixroom value.
 - **QCV paid pilot (claude-haiku-4-5-20251001):** input fell 97.4%, modeled cost fell 97.1%, and exact score improved 1/2 → 2/2. This is the first pixroom-owned optimizer result, but it remains a two-task, one-repetition pilot.
+- **QCV breadth:** 36/36 deterministic tasks materialized exact results across 6 structured categories without exposing fallback. This broadens operation coverage but is not live-model non-inferiority evidence.
 - **Constructed additivity (Arm E):** `dominates-all=true` on five synthetic disjoint-region inputs; strict token wins on mixed-json + mixed-logs + mixed-code. This is transform arithmetic, not a task-quality or universal product claim.
 - **Prose (Arm F): fills the gap** — a large user-message prose block is compressed **0%** by pxpipe, headroom-tools, and default pixroom, but `PIXROOM_SEMANTIC_PROSE=1` routes it to headroom's Kompress for a real, reversible cut (~6–21% of prose tokens by redundancy), **additive** with the optical + tool_result regions and a **no-op** when there's no prose.
 - **Controller simulation (Arm G):** the policy loop recovers a hand-authored 2×2 allocation under its own oracle. It is retained as a deterministic mechanism test and excluded from competitive claims.
@@ -377,7 +414,9 @@ node benchmarks/prose.mjs             # Arm F (prose region, needs transformers 
 node benchmarks/rd_frontier.mjs       # Arm G (simulated RD surface)
 node benchmarks/adaptive.mjs          # Arm G (controller simulation)
 npm run bench:virtual                 # Arm H (QCV, free conservative accounting)
+npm run bench:qcv-quality             # Arm I (36 exact tasks, no provider calls)
 npm run bench:profile                 # v2 local proxy overhead profile
+npm run bench:profile:isolated        # v2 three-process overhead profile
 npm run bench:anthropic:self-test     # no network
 npm run bench:anthropic:preflight     # model discovery + token counts, no generation
 BENCH_ALLOW_PAID=1 BENCH_MAX_USD=0.01 BENCH_MAX_REQUESTS=1 npm run bench:anthropic:canary

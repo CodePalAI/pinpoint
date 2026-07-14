@@ -62,6 +62,10 @@ export interface SemanticConfig {
 export interface CcrConfig {
   /** Inject the `headroom_retrieve` tool when compression offloads content. */
   readonly injectRetrieveTool: boolean;
+  /** Execute pure retrieval tool calls inside the proxy instead of leaking them to the client. */
+  readonly continueToolCalls: boolean;
+  /** Maximum hidden retrieval continuation rounds. */
+  readonly maxContinuationRounds: number;
 }
 
 export interface CaptureConfig {
@@ -71,6 +75,10 @@ export interface CaptureConfig {
   readonly includeBodies: boolean;
   /** Flush every record to durable storage before returning. */
   readonly fsync: boolean;
+  /** Rotate before the active JSONL file exceeds this many bytes. */
+  readonly maxBytes: number;
+  /** Total active plus rotated files retained. */
+  readonly maxFiles: number;
 }
 
 export interface TelemetryConfig {
@@ -277,11 +285,15 @@ export function loadConfig(overrides: PixroomConfigOverrides = {}): PixroomConfi
     },
     ccr: {
       injectRetrieveTool: envBool('PIXROOM_CCR_TOOL', true),
+      continueToolCalls: envBool('PIXROOM_CCR_CONTINUATION', true),
+      maxContinuationRounds: envInt('PIXROOM_CCR_MAX_CONTINUATION_ROUNDS', 3),
     },
     capture: {
       path: envStr('PIXROOM_CAPTURE_PATH', ''),
       includeBodies: envBool('PIXROOM_CAPTURE_BODIES', false),
       fsync: envBool('PIXROOM_CAPTURE_FSYNC', true),
+      maxBytes: envInt('PIXROOM_CAPTURE_MAX_BYTES', 256 * 1024 * 1024),
+      maxFiles: envInt('PIXROOM_CAPTURE_MAX_FILES', 3),
     },
     telemetry: {
       endpoint: resolveOtlpEndpoint(),

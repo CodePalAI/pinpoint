@@ -1,0 +1,395 @@
+{
+  "schemaVersion": 1,
+  "evidenceLevel": "offline-real-transform",
+  "generatedAt": "2026-07-14T12:11:37.104Z",
+  "methodology": {
+    "providerCalls": 0,
+    "modelQuality": "not measured; deterministic exact materialization only",
+    "categories": [
+      "json-lookup",
+      "filtered-count",
+      "log-count",
+      "source-code",
+      "table-json",
+      "nested-projection"
+    ]
+  },
+  "summary": {
+    "tasks": 36,
+    "exact": 36,
+    "virtualized": 36,
+    "fallbackInjected": 0,
+    "tokensText": 104018,
+    "tokensCompressed": 5964,
+    "tokensSaved": 98054
+  },
+  "results": [
+    {
+      "id": "json-lookup-1",
+      "category": "json-lookup",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3536,
+      "tokensCompressed": 175,
+      "tokensSaved": 3361
+    },
+    {
+      "id": "json-lookup-2",
+      "category": "json-lookup",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3536,
+      "tokensCompressed": 175,
+      "tokensSaved": 3361
+    },
+    {
+      "id": "json-lookup-3",
+      "category": "json-lookup",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3536,
+      "tokensCompressed": 175,
+      "tokensSaved": 3361
+    },
+    {
+      "id": "json-lookup-4",
+      "category": "json-lookup",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3536,
+      "tokensCompressed": 175,
+      "tokensSaved": 3361
+    },
+    {
+      "id": "json-lookup-5",
+      "category": "json-lookup",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3536,
+      "tokensCompressed": 175,
+      "tokensSaved": 3361
+    },
+    {
+      "id": "json-lookup-6",
+      "category": "json-lookup",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3536,
+      "tokensCompressed": 175,
+      "tokensSaved": 3361
+    },
+    {
+      "id": "filtered-count-1",
+      "category": "filtered-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2026,
+      "tokensCompressed": 150,
+      "tokensSaved": 1876
+    },
+    {
+      "id": "filtered-count-2",
+      "category": "filtered-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2156,
+      "tokensCompressed": 150,
+      "tokensSaved": 2006
+    },
+    {
+      "id": "filtered-count-3",
+      "category": "filtered-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2285,
+      "tokensCompressed": 150,
+      "tokensSaved": 2135
+    },
+    {
+      "id": "filtered-count-4",
+      "category": "filtered-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2413,
+      "tokensCompressed": 150,
+      "tokensSaved": 2263
+    },
+    {
+      "id": "filtered-count-5",
+      "category": "filtered-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2541,
+      "tokensCompressed": 150,
+      "tokensSaved": 2391
+    },
+    {
+      "id": "filtered-count-6",
+      "category": "filtered-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2672,
+      "tokensCompressed": 150,
+      "tokensSaved": 2522
+    },
+    {
+      "id": "log-count-1",
+      "category": "log-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2913,
+      "tokensCompressed": 139,
+      "tokensSaved": 2774
+    },
+    {
+      "id": "log-count-2",
+      "category": "log-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2898,
+      "tokensCompressed": 139,
+      "tokensSaved": 2759
+    },
+    {
+      "id": "log-count-3",
+      "category": "log-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2898,
+      "tokensCompressed": 139,
+      "tokensSaved": 2759
+    },
+    {
+      "id": "log-count-4",
+      "category": "log-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2905,
+      "tokensCompressed": 139,
+      "tokensSaved": 2766
+    },
+    {
+      "id": "log-count-5",
+      "category": "log-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2904,
+      "tokensCompressed": 139,
+      "tokensSaved": 2765
+    },
+    {
+      "id": "log-count-6",
+      "category": "log-count",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2903,
+      "tokensCompressed": 139,
+      "tokensSaved": 2764
+    },
+    {
+      "id": "source-exports-1",
+      "category": "source-code",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2000,
+      "tokensCompressed": 176,
+      "tokensSaved": 1824
+    },
+    {
+      "id": "source-exports-2",
+      "category": "source-code",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2000,
+      "tokensCompressed": 176,
+      "tokensSaved": 1824
+    },
+    {
+      "id": "source-exports-3",
+      "category": "source-code",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2000,
+      "tokensCompressed": 176,
+      "tokensSaved": 1824
+    },
+    {
+      "id": "source-exports-4",
+      "category": "source-code",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2000,
+      "tokensCompressed": 176,
+      "tokensSaved": 1824
+    },
+    {
+      "id": "source-exports-5",
+      "category": "source-code",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2000,
+      "tokensCompressed": 176,
+      "tokensSaved": 1824
+    },
+    {
+      "id": "source-exports-6",
+      "category": "source-code",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2000,
+      "tokensCompressed": 176,
+      "tokensSaved": 1824
+    },
+    {
+      "id": "table-row-1",
+      "category": "table-json",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2862,
+      "tokensCompressed": 174,
+      "tokensSaved": 2688
+    },
+    {
+      "id": "table-row-2",
+      "category": "table-json",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2862,
+      "tokensCompressed": 174,
+      "tokensSaved": 2688
+    },
+    {
+      "id": "table-row-3",
+      "category": "table-json",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2862,
+      "tokensCompressed": 174,
+      "tokensSaved": 2688
+    },
+    {
+      "id": "table-row-4",
+      "category": "table-json",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2862,
+      "tokensCompressed": 174,
+      "tokensSaved": 2688
+    },
+    {
+      "id": "table-row-5",
+      "category": "table-json",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2862,
+      "tokensCompressed": 174,
+      "tokensSaved": 2688
+    },
+    {
+      "id": "table-row-6",
+      "category": "table-json",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 2862,
+      "tokensCompressed": 174,
+      "tokensSaved": 2688
+    },
+    {
+      "id": "nested-projection-1",
+      "category": "nested-projection",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3686,
+      "tokensCompressed": 180,
+      "tokensSaved": 3506
+    },
+    {
+      "id": "nested-projection-2",
+      "category": "nested-projection",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3686,
+      "tokensCompressed": 180,
+      "tokensSaved": 3506
+    },
+    {
+      "id": "nested-projection-3",
+      "category": "nested-projection",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3686,
+      "tokensCompressed": 180,
+      "tokensSaved": 3506
+    },
+    {
+      "id": "nested-projection-4",
+      "category": "nested-projection",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3686,
+      "tokensCompressed": 180,
+      "tokensSaved": 3506
+    },
+    {
+      "id": "nested-projection-5",
+      "category": "nested-projection",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3686,
+      "tokensCompressed": 180,
+      "tokensSaved": 3506
+    },
+    {
+      "id": "nested-projection-6",
+      "category": "nested-projection",
+      "exact": true,
+      "virtualized": true,
+      "fallbackInjected": false,
+      "tokensText": 3686,
+      "tokensCompressed": 180,
+      "tokensSaved": 3506
+    }
+  ],
+  "verdict": {
+    "atLeastThirtyTasks": true,
+    "sixCategories": true,
+    "allExact": true,
+    "allVirtualized": true,
+    "noFallback": true
+  }
+}

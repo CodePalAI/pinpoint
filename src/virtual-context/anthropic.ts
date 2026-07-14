@@ -4,7 +4,7 @@ import {
   type VirtualContextStore,
 } from './store.js';
 
-interface ToolUseBlock {
+export interface AnthropicToolUseBlock {
   readonly type: 'tool_use';
   readonly id: string;
   readonly name: string;
@@ -17,9 +17,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function toolUseBlocks(response: Readonly<Record<string, unknown>>): ToolUseBlock[] {
+export function anthropicToolUseBlocks(
+  response: Readonly<Record<string, unknown>>,
+): AnthropicToolUseBlock[] {
   const content = Array.isArray(response.content) ? response.content : [];
-  return content.filter((value): value is ToolUseBlock => {
+  return content.filter((value): value is AnthropicToolUseBlock => {
     if (!isRecord(value)) return false;
     return (
       value.type === 'tool_use' &&
@@ -29,7 +31,7 @@ function toolUseBlocks(response: Readonly<Record<string, unknown>>): ToolUseBloc
   });
 }
 
-function parseQuery(value: unknown): VirtualContextQuery | undefined {
+export function parseVirtualContextQuery(value: unknown): VirtualContextQuery | undefined {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.op !== 'string') {
     return undefined;
   }
@@ -71,7 +73,24 @@ function parseQuery(value: unknown): VirtualContextQuery | undefined {
 export function hasVirtualAnthropicToolUse(
   response: Readonly<Record<string, unknown>>,
 ): boolean {
-  return toolUseBlocks(response).some((call) => call.name === VIRTUAL_QUERY_TOOL_NAME);
+  return anthropicToolUseBlocks(response).some((call) => call.name === VIRTUAL_QUERY_TOOL_NAME);
+}
+
+export function virtualAnthropicToolResult(
+  call: AnthropicToolUseBlock,
+  store: VirtualContextStore,
+  allowedIds: ReadonlySet<string>,
+): Record<string, unknown> {
+  const query = parseVirtualContextQuery(call.input);
+  const allowed = query !== undefined && allowedIds.has(query.id);
+  return {
+    type: 'tool_result',
+    tool_use_id: call.id,
+    content: allowed
+      ? store.query(query)
+      : JSON.stringify({ error: 'invalid or unavailable pixroom_query input' }),
+    is_error: !allowed,
+  };
 }
 
 /** Build a provider continuation when every tool call belongs to the virtual store. */
@@ -81,7 +100,7 @@ export function continueVirtualAnthropicTurn(
   store: VirtualContextStore,
   allowedIds: ReadonlySet<string> = new Set(),
 ): Record<string, unknown> | undefined {
-  const calls = toolUseBlocks(response);
+  const calls = anthropicToolUseBlocks(response);
   if (calls.length === 0 || calls.some((call) => call.name !== VIRTUAL_QUERY_TOOL_NAME)) {
     return undefined;
   }
@@ -89,19 +108,7 @@ export function continueVirtualAnthropicTurn(
   const content = Array.isArray(response.content) ? response.content : undefined;
   if (!messages || !content) return undefined;
 
-  const results = calls.map((call) => {
-    const query = parseQuery(call.input);
-    const allowed = query !== undefined && allowedIds.has(query.id);
-    const result = allowed
-      ? store.query(query)
-      : JSON.stringify({ error: 'invalid or unavailable pixroom_query input' });
-    return {
-      type: 'tool_result',
-      tool_use_id: call.id,
-      content: result,
-      is_error: !allowed,
-    };
-  });
+  const results = calls.map((call) => virtualAnthropicToolResult(call, store, allowedIds));
 
   return {
     ...structuredClone(request),

@@ -60,6 +60,7 @@
   "files": [
     "bin/",
     "dist/",
+    "examples/",
     "!dist/**/*.map",
     "README.md",
     "CHANGELOG.md",
@@ -77,7 +78,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "bench:profile": "npm run build && node benchmarks/v2/profile_proxy.mjs",
+    "bench:profile:isolated": "npm run build && node benchmarks/v2/profile_proxy_isolated.mjs",
     "bench:virtual": "npm run build && node benchmarks/virtual_context.mjs",
+    "bench:qcv-quality": "npm run build && node benchmarks/qcv_quality.mjs",
     "bench:anthropic:self-test": "npm run build && node benchmarks/v2/direct_anthropic.mjs --phase self-test",
     "bench:anthropic:preflight": "npm run build && node benchmarks/v2/direct_anthropic.mjs --phase preflight",
     "bench:anthropic:canary": "npm run build && node benchmarks/v2/direct_anthropic.mjs --phase canary",

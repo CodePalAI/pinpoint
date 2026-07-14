@@ -105,6 +105,14 @@ describe('ContentRouter end-to-end', () => {
     expect(routed.reversible.length).toBeGreaterThan(0);
     expect(await px.retrieve('h0')).toBe('FULL ORIGINAL CONTENT');
 
+    const unrelated = await px.route(
+      'anthropic',
+      'claude-fable-5',
+      { model: 'claude-fable-5', messages: [{ role: 'user', content: 'hello' }] },
+    );
+    expect(unrelated.body.tools).toBeUndefined();
+    expect(unrelated.ccrToolNeeded).toBe(false);
+
     await px.shutdown();
     await fake.close();
   });

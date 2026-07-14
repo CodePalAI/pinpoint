@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -98,5 +98,41 @@ describe('durable capture and replay', () => {
     expect(await runCaptureReplay(path, { ...overrides, capture: { path: '' } })).toContain(
       'matched transformed bodies: 1',
     );
+  });
+
+  it('rotates capture files before the configured byte cap', async () => {
+    const path = capturePath();
+    const runtime = createPixroom({
+      capture: {
+        path,
+        includeBodies: false,
+        fsync: true,
+        maxBytes: 2_500,
+        maxFiles: 10,
+      },
+      virtualContext: { enabled: false },
+      semantic: { enabled: false },
+      optical: { enabled: false },
+      logLevel: 'silent',
+    });
+    for (let index = 0; index < 6; index += 1) {
+      await runtime.route(
+        'openai',
+        'gpt-test',
+        { model: 'gpt-test', messages: [{ role: 'user', content: `request-${index}` }] },
+        'payg',
+      );
+    }
+    await runtime.shutdown();
+
+    expect(existsSync(path)).toBe(true);
+    expect(existsSync(`${path}.1`)).toBe(true);
+    expect(statSync(path).size).toBeLessThanOrEqual(2_500);
+    expect(statSync(`${path}.1`).size).toBeLessThanOrEqual(2_500);
+    expect(statSync(`${path}.1`).mode & 0o777).toBe(0o600);
+    const retained = [path, ...Array.from({ length: 9 }, (_, index) => `${path}.${index + 1}`)]
+      .filter((file) => existsSync(file))
+      .flatMap((file) => readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean));
+    expect(retained).toHaveLength(6);
   });
 });

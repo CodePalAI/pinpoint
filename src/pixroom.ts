@@ -168,7 +168,14 @@ export function createRuntime(options: RuntimeOptions = {}): Pixroom {
   // The semantic compressor doubles as the CCR retriever for headroom hashes.
   const ccr = new CcrStore(semantic, recorder);
   const pipeline = new IntegrationPipeline(integrations);
-  const router = new ContentRouter(pipeline, ccr, log.child('router'), config.mode, controller);
+  const router = new ContentRouter(
+    pipeline,
+    ccr,
+    log.child('router'),
+    config.mode,
+    controller,
+    config.ccr,
+  );
 
   const totals: SessionStats = {
     requests: 0,
@@ -209,23 +216,26 @@ export function createRuntime(options: RuntimeOptions = {}): Pixroom {
     requestInspection,
     policy,
     async route(provider, model, body, authMode, validate) {
-      const startedAtUnixMs = Date.now();
-      const started = performance.now();
+      const observed = capture.enabled || telemetry.enabled;
+      const startedAtUnixMs = observed ? Date.now() : 0;
+      const started = observed ? performance.now() : 0;
       const resolvedAuthMode = authMode ?? 'payg';
       const originalBody = capture.enabled ? structuredClone(body) : undefined;
       const result = await router.route(provider, model, body, authMode, validate);
       accumulate(result.report);
-      const durationMs = performance.now() - started;
-      telemetry.enqueue({
-        startedAtUnixMs,
-        durationMs,
-        provider,
-        model,
-        authMode: resolvedAuthMode,
-        mode: config.mode,
-        report: result.report,
-        pipeline: result.pipeline,
-      });
+      const durationMs = observed ? performance.now() - started : 0;
+      if (telemetry.enabled) {
+        telemetry.enqueue({
+          startedAtUnixMs,
+          durationMs,
+          provider,
+          model,
+          authMode: resolvedAuthMode,
+          mode: config.mode,
+          report: result.report,
+          pipeline: result.pipeline,
+        });
+      }
       if (originalBody) {
         capture.record({
           durationMs,

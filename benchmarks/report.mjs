@@ -21,10 +21,12 @@ const prose = load('prose.json');
 const rdFrontier = load('rd-frontier.json');
 const adaptive = load('adaptive.json');
 const proxyProfile = load('proxy-profile.json');
+const isolatedProxyProfile = load('proxy-profile-isolated.json');
 const directAnthropic = load('direct-anthropic.json');
 const virtualContext = load('virtual-context.json');
 const directAnthropicVirtual = load('direct-anthropic-virtual.json');
 const virtualContextNaive = load('virtual-context-naive.json');
+const qcvQuality = load('qcv-quality.json');
 const out = [];
 
 function loadClaudeResults() {
@@ -89,8 +91,44 @@ if (!proxyProfile) {
   out.push('');
   out.push(
     '> This is a local smoke profile, not a 1k-RPS release benchmark. Direct mock and proxy share one ' +
-      'process, so CPU/RSS are diagnostic. The full v2 matrix will isolate containers and add SSE, ' +
-      'WebSocket, 1 MB payloads, soak, and competitor gateways.',
+      'process, so CPU/RSS are diagnostic. The isolated-process profile follows; future work still needs ' +
+      'SSE, WebSocket, 1 MB payloads, soak, and competitor gateways.',
+  );
+}
+out.push('');
+
+out.push('### Isolated-process profile');
+out.push('');
+if (!isolatedProxyProfile) {
+  out.push('_Not run._');
+} else {
+  const cfg = isolatedProxyProfile.config;
+  out.push(
+    `Evidence: ${inlineCode(isolatedProxyProfile.evidenceLevel)}. Load generator, Pixroom, and mock ` +
+      `provider run in separate OS processes; ${cfg.requests} requests per arm, ${cfg.repetitions} ` +
+      'repetitions, randomized arm order.',
+  );
+  out.push('');
+  out.push(
+    mdTable(
+      ['protocol', 'payload', 'concurrency', 'direct mean p95', 'pixroom mean p95', 'added p95'],
+      isolatedProxyProfile.comparisons.map((row) => [
+        row.protocol,
+        `${row.payloadBytes} B`,
+        String(row.concurrency),
+        `${row.directMeanP95Ms.toFixed(2)} ms`,
+        `${row.proxyMeanP95Ms.toFixed(2)} ms`,
+        `${row.addedP95Ms.toFixed(2)} ms`,
+      ]),
+    ),
+  );
+  out.push('');
+  out.push(
+    `Verdict: ${inlineCode(`zero-errors=${isolatedProxyProfile.verdict.zeroErrors}`)}, ` +
+      `${inlineCode(`below-5ms-at-c100=${isolatedProxyProfile.verdict.belowFiveMsAtConcurrency100}`)}, ` +
+      `${inlineCode(`max-added-p95-at-c100=${Number(isolatedProxyProfile.verdict.maxAddedP95AtConcurrency100).toFixed(2)}ms`)}. ` +
+      'The isolated run removes same-event-loop contention but does not meet the saturation target; the ' +
+      'extra local HTTP hop remains visible and is not presented as solved.',
   );
 }
 out.push('');
@@ -836,10 +874,11 @@ if (!directAnthropicVirtual) {
     out.push('');
   }
   out.push(
-    '> Scope: the deterministic exact subset defaults on for first-party Anthropic Messages, PAYG, ' +
-      'non-streaming, old large JSON/log/code tool results. Ambiguous questions pass through by default; ' +
-      '`PIXROOM_VIRTUAL_QUERY_FALLBACK=1` separately enables the bounded query tool. Streaming and ' +
-      'subscription traffic pass through. N=2 is breakthrough-candidate evidence, not a universal claim.',
+    '> Scope: the deterministic exact subset defaults on for first-party Anthropic Messages, OpenAI Chat, ' +
+      'and OpenAI Responses PAYG traffic, including streaming responses. Ambiguous questions pass through ' +
+      'by default; `PIXROOM_VIRTUAL_QUERY_FALLBACK=1` separately enables the bounded Anthropic query tool ' +
+      'for non-streaming requests. Subscription traffic passes through. N=2 is breakthrough-candidate ' +
+      'evidence, not a universal claim.',
   );
   out.push('');
   out.push(
@@ -857,6 +896,45 @@ if (!directAnthropicVirtual) {
       'virtualization of arbitrary intercepted provider tool results, deterministic exact current-question ' +
       'prefetch, conditional tool exposure, and transparent continuation inside a transactional ' +
       'multi-optimizer runtime. This report does not claim globally novel ingredients.',
+  );
+}
+out.push('');
+
+out.push('## Arm I — Exact QCV breadth suite');
+out.push('');
+if (!qcvQuality) {
+  out.push('_Not run._');
+} else {
+  const summary = qcvQuality.summary;
+  out.push(
+    `Evidence: ${inlineCode(qcvQuality.evidenceLevel)}. ${summary.tasks} deterministic tasks across ` +
+      `${qcvQuality.methodology.categories.length} categories, with zero provider calls. This grades exact ` +
+      'local materialization and fallback suppression, not model-answer quality.',
+  );
+  out.push('');
+  const categories = [...new Set(qcvQuality.results.map((result) => result.category))];
+  out.push(
+    mdTable(
+      ['category', 'tasks', 'exact', 'virtualized', 'fallback'],
+      categories.map((category) => {
+        const rows = qcvQuality.results.filter((result) => result.category === category);
+        return [
+          category,
+          String(rows.length),
+          `${rows.filter((row) => row.exact).length}/${rows.length}`,
+          `${rows.filter((row) => row.virtualized).length}/${rows.length}`,
+          String(rows.filter((row) => row.fallbackInjected).length),
+        ];
+      }),
+    ),
+  );
+  out.push('');
+  out.push(
+    `Result: ${summary.exact}/${summary.tasks} exact, ${summary.virtualized}/${summary.tasks} virtualized, ` +
+      `${summary.fallbackInjected} fallback tools; dataset-region estimate ` +
+      `${summary.tokensText.toLocaleString()} → ${summary.tokensCompressed.toLocaleString()} tokens ` +
+      `(${pct(summary.tokensSaved / summary.tokensText)} lower). Verdict: ` +
+      Object.entries(qcvQuality.verdict).map(([key, value]) => inlineCode(`${key}=${value}`)).join(', ') + '.',
   );
 }
 out.push('');
@@ -914,6 +992,13 @@ if (directAnthropicVirtual) {
       'optimizer result, but it remains a two-task, one-repetition pilot.',
   );
 }
+if (qcvQuality) {
+  out.push(
+    `- **QCV breadth:** ${qcvQuality.summary.exact}/${qcvQuality.summary.tasks} deterministic tasks ` +
+      `materialized exact results across ${qcvQuality.methodology.categories.length} structured categories ` +
+      'without exposing fallback. This broadens operation coverage but is not live-model non-inferiority evidence.',
+  );
+}
 if (proof) {
   const strictMixed = proof.scenarios.filter((e) => e.category === 'mixed' && e.strictWin).map((e) => e.name);
   out.push(
@@ -954,7 +1039,9 @@ out.push('node benchmarks/prose.mjs             # Arm F (prose region, needs tra
 out.push('node benchmarks/rd_frontier.mjs       # Arm G (simulated RD surface)');
 out.push('node benchmarks/adaptive.mjs          # Arm G (controller simulation)');
 out.push('npm run bench:virtual                 # Arm H (QCV, free conservative accounting)');
+out.push('npm run bench:qcv-quality             # Arm I (36 exact tasks, no provider calls)');
 out.push('npm run bench:profile                 # v2 local proxy overhead profile');
+out.push('npm run bench:profile:isolated        # v2 three-process overhead profile');
 out.push('npm run bench:anthropic:self-test     # no network');
 out.push('npm run bench:anthropic:preflight     # model discovery + token counts, no generation');
 out.push('BENCH_ALLOW_PAID=1 BENCH_MAX_USD=0.01 BENCH_MAX_REQUESTS=1 npm run bench:anthropic:canary');

@@ -10,7 +10,7 @@ All notable changes are documented here. This project follows semantic versionin
 
 - Deterministic one-hop unique-key QCV joins across two JSON tool results, with exact local projection and no model-planned retrieval.
 - Expanded exact-QCV breadth evidence: 42/42 positive tasks across seven categories and 20/20 adversarial controls refused.
-- A repeated paid evidence gate covering 30 tasks, five repetitions, two models, and Anthropic Messages plus OpenAI Chat/Responses, with exact confidence bounds and hard spend/request caps.
+- A repeated paid evidence gate covering 30 task templates, 150 unique fixture variants, two models, and Anthropic Messages plus OpenAI Chat/Responses, with exact confidence bounds and hard spend/request caps.
 - A ten-session real Claude Code/Codex capture, sanitization, retry, cache-shape, and hash-replay gate.
 - Automated packed-consumer smoke coverage for all public exports, declarations, CLI help/version, and the offline demo.
 - A project Code of Conduct, five scoped starter issues, and npm/GitHub Actions dependency automation.

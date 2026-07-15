@@ -30,11 +30,11 @@
 
 <p align="center">
   <a href="./benchmarks/results/evidence-gate.first-party-macos-arm64-20260715.json">
-    <img src="./assets/qcv-evidence-gate.svg" alt="Repeated live gate: Pinpoint QCV answered 150 of 150 exactly across 30 synthetic structured tasks, five repetitions, two models, and three protocols, with modeled provider cost 94.7% lower than Headroom" width="920">
+    <img src="./assets/qcv-evidence-gate.svg" alt="Repeated live gate: Pinpoint QCV answered 150 of 150 independently parameterized structured-task variants exactly across two models and three protocols, with modeled provider cost 96.8% lower than Headroom" width="920">
        </a>
 </p>
 
-<p align="center"><sub>Repeated controlled evidence: 150 randomized paired observations per arm, zero QCV regressions, exact one-sided 95% harm bound 1.98%. Synthetic structured tasks, not a universal traffic claim.</sub></p>
+<p align="center"><sub>Repeated controlled evidence: 30 templates, 150 unique fixture variants, zero QCV regressions, exact one-sided 95% harm bound 1.98%. Synthetic structured tasks, not a universal traffic claim.</sub></p>
 
 <!-- LAUNCH(demo-video): Put a 15-25 second terminal recording here after independent replication. Keep the generated receipt card above as the static fallback. -->
 
@@ -123,7 +123,7 @@ Pinpoint changes only the launched process environment. It does not rewrite the 
 | GitHub Copilot CLI | Delegated | `pinpoint doctor copilot`, then `pinpoint wrap copilot`; compression is handled by the optional Headroom integration |
 | Cursor, Cline, Continue | Config printed | `pinpoint wrap <agent>` prints the local base URL; keep the proxy running while the editor uses it |
 
-> **About the 94.7% result:** it came from provider API-key traffic containing large eligible structured tool output. It is not a promise for subscription/OAuth CLI sessions, ordinary chat, or traffic that does not match an exact rule.
+> **About the 96.8% result:** it came from provider API-key traffic containing large eligible structured tool output. It is not a promise for subscription/OAuth CLI sessions, ordinary chat, or traffic that does not match an exact rule.
 
 Pinpoint checks every request, applies only a matching safe rule, and forwards everything else unchanged. Automatic routing is not forced compression.
 
@@ -366,21 +366,21 @@ CodePal publishes Pinpoint's raw benchmark artifacts, negative results, and safe
 
 ### Repeated multi-provider evidence gate
 
-The current primary receipt covers 30 unique synthetic structured tasks, five repetitions, and three randomized arms per observation: raw provider input, Headroom-only semantic compression, and Pinpoint QCV. It used Claude Haiku 4.5 through Anthropic Messages and GPT-4.1 mini through both OpenAI Chat Completions and Responses.
+The current primary receipt covers 30 synthetic task templates with five independently parameterized variants each. Every one of the 150 paired observations has a distinct payload, expected answer, task ID, and fixture hash. Each runs three randomized arms: raw provider input, Headroom-only semantic compression, and Pinpoint QCV. The gate used Claude Haiku 4.5 through Anthropic Messages and GPT-4.1 mini through both OpenAI Chat Completions and Responses.
 
 | Arm | Exact score | Provider input | Modeled provider cost |
 |---|---:|---:|---:|
-| Raw | 117/150 | 1,307,685 | $0.698772 |
-| Headroom | 120/150 | 1,175,570 | $0.616551 |
-| **Pinpoint QCV** | **150/150** | **47,480** | **$0.032929** |
+| Raw | 109/150 | 1,899,030 | $1.198998 |
+| Headroom | 112/150 | 1,713,184 | $1.062131 |
+| **Pinpoint QCV** | **150/150** | **48,439** | **$0.034462** |
 
-Against Headroom, QCV used 96.0% fewer input tokens and 94.7% lower modeled provider cost. The paired-bootstrap 95% cost-reduction interval was 94.3%-95.0%. There were zero paired regressions and 30 improvements; the exact one-sided 95% upper bound on harm was 1.98%, below the predeclared two-point non-inferiority margin.
+Against Headroom, QCV used 97.2% fewer input tokens and 96.8% lower modeled provider cost. The paired-bootstrap 95% cost-reduction interval was 96.5%-96.9%. There were zero paired regressions and 38 improvements; the exact one-sided 95% upper bound on harm was 1.98%, below the predeclared two-point non-inferiority margin. That inferential bound treats the 150 fixed, independently parameterized variants as exchangeable benchmark units; it is not a confidence bound for organic traffic.
 
-The run made 450 paid calls with no harness retries and observed $1.348252 in provider spend. Inspect the [full repeated receipt](./benchmarks/results/evidence-gate.first-party-macos-arm64-20260715.json).
+The run made 450 paid calls with no harness retries and observed $2.295591 in provider spend. Inspect the [full repeated receipt](./benchmarks/results/evidence-gate.first-party-macos-arm64-20260715.json).
 
 ### Real-agent capture and replay gate
 
-Five real Claude Code sessions and five real Codex CLI sessions ran in disposable synthetic repositories through the production proxy. All 10 answered exactly, all 10 minimized sanitized traces replayed hash-identically, stable cache shape was observed, four long/join sessions completed, and both injected provider POST failures were retried by the agents.
+Five real Claude Code sessions and five real Codex CLI sessions ran in disposable synthetic repositories through the production proxy. The grader parsed only Claude's final `result` or Codex's last `agent_message`; all 10 returned the single correct email value. All 10 minimized sanitized traces replayed hash-identically, stable cache shape was observed, four long/join sessions completed, and both injected provider POST failures were retried by the agents.
 
 Claude Code exercised QCV on line-numbered `Read` output. Codex queried sub-6,000-character chunks locally, so Pinpoint correctly left those requests unchanged. The source captures, agent outputs, credentials, and personal paths were deleted; only reviewed synthetic derivatives remain. Inspect the [agent receipt](./benchmarks/results/agent-trace-gate.first-party-macos-arm64-20260715.json) and [sanitized traces](./benchmarks/traces/agent-gate/).
 

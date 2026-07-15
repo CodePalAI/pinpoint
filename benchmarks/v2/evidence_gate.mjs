@@ -327,17 +327,23 @@ function chooseModel(ids, explicit, preferences, provider) {
   throw new Error(`no audited low-cost ${provider} model is available`);
 }
 
-function padding(label, index) {
-  return `${label} record=${index} deterministic benchmark metadata `.repeat(3);
+function padding(label, index, template, replication) {
+  return (
+    `${label} template=${template} variant=${replication} record=${index} ` +
+    'deterministic benchmark metadata '
+  ).repeat(3);
 }
 
 function makeTaskDefinitions() {
   const definitions = [];
   const protocols = ['anthropic-messages', 'openai-chat', 'openai-responses'];
-  const add = (category, variant, payloads, question, expected) => {
+  const add = (category, template, replication, payloads, question, expected) => {
     const ordinal = definitions.length;
+    const templateId = `${category}-${template + 1}`;
     definitions.push({
-      id: `${category}-${variant + 1}`,
+      id: `${templateId}-v${replication + 1}`,
+      templateId,
+      replication,
       category,
       protocol: protocols[ordinal % protocols.length],
       payloads,
@@ -347,116 +353,137 @@ function makeTaskDefinitions() {
     });
   };
 
-  for (let variant = 0; variant < 5; variant += 1) {
-    const target = 17 + variant * 19;
-    const rows = Array.from({ length: 140 }, (_, id) => ({
-      id,
-      email: `lookup${variant}-${id}@example.com`,
-      status: id % 4 === 0 ? 'review' : 'active',
-      padding: padding('lookup', id),
-    }));
-    add(
-      'json-lookup',
-      variant,
-      [JSON.stringify(rows)],
-      `What is the email for id ${target}? Return only the email address.`,
-      rows[target].email,
-    );
+  for (let template = 0; template < 5; template += 1) {
+    for (let replication = 0; replication < REPETITIONS; replication += 1) {
+      const target = (17 + template * 19 + replication * 11) % 140;
+      const rows = Array.from({ length: 140 }, (_, id) => ({
+        id,
+        email: `lookup${template}-v${replication}-${id}@example.com`,
+        status: (id + replication) % 4 === 0 ? 'review' : 'active',
+        padding: padding('lookup', id, template, replication),
+      }));
+      add(
+        'json-lookup',
+        template,
+        replication,
+        [JSON.stringify(rows)],
+        `What is the email for id ${target}? Return only the email address.`,
+        rows[target].email,
+      );
+    }
   }
 
-  for (let variant = 0; variant < 5; variant += 1) {
-    const divisor = variant + 2;
-    const rows = Array.from({ length: 150 }, (_, id) => ({
-      id,
-      active: id % divisor === 0,
-      label: `count-${variant}-${id}`,
-      padding: padding('filtered-count', id),
-    }));
-    add(
-      'filtered-count',
-      variant,
-      [JSON.stringify(rows)],
-      'How many records have active is true? Return only the integer.',
-      String(rows.filter((row) => row.active).length),
-    );
+  for (let template = 0; template < 5; template += 1) {
+    for (let replication = 0; replication < REPETITIONS; replication += 1) {
+      const divisor = template + 2;
+      const rows = Array.from({ length: 150 + replication }, (_, id) => ({
+        id,
+        active: (id + replication) % divisor === 0,
+        label: `count-${template}-v${replication}-${id}`,
+        padding: padding('filtered-count', id, template, replication),
+      }));
+      add(
+        'filtered-count',
+        template,
+        replication,
+        [JSON.stringify(rows)],
+        'How many records have active is true? Return only the integer.',
+        String(rows.filter((row) => row.active).length),
+      );
+    }
   }
 
   const levels = ['ERROR', 'WARN', 'FATAL', 'DEBUG', 'TRACE'];
-  for (let variant = 0; variant < 5; variant += 1) {
-    const level = levels[variant];
-    const lines = Array.from({ length: 260 }, (_, index) => {
-      const selected = index % (variant + 3) === 0 ? level : 'INFO';
-      return (
-        `2026-07-15T12:${String(index % 60).padStart(2, '0')}:00Z ${selected} ` +
-        `worker=${index % 8} job=${index} ${padding('log-event', index)}`
+  for (let template = 0; template < 5; template += 1) {
+    for (let replication = 0; replication < REPETITIONS; replication += 1) {
+      const level = levels[template];
+      const lines = Array.from({ length: 260 + replication }, (_, index) => {
+        const selected = (index + replication) % (template + 3) === 0 ? level : 'INFO';
+        return (
+          `2026-07-${String(15 + replication).padStart(2, '0')}T12:` +
+          `${String(index % 60).padStart(2, '0')}:00Z ${selected} ` +
+          `worker=${(index + replication) % 8} job=${index} ` +
+          padding('log-event', index, template, replication)
+        );
+      });
+      add(
+        'log-count',
+        template,
+        replication,
+        [lines.join('\n')],
+        `How many lines have level ${level}? Return only the integer.`,
+        String(lines.filter((line) => new RegExp(`\\s${level}\\s`).test(line)).length),
       );
-    });
-    add(
-      'log-count',
-      variant,
-      [lines.join('\n')],
-      `How many lines have level ${level}? Return only the integer.`,
-      String(lines.filter((line) => new RegExp(`\\s${level}\\s`).test(line)).length),
-    );
+    }
   }
 
-  for (let variant = 0; variant < 5; variant += 1) {
-    const target = 11 + variant * 21;
-    const rows = Array.from({ length: 130 }, (_, rowNumber) => ({
-      row_number: rowNumber,
-      owner: `team-${(rowNumber + variant) % 13}`,
-      invoice_code: `INV-${variant}-${String(rowNumber).padStart(4, '0')}`,
-      padding: padding('table', rowNumber),
-    }));
-    add(
-      'table-lookup',
-      variant,
-      [JSON.stringify(rows)],
-      `What is the owner for row_number ${target}? Return only the owner.`,
-      rows[target].owner,
-    );
+  for (let template = 0; template < 5; template += 1) {
+    for (let replication = 0; replication < REPETITIONS; replication += 1) {
+      const target = (11 + template * 21 + replication * 7) % 130;
+      const rows = Array.from({ length: 130 }, (_, rowNumber) => ({
+        row_number: rowNumber,
+        owner: `team-${(rowNumber + template + replication) % 13}`,
+        invoice_code: `INV-${template}-V${replication}-${String(rowNumber).padStart(4, '0')}`,
+        padding: padding('table', rowNumber, template, replication),
+      }));
+      add(
+        'table-lookup',
+        template,
+        replication,
+        [JSON.stringify(rows)],
+        `What is the owner for row_number ${target}? Return only the owner.`,
+        rows[target].owner,
+      );
+    }
   }
 
-  for (let variant = 0; variant < 5; variant += 1) {
-    const target = 13 + variant * 17;
-    const rows = Array.from({ length: 130 }, (_, id) => ({
-      id,
-      profile: {
-        email: `nested${variant}-${id}@example.com`,
-        region: `region-${(id + variant) % 7}`,
-      },
-      padding: padding('nested', id),
-    }));
-    add(
-      'nested-projection',
-      variant,
-      [JSON.stringify(rows)],
-      `What is the profile for id ${target}? Return only the email inside profile.`,
-      rows[target].profile.email,
-    );
+  for (let template = 0; template < 5; template += 1) {
+    for (let replication = 0; replication < REPETITIONS; replication += 1) {
+      const target = (13 + template * 17 + replication * 9) % 130;
+      const rows = Array.from({ length: 130 }, (_, id) => ({
+        id,
+        profile: {
+          email: `nested${template}-v${replication}-${id}@example.com`,
+          region: `region-${(id + template + replication) % 7}`,
+        },
+        padding: padding('nested', id, template, replication),
+      }));
+      add(
+        'nested-projection',
+        template,
+        replication,
+        [JSON.stringify(rows)],
+        `What is the profile for id ${target}? Return only the email inside profile.`,
+        rows[target].profile.email,
+      );
+    }
   }
 
-  for (let variant = 0; variant < 5; variant += 1) {
-    const target = 19 + variant * 17;
-    const orders = Array.from({ length: 130 }, (_, orderId) => ({
-      order_id: orderId,
-      customer_id: orderId + 10_000 + variant * 1_000,
-      status: orderId % 2 === 0 ? 'open' : 'closed',
-      padding: padding('join-source', orderId),
-    }));
-    const customers = Array.from({ length: 130 }, (_, customerIndex) => ({
-      customer_id: customerIndex + 10_000 + variant * 1_000,
-      email: `joined${variant}-${customerIndex}@example.com`,
-      tier: customerIndex % 3 === 0 ? 'pro' : 'basic',
-      padding: padding('join-destination', customerIndex),
-    }));
-    add(
-      'json-join',
-      variant,
-      [JSON.stringify(orders), JSON.stringify(customers)],
-      `What is the email for order_id ${target}? Return only the email address.`,
-      customers[target].email,
-    );
+  for (let template = 0; template < 5; template += 1) {
+    for (let replication = 0; replication < REPETITIONS; replication += 1) {
+      const target = (19 + template * 17 + replication * 13) % 130;
+      const customerBase = 10_000 + template * 1_000 + replication * 100_000;
+      const orders = Array.from({ length: 130 }, (_, orderId) => ({
+        order_id: orderId,
+        customer_id: orderId + customerBase,
+        status: (orderId + replication) % 2 === 0 ? 'open' : 'closed',
+        padding: padding('join-source', orderId, template, replication),
+      }));
+      const customers = Array.from({ length: 130 }, (_, customerIndex) => ({
+        customer_id: customerIndex + customerBase,
+        email: `joined${template}-v${replication}-${customerIndex}@example.com`,
+        tier: (customerIndex + replication) % 3 === 0 ? 'pro' : 'basic',
+        padding: padding('join-destination', customerIndex, template, replication),
+      }));
+      add(
+        'json-join',
+        template,
+        replication,
+        [JSON.stringify(orders), JSON.stringify(customers)],
+        `What is the email for order_id ${target}? Return only the email address.`,
+        customers[target].email,
+      );
+    }
   }
 
   return definitions;
@@ -867,6 +894,8 @@ async function preflight(tasks, runtimes, pricing) {
     const qcvBytes = Buffer.byteLength(qcvSerialized);
     rows.push({
       id: task.id,
+      templateId: task.templateId,
+      replication: task.replication,
       category: task.category,
       protocol: task.protocol,
       model: task.model,
@@ -885,8 +914,7 @@ async function preflight(tasks, runtimes, pricing) {
       qcvFallbackInjected: qcvSerialized.includes('pinpoint_query'),
       headroomReport: reportRows(headroom),
       qcvReport: reportRows(qcv),
-      projectedWorstCaseUSD:
-        worstCaseCost(task.body, pricing[task.protocol]) * REPETITIONS * 3,
+      projectedWorstCaseUSD: worstCaseCost(task.body, pricing[task.protocol]) * 3,
     });
   }
   return rows;
@@ -959,6 +987,8 @@ function writeArtifact(filename, value, secrets) {
 function publicTask(task) {
   return {
     id: task.id,
+    templateId: task.templateId,
+    replication: task.replication,
     category: task.category,
     protocol: task.protocol,
     model: task.model,
@@ -1081,12 +1111,21 @@ function finalArtifact({ models, pricing, tasks, preflightRows, runs, budget, st
   const completedPerTask = Object.fromEntries(
     tasks.map((task) => [task.id, runs.filter((run) => run.id === task.id).length]),
   );
+  const templateIds = [...new Set(tasks.map((task) => task.templateId))];
+  const completedPerTemplate = Object.fromEntries(
+    templateIds.map((templateId) => [
+      templateId,
+      runs.filter((run) => run.templateId === templateId).length,
+    ]),
+  );
+  const fixtureHashes = new Set(tasks.map((task) => task.fixtureSha256));
   const gates = summary
     ? {
-        atLeastThirtyTasks: tasks.length >= 30,
-        fiveRepetitionsPerTask: Object.values(completedPerTask).every(
-          (count) => count >= REPETITIONS && REPETITIONS >= 5,
+        atLeastThirtyTaskTemplates: templateIds.length >= 30,
+        fiveIndependentVariantsPerTemplate: Object.values(completedPerTemplate).every(
+          (count) => count === REPETITIONS && REPETITIONS >= 5,
         ),
+        everyFixtureVariantUnique: fixtureHashes.size === tasks.length,
         randomizedArmOrder: armPermutations >= 4,
         multipleModels: new Set(tasks.map((task) => task.model)).size >= 2,
         threeProtocols: new Set(tasks.map((task) => task.protocol)).size >= 3,
@@ -1104,7 +1143,7 @@ function finalArtifact({ models, pricing, tasks, preflightRows, runs, budget, st
           summary.comparisons.qcvVsHeadroom.costReduction95.low >= 0.25,
         noRetries: true,
         withinSpendCap: budget.observedUSD <= budget.maxUSD,
-        complete: runs.length === tasks.length * REPETITIONS,
+        complete: runs.length === tasks.length,
       }
     : undefined;
   return {
@@ -1117,11 +1156,16 @@ function finalArtifact({ models, pricing, tasks, preflightRows, runs, budget, st
     models,
     pricing,
     methodology: {
-      logicalTasks: tasks.length,
+      logicalTasks: templateIds.length,
+      independentlyParameterizedTasks: tasks.length,
       categories: [...new Set(tasks.map((task) => task.category))],
       protocols: [...new Set(tasks.map((task) => task.protocol))],
       repetitions: REPETITIONS,
-      pairedObservationsPlanned: tasks.length * REPETITIONS,
+      replicationDesign:
+        'Each template repetition uses a distinct payload, expected answer, fixture hash, and task id; no identical prompt is repeated.',
+      inferenceUnit:
+        'One independently parameterized structured-task variant. The exact harm bound assumes these fixed variants are exchangeable benchmark units.',
+      pairedObservationsPlanned: tasks.length,
       arms: ['raw', 'headroom', 'qcv'],
       randomizedTaskAndArmOrder: true,
       seed: SEED,
@@ -1136,16 +1180,17 @@ function finalArtifact({ models, pricing, tasks, preflightRows, runs, budget, st
       qcv:
         'Pinpoint deterministic exact prefetch enabled; model-driven fallback, semantic compression, and optical compression disabled.',
       limitation:
-        'Synthetic controlled structured tasks. This is inferential live-model evidence, not organic production-traffic or external-adoption evidence.',
+        'Synthetic controlled structured-task variants from six operation families. The inferential bound applies to this fixed benchmark population and its exchangeability assumption, not organic production traffic or external adoption.',
     },
     budget: budget.snapshot(),
     tasks: tasks.map(publicTask),
     preflight: preflightRows,
     progress: {
       completedPairedObservations: runs.length,
-      plannedPairedObservations: tasks.length * REPETITIONS,
+      plannedPairedObservations: tasks.length,
       armPermutationsObserved: armPermutations,
       completedPerTask,
+      completedPerTemplate,
     },
     summary,
     gates,
@@ -1233,7 +1278,7 @@ async function runBenchmark({ keys, secrets, models, pricing, tasks, runtimes, p
   if (!ARTIFACT_LABEL) {
     throw new Error('paid benchmark requires BENCH_ARTIFACT_LABEL to preserve prior receipts');
   }
-  const plannedRequests = tasks.length * REPETITIONS * 3;
+  const plannedRequests = tasks.length * 3;
   const projectedUSD = preflightRows.reduce(
     (sum, row) => sum + row.projectedWorstCaseUSD,
     0,
@@ -1256,17 +1301,11 @@ async function runBenchmark({ keys, secrets, models, pricing, tasks, runtimes, p
 
   const budget = new Budget(MAX_USD, MAX_REQUESTS);
   const random = seededRandom(SEED);
-  const observations = shuffled(
-    tasks.flatMap((task) =>
-      Array.from({ length: REPETITIONS }, (_, repetition) => ({ task, repetition })),
-    ),
-    random,
-  );
+  const observations = shuffled(tasks, random);
   const runs = [];
   const filename = artifactName('evidence-gate.json');
   try {
-    for (const observation of observations) {
-      const { task, repetition } = observation;
+    for (const task of observations) {
       const order = shuffled(['raw', 'headroom', 'qcv'], random);
       const results = {};
       for (const arm of order) {
@@ -1282,16 +1321,17 @@ async function runBenchmark({ keys, secrets, models, pricing, tasks, runtimes, p
           keys,
           pricing: pricing[task.protocol],
           budget,
-          label: `${task.id}:r${repetition + 1}:${arm}`,
+          label: `${task.id}:${arm}`,
           secrets,
         });
       }
       runs.push({
         id: task.id,
+        templateId: task.templateId,
         category: task.category,
         protocol: task.protocol,
         model: task.model,
-        repetition,
+        replication: task.replication,
         order,
         results,
       });
@@ -1362,7 +1402,23 @@ async function runBenchmark({ keys, secrets, models, pricing, tasks, runtimes, p
 
 function runSelfTest() {
   const tasks = makeTaskDefinitions();
-  if (tasks.length !== 30) throw new Error(`self-test: expected 30 tasks, got ${tasks.length}`);
+  if (tasks.length !== 30 * REPETITIONS) {
+    throw new Error(`self-test: expected ${30 * REPETITIONS} variants, got ${tasks.length}`);
+  }
+  const templateIds = [...new Set(tasks.map((task) => task.templateId))];
+  if (templateIds.length !== 30) {
+    throw new Error(`self-test: expected 30 templates, got ${templateIds.length}`);
+  }
+  if (
+    templateIds.some(
+      (templateId) => tasks.filter((task) => task.templateId === templateId).length !== REPETITIONS,
+    )
+  ) {
+    throw new Error('self-test: each template must have exactly BENCH_REPS variants');
+  }
+  if (new Set(tasks.map((task) => task.fixtureSha256)).size !== tasks.length) {
+    throw new Error('self-test: every task variant must have a unique fixture hash');
+  }
   if (new Set(tasks.map((task) => task.category)).size !== 6) {
     throw new Error('self-test: expected six task categories');
   }
@@ -1372,7 +1428,7 @@ function runSelfTest() {
       tasks.filter((task) => task.protocol === protocol).length,
     ]),
   );
-  if (Object.values(protocolCounts).some((count) => count !== 10)) {
+  if (Object.values(protocolCounts).some((count) => count !== tasks.length / 3)) {
     throw new Error(`self-test: protocol matrix is unbalanced: ${JSON.stringify(protocolCounts)}`);
   }
   const upper = clopperPearsonUpper(0, 150);
@@ -1398,7 +1454,8 @@ function runSelfTest() {
   }
   if (!rejected) throw new Error('self-test: request cap was not enforced');
   console.log(
-    `evidence gate self-test: ok (30 tasks, 6 categories, 3 protocols, ` +
+    `evidence gate self-test: ok (30 templates x ${REPETITIONS} unique variants, ` +
+      `6 categories, 3 protocols, ` +
       `0/150 harm upper=${(upper * 100).toFixed(3)}%)`,
   );
 }
@@ -1422,7 +1479,7 @@ async function main() {
   const tasks = materializeTasks(models);
   console.log(
     `phase=${PHASE}; anthropic=${models.anthropic}; openai=${models.openai}; ` +
-      `tasks=${tasks.length}; reps=${REPETITIONS}; cap=$${MAX_USD.toFixed(2)}; ` +
+      `templates=30; variants=${tasks.length}; reps=${REPETITIONS}; cap=$${MAX_USD.toFixed(2)}; ` +
       `request-cap=${MAX_REQUESTS}`,
   );
 
@@ -1443,7 +1500,7 @@ async function main() {
       environment: environmentMetadata(),
       models,
       pricing,
-      plannedRequests: tasks.length * REPETITIONS * 3,
+      plannedRequests: tasks.length * 3,
       projectedWorstCaseUSD: projectedUSD,
       capUSD: MAX_USD,
       rows: preflightRows,

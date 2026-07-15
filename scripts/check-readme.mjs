@@ -118,7 +118,7 @@ const endUserSignals = [
   '### Any language or HTTP client: change the base URL',
   'Provider API key',
   'Subscription or OAuth',
-  'About the 94.7% result',
+  'About the 96.8% result',
   '## What Pinpoint can optimize',
 ];
 for (const signal of endUserSignals) {

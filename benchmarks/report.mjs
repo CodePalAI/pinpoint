@@ -889,8 +889,8 @@ if (!directAnthropicVirtual) {
     '> Scope: the deterministic exact subset defaults on for first-party Anthropic Messages, OpenAI Chat, ' +
       'and OpenAI Responses PAYG traffic, including streaming responses. Ambiguous questions pass through ' +
       'by default; `PINPOINT_VIRTUAL_QUERY_FALLBACK=1` separately enables the bounded Anthropic query tool ' +
-      'for non-streaming requests. Subscription traffic passes through. N=2 is breakthrough-candidate ' +
-      'evidence, not a universal claim.',
+      'for non-streaming requests. Subscription traffic passes through. This historical N=2 pilot is ' +
+      'design evidence; Arm J is the current repeated result.',
   );
   out.push('');
   out.push(
@@ -962,8 +962,8 @@ if (!evidenceGate) {
   const comparison = summary.comparisons.qcvVsHeadroom;
   out.push(
     `Evidence: ${inlineCode(evidenceGate.evidenceLevel)}. ${methodology.logicalTasks} synthetic ` +
-      `structured tasks x ${methodology.repetitions} repetitions = ` +
-      `${methodology.pairedObservationsPlanned} randomized paired observations per arm. ` +
+      `structured-task templates x ${methodology.repetitions} independently parameterized variants = ` +
+      `${methodology.independentlyParameterizedTasks} unique randomized paired observations per arm. ` +
       `${methodology.protocols.length} protocols, 2 live models, no retries.`,
   );
   out.push('');
@@ -989,7 +989,8 @@ if (!evidenceGate) {
       `(paired-bootstrap 95% CI ${pct(comparison.costReduction95.low)}-${pct(comparison.costReduction95.high)}), ` +
       `${pct(comparison.inputReduction)} fewer input tokens, ${comparison.harms} regressions, ` +
       `${comparison.improvements} improvements. The exact one-sided 95% upper bound on paired harm is ` +
-      `${pct(comparison.harmRateOneSided95Upper)}, below the 2-point non-inferiority margin.`,
+      `${(comparison.harmRateOneSided95Upper * 100).toFixed(3)}%, below the 2-point ` +
+      'non-inferiority margin.',
   );
   out.push('');
   out.push(
@@ -1013,7 +1014,8 @@ if (!evidenceGate) {
   out.push('');
   out.push(
     '> This establishes repeated live-model efficacy on the committed synthetic structured-task family. ' +
-      'It does not establish the eligible share of organic customer traffic or universal model quality.',
+      'The harm interval treats the 150 fixed variants as exchangeable benchmark units. It does not ' +
+      'establish the eligible share of organic customer traffic or universal model quality.',
   );
 }
 out.push('');
@@ -1044,7 +1046,7 @@ if (!agentTraceGate) {
   out.push('');
   const replaySaved = sessions.reduce((total, session) => total + session.replay.tokensSaved, 0);
   out.push(
-    `${sessions.length}/${sessions.length} sessions answered exactly; ` +
+    `${sessions.length}/${sessions.length} sessions returned the correct final value; ` +
       `${sessions.reduce((total, session) => total + session.replay.matched, 0)}/${sessions.length} ` +
       `sanitized traces replayed hash-identically. Claude Code exercised QCV and stable manifest reuse; ` +
       'Codex locally queried sub-threshold chunks and exercised byte-stable pass-through. Both injected ' +
@@ -1140,7 +1142,7 @@ if (evidenceGate) {
 if (agentTraceGate) {
   out.push(
     `- **Real-agent gate:** ${agentTraceGate.sessions.length}/${agentTraceGate.sessions.length} ` +
-      'Claude Code/Codex sessions exact and hash-replayed; Claude exercised QCV, while Codex correctly ' +
+      'Claude Code/Codex sessions correct and hash-replayed; Claude exercised QCV, while Codex correctly ' +
       'passed through its sub-threshold local-query workflow.',
   );
 }

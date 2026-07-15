@@ -95,6 +95,55 @@ function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function normalizeAnswer(value) {
+  return String(value)
+    .trim()
+    .replace(/^```(?:\w+)?\s*|\s*```$/g, '')
+    .replace(/^[`'"\s]+|[`'".,;:\s]+$/g, '')
+    .toLowerCase();
+}
+
+function finalAnswerCorrect(actual, expected) {
+  if (normalizeAnswer(actual) === normalizeAnswer(expected)) return true;
+  if (!String(expected).includes('@')) return false;
+  const emails = [
+    ...new Set(
+      String(actual)
+        .match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)
+        ?.map((value) => value.toLowerCase()) ?? [],
+    ),
+  ];
+  return emails.length === 1 && emails[0] === String(expected).toLowerCase();
+}
+
+function finalAgentAnswer(agent, stdout) {
+  if (agent === 'claude') {
+    try {
+      const value = JSON.parse(stdout.trim());
+      return typeof value?.result === 'string' ? value.result : '';
+    } catch {
+      return '';
+    }
+  }
+  let answer = '';
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const event = JSON.parse(line);
+      if (
+        event?.type === 'item.completed' &&
+        event.item?.type === 'agent_message' &&
+        typeof event.item.text === 'string'
+      ) {
+        answer = event.item.text;
+      }
+    } catch {
+      // Ignore non-JSON diagnostics; Codex --json emits one JSON object per event.
+    }
+  }
+  return answer;
+}
+
 class ExposureBudget {
   constructor(maxUSD, maxRequests) {
     this.maxUSD = maxUSD;
@@ -384,10 +433,12 @@ function spawnAgent(task, workspace, proxyUrl, keys, secrets) {
     child.once('exit', (code, signal) => {
       clearTimeout(timer);
       const output = `${stdout}\n${stderr}`;
+      const finalAnswer = finalAgentAnswer(task.agent, stdout);
       resolve({
         code: code ?? 1,
         signal,
-        correct: output.toLowerCase().includes(task.expected.toLowerCase()),
+        correct: finalAnswerCorrect(finalAnswer, task.expected),
+        finalAnswerSha256: sha256(finalAnswer),
         outputSha256: sha256(output),
         outputTail: output.slice(-1_000),
         stderrTail: stderr.slice(-500),
@@ -809,6 +860,11 @@ async function runSession(task, keys, secrets, budget) {
     const result = await spawnAgent(task, workspace, `http://${address.host}:${address.port}`, keys, secrets);
     await proxy.close();
     proxy = undefined;
+    if (result.code === 0 && !result.correct) {
+      throw new Error(
+        `${task.id}: strict final-answer grader did not match expected output: ${result.outputTail}`,
+      );
+    }
     if (!existsSync(sourceCapture)) {
       throw new Error(
         `${task.id}: agent exited ${result.code}${result.signal ? ` (${result.signal})` : ''} ` +
@@ -846,6 +902,7 @@ async function runSession(task, keys, secrets, budget) {
       agentExitCode: result.code,
       agentSignal: result.signal,
       agentCorrect: result.correct,
+      finalAnswerSha256: result.finalAnswerSha256,
       agentOutputSha256: result.outputSha256,
       sourceCaptureSha256: sha256(readFileSync(sourceCapture)),
       sourceRecords: records.length,

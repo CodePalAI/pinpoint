@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "evidenceLevel": "live-agentic",
   "kind": "sanitized-real-agent-trace-replay-gate",
-  "generatedAt": "2026-07-15T08:05:35.711Z",
+  "generatedAt": "2026-07-15T08:36:15.528Z",
   "phase": "benchmark",
   "methodology": {
     "source": "Real Claude Code and Codex CLI sessions in disposable synthetic workspaces, routed through the production Pinpoint proxy.",
@@ -15,13 +15,13 @@
     "claude": "claude-haiku-4-5-20251001",
     "codex": "gpt-4.1-mini"
   },
-  "implementationSha256": "516b2fa9ea0ca76452c585e46afb921396cd9b2bc995a2f333b2d5a8c2b85586",
+  "implementationSha256": "f8cb9475c9a38007f604af6b4c8acce0328e85a21633ef356aec7b4cf4e62079",
   "budget": {
     "maxUSD": 3,
     "maxRequests": 60,
     "providerRequests": 46,
-    "conservativeExposureUSD": 1.3692264000000003,
-    "observedUSD": 0.10321585
+    "conservativeExposureUSD": 1.371887,
+    "observedUSD": 0.1042109
   },
   "gates": {
     "expectedSessionCount": true,
@@ -48,8 +48,9 @@
       "agentExitCode": 0,
       "agentSignal": null,
       "agentCorrect": true,
-      "agentOutputSha256": "17c48fdd2e05ec54464a5e59aa946fb6f210c8a1891b3195ab360893caaf328c",
-      "sourceCaptureSha256": "c85130d84c483b6facda83852d1d6455129e3a022954f7f5af81e2f7628cc831",
+      "finalAnswerSha256": "df15e8e92d2f83bda42cd0373500c7ae1b6b622f2497374646c9b4be002f9b93",
+      "agentOutputSha256": "454c53a84d0d0dc1cc37066185e860663ae47994ea75b9cb6bf05974f0d477da",
+      "sourceCaptureSha256": "efbd8af91e0f2ca064f57281fbf91bb2f8219e8710a52a3b2e369da6f8e3b4ad",
       "sourceRecords": 2,
       "qcvAppliedRecords": 2,
       "stablePrefixObserved": false,
@@ -66,8 +67,8 @@
       },
       "sanitizedTrace": {
         "file": "benchmarks/traces/agent-gate/claude-lookup-1.jsonl",
-        "bytes": 43771,
-        "sha256": "e8e558c687c11587c5185a801ecf0152c1f24bae9bfa85ad82bb6781c38eb881"
+        "bytes": 43772,
+        "sha256": "109e140cec71b4ce975e9bc322d8052310721ccd523a42baac2bc15e95f7ac95"
       },
       "replay": {
         "records": 1,
@@ -90,8 +91,9 @@
       "agentExitCode": 0,
       "agentSignal": null,
       "agentCorrect": true,
-      "agentOutputSha256": "3e86b44a9dceb54ce08fb92d0b550a61481674237d26ffc26afa2b2420a15bf8",
-      "sourceCaptureSha256": "3ad475312f16a49607dab398986d5ae8eb8155559dc43e4f4166a6410a0967e9",
+      "finalAnswerSha256": "a0e1e2debf477d3127027908489b926be49711345f88d73801742b3b28027e48",
+      "agentOutputSha256": "798d3df491688dc236f2524453897555347680bd3cfd74f322886907c12240ed",
+      "sourceCaptureSha256": "344694e48eb7840de48587bf336b28cb984cb7e34523842e92f54b3b34d09347",
       "sourceRecords": 2,
       "qcvAppliedRecords": 2,
       "stablePrefixObserved": false,
@@ -108,8 +110,8 @@
       },
       "sanitizedTrace": {
         "file": "benchmarks/traces/agent-gate/claude-lookup-2.jsonl",
-        "bytes": 43772,
-        "sha256": "d719f163effc0870bcf51cd79cde833ec54edd8478fe8bfd3c8380529ef9d28b"
+        "bytes": 43771,
+        "sha256": "10522cb881641976f5ad4b7882d6a3ccd87a6a981506278dd453c0df7bf53991"
       },
       "replay": {
         "records": 1,
@@ -132,8 +134,9 @@
       "agentExitCode": 0,
       "agentSignal": null,
       "agentCorrect": true,
-      "agentOutputSha256": "3fa2e8528047921fd61bc5f432533f29c7ea0f17d840f8c4de0b39d5a7df49ba",
-      "sourceCaptureSha256": "24cd3c1df037f5b487ee2f0d234c52ee5aff239606d95c1b8a0ad0ceb089459f",
+      "finalAnswerSha256": "d49ab2583a9a3a32137f5539ae3930157666e6c141b47c6ba3795cfe20322f03",
+      "agentOutputSha256": "36e29ad468183b69fe485bc203079117648e04e2df6d862a035c4f5312a60e52",
+      "sourceCaptureSha256": "88ab8a83d8b643ba2a1d1d15a0d96a61f156520eea800b767a5a74328a9c8128",
       "sourceRecords": 2,
       "qcvAppliedRecords": 2,
       "stablePrefixObserved": true,
@@ -151,7 +154,7 @@
       "sanitizedTrace": {
         "file": "benchmarks/traces/agent-gate/claude-lookup-3.jsonl",
         "bytes": 43772,
-        "sha256": "cde5abbdc36186b0c87e2e492e559279ee6865ed0ad35d05a698a3e0a9b53a1d"
+        "sha256": "8f8b72b02eb99d3d2809194ace9d58c59c5ef62972cc52d9c88a03968cdc00b6"
       },
       "replay": {
         "records": 1,
@@ -174,8 +177,9 @@
       "agentExitCode": 0,
       "agentSignal": null,
       "agentCorrect": true,
-      "agentOutputSha256": "e95ea9db1d1399bf1fb23f6ad487785d3df0855e073d38320bb84bf0f06b49ee",
-      "sourceCaptureSha256": "d856df9869273a7c486bd3e2c5d839946567a76bc41f227325f8a83c35de6cd8",
+      "finalAnswerSha256": "b72af402875e80ed53f86f9f47a702ad518ca9c3a739312911d179a9a003188a",
+      "agentOutputSha256": "33af4da1a5a8c617193ae0523a55c6da386e927af3ddab534db5afa1d4559983",
+      "sourceCaptureSha256": "5fbc7e9cec9cce1fd07ded7abbeb834566f199cf19b8cea911a89b137ee2efeb",
       "sourceRecords": 3,
       "qcvAppliedRecords": 2,
       "stablePrefixObserved": false,
@@ -192,8 +196,8 @@
       },
       "sanitizedTrace": {
         "file": "benchmarks/traces/agent-gate/claude-join-4.jsonl",
-        "bytes": 77456,
-        "sha256": "a272b7e7c02249dfd5f733a38725725a2f798095c08a6fc9aa5ca350e792498f"
+        "bytes": 77457,
+        "sha256": "ebbab399245856904a849be66a27ffa5ec183a9f9d18a1cb0714b4a5a64fcc97"
       },
       "replay": {
         "records": 1,
@@ -216,8 +220,9 @@
       "agentExitCode": 0,
       "agentSignal": null,
       "agentCorrect": true,
-      "agentOutputSha256": "d868789d629666398ff0533e3e940fefe962b30cf1f225fdb1f11f4d84326214",
-      "sourceCaptureSha256": "c99b508a62d2f2f0d1f55674f34d28fd31b78b7785a57b4995834b9722a659c4",
+      "finalAnswerSha256": "14586527b35692da27dac85760b2a1966b108fb65eb3da77499bb0bd5ee65270",
+      "agentOutputSha256": "7f8e8bcbd63b9a8433e9f3dd96b01d1415409cb5e6164fea72f9af3bb38761e7",
+      "sourceCaptureSha256": "b0beb2d5c32934b70a93abfadc723614a1a8f06003c912f14268727d29eb1aad",
       "sourceRecords": 3,
       "qcvAppliedRecords": 2,
       "stablePrefixObserved": false,
@@ -234,8 +239,8 @@
       },
       "sanitizedTrace": {
         "file": "benchmarks/traces/agent-gate/claude-join-5.jsonl",
-        "bytes": 77458,
-        "sha256": "249c9d1425fac7812ed0186a4b8650593b59d0504eb025fb26826a5c76cedcdf"
+        "bytes": 77457,
+        "sha256": "a6a957caf0d679d05c528487d53d74419034e473403df8d2062ca269a3f628d4"
       },
       "replay": {
         "records": 1,
@@ -258,8 +263,9 @@
       "agentExitCode": 0,
       "agentSignal": null,
       "agentCorrect": true,
-      "agentOutputSha256": "b76de852816d51ae999386952ed922dca52ccba2eae400b28f17919e4cd9581c",
-      "sourceCaptureSha256": "6db8cbfc29d5d688265d4619328efc6943d58a1d16348ff5595a136eec5786e8",
+      "finalAnswerSha256": "a74801c56b416fe27f776b53cc72e70d1156a358478dca29f6ff5a394520fe6f",
+      "agentOutputSha256": "5640f2becf721dd85754b4060c5f2a02e86a45ee04e08d0868ba6d5780ff2b6a",
+      "sourceCaptureSha256": "745d21c38b463b747df83a701ffe24509e8c6580901e691bcd5ace3c7e951647",
       "sourceRecords": 2,
       "qcvAppliedRecords": 0,
       "stablePrefixObserved": true,
@@ -277,7 +283,7 @@
       "sanitizedTrace": {
         "file": "benchmarks/traces/agent-gate/codex-lookup-1.jsonl",
         "bytes": 3278,
-        "sha256": "651b3fa4395a533646ef1ea5b94de6b18bc162e6f021d690f3fcfed62d858f30"
+        "sha256": "e6948834b500c373519f856ee0dc9248f6b0b76264b29d71ec23fce4e1486654"
       },
       "replay": {
         "records": 1,
@@ -300,8 +306,9 @@
       "agentExitCode": 0,
       "agentSignal": null,
       "agentCorrect": true,
-      "agentOutputSha256": "b8fce16e2ea874dca1c7a8a5a3d56890e5261929d4f34a960968da67c8b3de3a",
-      "sourceCaptureSha256": "473bde18c1ecfe1ed766f053d0ac8ef57009169d1ec1032611f5d27f2359dda8",
+      "finalAnswerSha256": "b79d1ac307ca455b37e499a275fc99916a8362510d4ee3226c2577646a692f4b",
+      "agentOutputSha256": "d4a8b6e11cd3ec9a3782ae4089cc485ad0dc9961f423d1a39d7c5ac927903958",
+      "sourceCaptureSha256": "d49bacf726afbe2561c0b6e224b318fa97556e31c03f85230f9793e1c4755ed5",
       "sourceRecords": 2,
       "qcvAppliedRecords": 0,
       "stablePrefixObserved": true,
@@ -318,8 +325,8 @@
       },
       "sanitizedTrace": {
         "file": "benchmarks/traces/agent-gate/codex-lookup-2.jsonl",
-        "bytes": 3278,
-        "sha256": "7441cd3eae79ab7a37837325f4ee3104953389027e0d0708ae386bbf74989e6a"
+        "bytes": 3277,
+        "sha256": "970f29f94c8d1d2fea438cb4be9e15a91cc34e37528a27a0d1a7120b2321819c"
       },
       "replay": {
         "records": 1,
@@ -342,8 +349,9 @@
       "agentExitCode": 0,
       "agentSignal": null,
       "agentCorrect": true,
-      "agentOutputSha256": "946cae52f2bf8df0c69824cf34c515a99a71cf5d2dd584b5b9e45dcf59ca8cbd",
-      "sourceCaptureSha256": "0aa2835ab707347d6eccc955b923aac28025e03860219f06e77b7a3f3a5e7b7c",
+      "finalAnswerSha256": "9b5d89d788b4371a106df0420a0da7e0444b7b32814ef278a3299573b11d2695",
+      "agentOutputSha256": "680c841556a33301b151aa2b8769ed3a931bcdb093e2f9fb8fbab79a890a8a75",
+      "sourceCaptureSha256": "a84ba664ce165f09b9de6181d4a902705a97abe1f03f83298bb46fcc2df21a35",
       "sourceRecords": 2,
       "qcvAppliedRecords": 0,
       "stablePrefixObserved": true,
@@ -361,7 +369,7 @@
       "sanitizedTrace": {
         "file": "benchmarks/traces/agent-gate/codex-lookup-3.jsonl",
         "bytes": 3278,
-        "sha256": "ff8bc0e4c93c9bf8e5739fb4a24e6af2c87519181000a804bac4d5246f0d350f"
+        "sha256": "b904392db3c11d98c1da29d9870f8180ca583debc3c5d2ae3e96da8f6323a17d"
       },
       "replay": {
         "records": 1,
@@ -384,8 +392,9 @@
       "agentExitCode": 0,
       "agentSignal": null,
       "agentCorrect": true,
-      "agentOutputSha256": "990f6d92462345be284b60ec5f17750b79cbd4c1abb9afcced52373458c8c4fa",
-      "sourceCaptureSha256": "171ed23c9c9a3cb9f31ce7840fcafd54f55861c098d3fb42f95d6a0eebd82448",
+      "finalAnswerSha256": "3e9eae6c5c5a36fd2d8f16f94c941d801ea9dc2869009213df547af535dcfea2",
+      "agentOutputSha256": "57ed7841dc135fc887a0f9c064242bbeb5dcf14063690c20ff6c62463ed40eb8",
+      "sourceCaptureSha256": "6ad9f38edeff36c3ee5f9a05f8bbe6e2e09b4424bcd8da0e3f9c81695a311b85",
       "sourceRecords": 3,
       "qcvAppliedRecords": 0,
       "stablePrefixObserved": true,
@@ -403,7 +412,7 @@
       "sanitizedTrace": {
         "file": "benchmarks/traces/agent-gate/codex-join-4.jsonl",
         "bytes": 4201,
-        "sha256": "61120d18e01d7f780497202a574e5ebd5a77590c753b06a56abc8515994ab013"
+        "sha256": "29046e8ef4cb050e2c88f18a6dcef02465b5a689b810bd07fa4530f702e06306"
       },
       "replay": {
         "records": 1,
@@ -426,8 +435,9 @@
       "agentExitCode": 0,
       "agentSignal": null,
       "agentCorrect": true,
-      "agentOutputSha256": "603ae3b1563e11e075cd0dcc8ecae8529ed0a8f60b270a24fc75c1eefcbbb944",
-      "sourceCaptureSha256": "328fd1d9abcfcd49cf8cc508e0f28210c9d9f60af9d37c70c861751a2c18455d",
+      "finalAnswerSha256": "b0f458a61b901d93c17dee2af6fb8afebb2cbbaa810335705ab65a4eabaa35e8",
+      "agentOutputSha256": "1939d9ee7fbcf04400b7d539dcf10c9006629e3e81e6ed3d4383d197ff147a87",
+      "sourceCaptureSha256": "0243c08c0c68ca3deba424a708c5f4c1e710b84078d386a1979d24bf8ee23889",
       "sourceRecords": 3,
       "qcvAppliedRecords": 0,
       "stablePrefixObserved": true,
@@ -444,8 +454,8 @@
       },
       "sanitizedTrace": {
         "file": "benchmarks/traces/agent-gate/codex-join-5.jsonl",
-        "bytes": 4202,
-        "sha256": "fc538e60bf87aa30f0f042ed8e9193e7482f588524ca599a6e32690dd3f68720"
+        "bytes": 4200,
+        "sha256": "f7709a938d1406d83987b99b7d89587ee23ec2b90d41bcbb9892c9c967bbd87a"
       },
       "replay": {
         "records": 1,

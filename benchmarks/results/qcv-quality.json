@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "evidenceLevel": "offline-real-transform",
-  "generatedAt": "2026-07-15T06:00:59.191Z",
+  "generatedAt": "2026-07-15T08:41:16.720Z",
   "methodology": {
     "providerCalls": 0,
     "modelQuality": "not measured; deterministic exact materialization only",

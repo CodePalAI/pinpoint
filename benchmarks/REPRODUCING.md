@@ -37,12 +37,12 @@ npm ci
 npm run bench:evidence:self-test
 ```
 
-The self-test verifies 30 tasks, six categories, balanced three-protocol coverage, budget enforcement, credential scrubbing, and the exact statistical threshold. With zero paired harms over 150 observations, the one-sided 95% Clopper-Pearson upper bound is 1.977%.
+The self-test verifies 30 task templates, five unique fixture variants per template, 150 unique fixture hashes, six categories, balanced three-protocol coverage, budget enforcement, credential scrubbing, and the exact statistical threshold. With zero paired harms over 150 observations, the one-sided 95% Clopper-Pearson upper bound is 1.977%.
 
 Run the transform-only preflight. It lists models, proves all 30 QCV plans are exact without model fallback, and computes a one-token-per-byte conservative spend bound. Listing provider models may make authenticated metadata requests, but this phase sends no completion requests:
 
 ```bash
-BENCH_MAX_USD=12 \
+BENCH_MAX_USD=15 \
 BENCH_MAX_REQUESTS=450 \
 BENCH_ARTIFACT_LABEL=independent-macos-arm64-20260715 \
 npm run bench:evidence:preflight
@@ -62,7 +62,7 @@ Run the complete gate only after both checks pass:
 
 ```bash
 BENCH_ALLOW_PAID=1 \
-BENCH_MAX_USD=12 \
+BENCH_MAX_USD=15 \
 BENCH_MAX_REQUESTS=450 \
 BENCH_REPS=5 \
 BENCH_SEED=20260715 \
@@ -73,7 +73,8 @@ npm run bench:evidence
 
 The gate fails unless all of these hold:
 
-- at least 30 unique tasks and five repetitions per task;
+- at least 30 task templates and five independently parameterized variants per template;
+- a distinct fixture hash, payload, expected answer, and task ID for every paired observation;
 - all six arm-order permutations observed;
 - two live models and Anthropic Messages, OpenAI Chat, and OpenAI Responses represented;
 - at least 98% QCV exact accuracy;
@@ -81,7 +82,9 @@ The gate fails unless all of these hold:
 - QCV modeled provider cost at least 25% below Headroom, including the paired-bootstrap 95% lower bound;
 - no harness retries, complete observations, and spend/request caps respected.
 
-The committed first-party run used Claude Haiku 4.5 and GPT-4.1 mini. It made 450 completion calls and observed $1.348252 in provider spend. Pricing is an explicit dated public-price snapshot in the receipt; review it before each replication.
+The committed first-party run used Claude Haiku 4.5 and GPT-4.1 mini. It made 450 completion calls and observed $2.295591 in provider spend. The one-token-per-byte preflight projection was $14.8625; that deliberately extreme value is a cap reservation, not a token or cost estimate. Actual modeled cost uses provider-reported usage. Pricing is an explicit dated public-price snapshot in the receipt; review it before each replication.
+
+The exact harm interval treats the 150 fixed, independently parameterized variants as exchangeable benchmark units. It is a bound for this benchmark population under that assumption, not a confidence interval for organic customer traffic. Replications should use a new seed and artifact label and should add new task families rather than only rerunning the same fixtures.
 
 ## Real-agent capture and replay gate
 
@@ -102,9 +105,9 @@ BENCH_ARTIFACT_LABEL=independent-macos-arm64-20260715 \
 npm run bench:agent-traces
 ```
 
-The full gate requires five Claude Code and five Codex sessions, exact final answers, tool continuations, four long/join sessions, stable cache shape, one successful injected POST retry per agent, and hash-identical offline replay of every sanitized derivative. Claude must exercise QCV. Codex is expected to pass through when it locally queries sub-6,000-character chunks.
+The full gate requires five Claude Code and five Codex sessions, correct final email values parsed only from Claude's final `result` or Codex's last `agent_message`, tool continuations, four long/join sessions, stable cache shape, one successful injected POST retry per agent, and hash-identical offline replay of every sanitized derivative. Claude must exercise QCV. Codex is expected to pass through when it locally queries sub-6,000-character chunks.
 
-Before publishing, verify every trace is mode `0600` and scan the receipts and `benchmarks/traces/agent-gate/` for credentials, home-directory paths, temporary paths, proprietary prompts, and real user data. The committed run observed $0.103216 in provider spend under a $1.369226 conservative exposure calculation.
+Before publishing, verify every trace is mode `0600` and scan the receipts and `benchmarks/traces/agent-gate/` for credentials, home-directory paths, temporary paths, proprietary prompts, and real user data. The committed run observed $0.104211 in provider spend under a $1.371887 conservative exposure calculation.
 
 These are first-party real-agent sessions over synthetic repositories, not customer production traces. Do not relabel them as organic or external traffic.
 

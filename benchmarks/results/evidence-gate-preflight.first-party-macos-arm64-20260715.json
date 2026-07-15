@@ -1,0 +1,1912 @@
+{
+  "schemaVersion": 1,
+  "evidenceLevel": "offline-real-transform",
+  "kind": "multi-provider-evidence-gate-preflight",
+  "generatedAt": "2026-07-15T06:50:02.882Z",
+  "environment": {
+    "node": "v26.0.0",
+    "platform": "darwin",
+    "release": "25.5.0",
+    "arch": "arm64",
+    "git": {
+      "commit": "ac339ebbae920bbb55b9aa6bb7003a396cc43859",
+      "dirty": true
+    }
+  },
+  "models": {
+    "anthropic": "claude-haiku-4-5-20251001",
+    "openai": "gpt-4.1-mini"
+  },
+  "pricing": {
+    "anthropic-messages": {
+      "input": 1,
+      "cachedInput": 0.1,
+      "output": 5,
+      "unit": "USD per million tokens",
+      "source": "Anthropic public API pricing snapshot",
+      "accessedAt": "2026-07-15"
+    },
+    "openai-chat": {
+      "input": 0.4,
+      "cachedInput": 0.1,
+      "output": 1.6,
+      "unit": "USD per million tokens",
+      "source": "OpenAI public API pricing snapshot",
+      "accessedAt": "2026-07-15"
+    },
+    "openai-responses": {
+      "input": 0.4,
+      "cachedInput": 0.1,
+      "output": 1.6,
+      "unit": "USD per million tokens",
+      "source": "OpenAI public API pricing snapshot",
+      "accessedAt": "2026-07-15"
+    }
+  },
+  "plannedRequests": 450,
+  "projectedWorstCaseUSD": 11.395323000000001,
+  "capUSD": 12,
+  "rows": [
+    {
+      "id": "json-lookup-1",
+      "category": "json-lookup",
+      "protocol": "anthropic-messages",
+      "model": "claude-haiku-4-5-20251001",
+      "fixtureSha256": "a426a90515e608074b6916e172986d2241a1a13a6a9f7e2765db353868cdeeda",
+      "datasetChars": 31511,
+      "rawBytes": 34123,
+      "headroomBytes": 24790,
+      "qcvBytes": 1446,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 5902,
+          "tokensCompressed": 5014
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7878,
+          "tokensCompressed": 174
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.5142450000000001
+    },
+    {
+      "id": "json-lookup-2",
+      "category": "json-lookup",
+      "protocol": "openai-chat",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "426b0804292061d280c23f818646c23bf435d0d43a725910c2378b93dcde523b",
+      "datasetChars": 31511,
+      "rawBytes": 34070,
+      "headroomBytes": 24737,
+      "qcvBytes": 1393,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 5985,
+          "tokensCompressed": 5097
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7878,
+          "tokensCompressed": 174
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.20518799999999998
+    },
+    {
+      "id": "json-lookup-3",
+      "category": "json-lookup",
+      "protocol": "openai-responses",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "772d0d709f66181d4356d4e14d93cf1deadb40be18366fbb013dea99e9ced5a9",
+      "datasetChars": 31511,
+      "rawBytes": 34069,
+      "headroomBytes": 34069,
+      "qcvBytes": 1373,
+      "headroomApplied": false,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7878,
+          "tokensCompressed": 174
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.20518200000000003
+    },
+    {
+      "id": "json-lookup-4",
+      "category": "json-lookup",
+      "protocol": "anthropic-messages",
+      "model": "claude-haiku-4-5-20251001",
+      "fixtureSha256": "b3984015d05a4fc22466678985b3b28ee965b51247e7c19e65ecc9f46e823091",
+      "datasetChars": 31511,
+      "rawBytes": 34123,
+      "headroomBytes": 24790,
+      "qcvBytes": 1446,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 5902,
+          "tokensCompressed": 5013
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7878,
+          "tokensCompressed": 174
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.5142450000000001
+    },
+    {
+      "id": "json-lookup-5",
+      "category": "json-lookup",
+      "protocol": "openai-chat",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "687886feadb3e5e9a4dfc934a0c2bdd6ef55d979dadedfa23a70c1f5aec9bc14",
+      "datasetChars": 31511,
+      "rawBytes": 34070,
+      "headroomBytes": 24737,
+      "qcvBytes": 1393,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 5985,
+          "tokensCompressed": 5099
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7878,
+          "tokensCompressed": 174
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.20518799999999998
+    },
+    {
+      "id": "filtered-count-1",
+      "category": "filtered-count",
+      "protocol": "openai-responses",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "0690550bec462955220742b3bfaf17074839893145fe6ed9b6bcc0d70db4eb74",
+      "datasetChars": 35076,
+      "rawBytes": 37483,
+      "headroomBytes": 37483,
+      "qcvBytes": 1274,
+      "headroomApplied": false,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 8769,
+          "tokensCompressed": 151
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.22566600000000003
+    },
+    {
+      "id": "filtered-count-2",
+      "category": "filtered-count",
+      "protocol": "anthropic-messages",
+      "model": "claude-haiku-4-5-20251001",
+      "fixtureSha256": "b360cf9e5512267b7977c845ced322c22d22046da6f00dff014db4f616eef3ff",
+      "datasetChars": 35101,
+      "rawBytes": 37565,
+      "headroomBytes": 29026,
+      "qcvBytes": 1350,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6621,
+          "tokensCompressed": 5865
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 8776,
+          "tokensCompressed": 151
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.565875
+    },
+    {
+      "id": "filtered-count-3",
+      "category": "filtered-count",
+      "protocol": "openai-chat",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "b618ab542ba56863b491119fdee1e01add1124adf23e0e6ef38cf8d8e799debd",
+      "datasetChars": 35113,
+      "rawBytes": 37521,
+      "headroomBytes": 28982,
+      "qcvBytes": 1294,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6701,
+          "tokensCompressed": 5943
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 8779,
+          "tokensCompressed": 151
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.22589400000000004
+    },
+    {
+      "id": "filtered-count-4",
+      "category": "filtered-count",
+      "protocol": "openai-responses",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "78060a7aa04c8a3ca20764df1664e1d10b1f13a6e97fa87eea52c6366d2ed44c",
+      "datasetChars": 35121,
+      "rawBytes": 37528,
+      "headroomBytes": 37528,
+      "qcvBytes": 1274,
+      "headroomApplied": false,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 8781,
+          "tokensCompressed": 151
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.22593600000000003
+    },
+    {
+      "id": "filtered-count-5",
+      "category": "filtered-count",
+      "protocol": "anthropic-messages",
+      "model": "claude-haiku-4-5-20251001",
+      "fixtureSha256": "f06313845dad94ad3c23cd5f58850ee6988036b3d56a5c46af3c5e47f076aad7",
+      "datasetChars": 35126,
+      "rawBytes": 37590,
+      "headroomBytes": 29051,
+      "qcvBytes": 1350,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6621,
+          "tokensCompressed": 5865
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 8782,
+          "tokensCompressed": 151
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.56625
+    },
+    {
+      "id": "log-count-1",
+      "category": "log-count",
+      "protocol": "openai-chat",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "49101a2cde670a751c60b3f28b4d9f19adbc25c1293e6cf85c3bbb531475ba32",
+      "datasetChars": 53206,
+      "rawBytes": 54058,
+      "headroomBytes": 39386,
+      "qcvBytes": 1227,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 11798,
+          "tokensCompressed": 8509
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 13302,
+          "tokensCompressed": 140
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.32511599999999996
+    },
+    {
+      "id": "log-count-2",
+      "category": "log-count",
+      "protocol": "openai-responses",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "544bce9953952c44fb632c31270434afb67e80c39dd9f72bafb987d780b9960a",
+      "datasetChars": 53119,
+      "rawBytes": 53969,
+      "headroomBytes": 53969,
+      "qcvBytes": 1205,
+      "headroomApplied": false,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 13280,
+          "tokensCompressed": 139
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.32458200000000004
+    },
+    {
+      "id": "log-count-3",
+      "category": "log-count",
+      "protocol": "anthropic-messages",
+      "model": "claude-haiku-4-5-20251001",
+      "fixtureSha256": "cb973ba6124be253340a46b856fc2e85d610e29ff38f9e65fefa136fe57161cf",
+      "datasetChars": 53171,
+      "rawBytes": 54074,
+      "headroomBytes": 39313,
+      "qcvBytes": 1278,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 11771,
+          "tokensCompressed": 8474
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 13293,
+          "tokensCompressed": 140
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.81351
+    },
+    {
+      "id": "log-count-4",
+      "category": "log-count",
+      "protocol": "openai-chat",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "bc37488d23150008086f085c9a62911221aae6d37f621dfc31387d6209e604b3",
+      "datasetChars": 53163,
+      "rawBytes": 54015,
+      "headroomBytes": 39343,
+      "qcvBytes": 1227,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 11798,
+          "tokensCompressed": 8509
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 13291,
+          "tokensCompressed": 140
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.32485800000000004
+    },
+    {
+      "id": "log-count-5",
+      "category": "log-count",
+      "protocol": "openai-responses",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "d8619903b1265c4bf6e8eadde87305d7e3ae7b35943aec35aa1c2ac4161c145d",
+      "datasetChars": 53157,
+      "rawBytes": 54008,
+      "headroomBytes": 54008,
+      "qcvBytes": 1207,
+      "headroomApplied": false,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 13290,
+          "tokensCompressed": 140
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.324816
+    },
+    {
+      "id": "table-lookup-1",
+      "category": "table-lookup",
+      "protocol": "anthropic-messages",
+      "model": "claude-haiku-4-5-20251001",
+      "fixtureSha256": "565664d45b4119d6cd425b42cb075f1dd4e20efec1376601bf6c517732ce4a25",
+      "datasetChars": 29101,
+      "rawBytes": 31576,
+      "headroomBytes": 22884,
+      "qcvBytes": 1456,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6002,
+          "tokensCompressed": 5162
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7276,
+          "tokensCompressed": 176
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.47603999999999996
+    },
+    {
+      "id": "table-lookup-2",
+      "category": "table-lookup",
+      "protocol": "openai-chat",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "e4a39440ffcfac5667421007fc7f8c1ad507e56d715b9bc53b23f6ae2b9baeb3",
+      "datasetChars": 29101,
+      "rawBytes": 31522,
+      "headroomBytes": 22830,
+      "qcvBytes": 1401,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6085,
+          "tokensCompressed": 5243
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7276,
+          "tokensCompressed": 176
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.1899
+    },
+    {
+      "id": "table-lookup-3",
+      "category": "table-lookup",
+      "protocol": "openai-responses",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "06e1b272824b7e878b2c851241db6b95bc6163330b989c90c6854390781b8dbd",
+      "datasetChars": 29101,
+      "rawBytes": 31521,
+      "headroomBytes": 31521,
+      "qcvBytes": 1381,
+      "headroomApplied": false,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7276,
+          "tokensCompressed": 176
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.189894
+    },
+    {
+      "id": "table-lookup-4",
+      "category": "table-lookup",
+      "protocol": "anthropic-messages",
+      "model": "claude-haiku-4-5-20251001",
+      "fixtureSha256": "fac3efc21a1fea8db3fc2528047c20625a3458ebea53643b2cdfb9e0d173d3eb",
+      "datasetChars": 29101,
+      "rawBytes": 31576,
+      "headroomBytes": 22884,
+      "qcvBytes": 1456,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6002,
+          "tokensCompressed": 5163
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7276,
+          "tokensCompressed": 176
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.47603999999999996
+    },
+    {
+      "id": "table-lookup-5",
+      "category": "table-lookup",
+      "protocol": "openai-chat",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "837a85d16ce2800d698f92c37d038d3c6c89bb0f55a5ec29b0f46296f3c77dfb",
+      "datasetChars": 29101,
+      "rawBytes": 31522,
+      "headroomBytes": 22830,
+      "qcvBytes": 1401,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6085,
+          "tokensCompressed": 5246
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7276,
+          "tokensCompressed": 176
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.1899
+    },
+    {
+      "id": "nested-projection-1",
+      "category": "nested-projection",
+      "protocol": "openai-responses",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "1df7a476c3020c143cb64a954cc89a8ce0a97e0c79cbcccf16682e6c6c868f6d",
+      "datasetChars": 31041,
+      "rawBytes": 33740,
+      "headroomBytes": 33740,
+      "qcvBytes": 1425,
+      "headroomApplied": false,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7761,
+          "tokensCompressed": 182
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.203208
+    },
+    {
+      "id": "nested-projection-2",
+      "category": "nested-projection",
+      "protocol": "anthropic-messages",
+      "model": "claude-haiku-4-5-20251001",
+      "fixtureSha256": "4aa04ef32563a1fd2fe52e475ead62e1e2d677cbdf178747d8283b2b7adc3d7b",
+      "datasetChars": 31041,
+      "rawBytes": 33800,
+      "headroomBytes": 25024,
+      "qcvBytes": 1504,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6132,
+          "tokensCompressed": 5299
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7761,
+          "tokensCompressed": 182
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.5094
+    },
+    {
+      "id": "nested-projection-3",
+      "category": "nested-projection",
+      "protocol": "openai-chat",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "864da4534a0d91ac7d0865b96b223e22a8651e9f884021b245fb0da16847747a",
+      "datasetChars": 31041,
+      "rawBytes": 33741,
+      "headroomBytes": 24965,
+      "qcvBytes": 1445,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6086,
+          "tokensCompressed": 5254
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7761,
+          "tokensCompressed": 182
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.203214
+    },
+    {
+      "id": "nested-projection-4",
+      "category": "nested-projection",
+      "protocol": "openai-responses",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "d4dccdee9faa63f9edd28ab2984b7ea28ed26e8bf74a0922ff45cf43f067badf",
+      "datasetChars": 31041,
+      "rawBytes": 33740,
+      "headroomBytes": 33740,
+      "qcvBytes": 1425,
+      "headroomApplied": false,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7761,
+          "tokensCompressed": 182
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.203208
+    },
+    {
+      "id": "nested-projection-5",
+      "category": "nested-projection",
+      "protocol": "anthropic-messages",
+      "model": "claude-haiku-4-5-20251001",
+      "fixtureSha256": "f359fb5d6759cbb22b7411ca068207e6ee5c91eb717ea5a6975874e78bff8ba9",
+      "datasetChars": 31041,
+      "rawBytes": 33800,
+      "headroomBytes": 25024,
+      "qcvBytes": 1504,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 6132,
+          "tokensCompressed": 5298
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 7761,
+          "tokensCompressed": 182
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.5094
+    },
+    {
+      "id": "json-join-1",
+      "category": "json-join",
+      "protocol": "openai-chat",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "2532e4ca7e8bd6dfd47bef65d13451dbd39f8cffc452c5ca31a1238b5f191fd5",
+      "datasetChars": 64294,
+      "rawBytes": 68509,
+      "headroomBytes": 60955,
+      "qcvBytes": 1996,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 12245,
+          "tokensCompressed": 11579
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 16074,
+          "tokensCompressed": 262
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.411822
+    },
+    {
+      "id": "json-join-2",
+      "category": "json-join",
+      "protocol": "openai-responses",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "f88a9b479e00c63cdfab69390eac76c17d87440baeba32bd3a7dc6ecf090026b",
+      "datasetChars": 64294,
+      "rawBytes": 68464,
+      "headroomBytes": 68464,
+      "qcvBytes": 1932,
+      "headroomApplied": false,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 16074,
+          "tokensCompressed": 262
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.4115520000000001
+    },
+    {
+      "id": "json-join-3",
+      "category": "json-join",
+      "protocol": "anthropic-messages",
+      "model": "claude-haiku-4-5-20251001",
+      "fixtureSha256": "ab47c57a6c918aa02f92c3850f031485912af45d6be6dbe24df736238b35a352",
+      "datasetChars": 64294,
+      "rawBytes": 68628,
+      "headroomBytes": 61064,
+      "qcvBytes": 2115,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 12131,
+          "tokensCompressed": 11462
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 16074,
+          "tokensCompressed": 262
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 1.0318200000000002
+    },
+    {
+      "id": "json-join-4",
+      "category": "json-join",
+      "protocol": "openai-chat",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "913172f25ca0d94c17443789af0392f7209f3175315dd2a4fe1f831f972fde58",
+      "datasetChars": 64294,
+      "rawBytes": 68509,
+      "headroomBytes": 60945,
+      "qcvBytes": 1996,
+      "headroomApplied": true,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 12245,
+          "tokensCompressed": 11576
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 16074,
+          "tokensCompressed": 262
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.411822
+    },
+    {
+      "id": "json-join-5",
+      "category": "json-join",
+      "protocol": "openai-responses",
+      "model": "gpt-4.1-mini",
+      "fixtureSha256": "ba114de7edcb286abdd40469270c038e825a5910beaf92bd2330e1cfbe46f8a3",
+      "datasetChars": 64294,
+      "rawBytes": 68464,
+      "headroomBytes": 68464,
+      "qcvBytes": 1932,
+      "headroomApplied": false,
+      "qcvApplied": true,
+      "qcvMaterializedExpected": true,
+      "qcvFallbackInjected": false,
+      "headroomReport": [
+        {
+          "stage": "virtual",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "below_threshold",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "qcvReport": [
+        {
+          "stage": "virtual",
+          "applied": true,
+          "reason": "applied",
+          "tokensText": 16074,
+          "tokensCompressed": 262
+        },
+        {
+          "stage": "semantic",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        },
+        {
+          "stage": "optical",
+          "applied": false,
+          "reason": "disabled",
+          "tokensText": 0,
+          "tokensCompressed": 0
+        }
+      ],
+      "projectedWorstCaseUSD": 0.4115520000000001
+    }
+  ],
+  "verdict": true
+}

@@ -43,9 +43,8 @@ export interface CcrStoreOptions {
 }
 
 function positiveFinite(value: number | undefined, fallback: number): number {
-  return value !== undefined && Number.isFinite(value) && value > 0
-    ? Math.floor(value)
-    : fallback;
+  if (value === undefined || !Number.isFinite(value)) return fallback;
+  return Math.max(1, Math.floor(value));
 }
 
 export class CcrStore {

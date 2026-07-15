@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "evidenceLevel": "live-controlled",
+  "kind": "multi-provider-qcv-canary",
+  "generatedAt": "2026-07-15T06:48:47.025Z",
+  "environment": {
+    "node": "v26.0.0",
+    "platform": "darwin",
+    "release": "25.5.0",
+    "arch": "arm64",
+    "git": {
+      "commit": "ac339ebbae920bbb55b9aa6bb7003a396cc43859",
+      "dirty": true
+    }
+  },
+  "models": {
+    "anthropic": "claude-haiku-4-5-20251001",
+    "openai": "gpt-4.1-mini"
+  },
+  "pricing": {
+    "anthropic-messages": {
+      "input": 1,
+      "cachedInput": 0.1,
+      "output": 5,
+      "unit": "USD per million tokens",
+      "source": "Anthropic public API pricing snapshot",
+      "accessedAt": "2026-07-15"
+    },
+    "openai-chat": {
+      "input": 0.4,
+      "cachedInput": 0.1,
+      "output": 1.6,
+      "unit": "USD per million tokens",
+      "source": "OpenAI public API pricing snapshot",
+      "accessedAt": "2026-07-15"
+    },
+    "openai-responses": {
+      "input": 0.4,
+      "cachedInput": 0.1,
+      "output": 1.6,
+      "unit": "USD per million tokens",
+      "source": "OpenAI public API pricing snapshot",
+      "accessedAt": "2026-07-15"
+    }
+  },
+  "budget": {
+    "maxUSD": 0.15,
+    "maxRequests": 3,
+    "paidRequests": 3,
+    "observedUSD": 0.0006538,
+    "conservativeExposureUSD": 0.0006537999999999978
+  },
+  "results": [
+    {
+      "protocol": "anthropic-messages",
+      "model": "claude-haiku-4-5-20251001",
+      "id": "json-lookup-1",
+      "result": {
+        "correct": true,
+        "text": "lookup0-17@example.com",
+        "usage": {
+          "input": 358,
+          "cachedInput": 0,
+          "output": 11
+        },
+        "costUSD": 0.000413,
+        "latencyMs": 923.6840830000001,
+        "requestId": "req_011Cd3PxHiNJYxD22LBWR4gY",
+        "stopReason": "end_turn"
+      }
+    },
+    {
+      "protocol": "openai-chat",
+      "model": "gpt-4.1-mini",
+      "id": "json-lookup-2",
+      "result": {
+        "correct": true,
+        "text": "lookup1-36@example.com",
+        "usage": {
+          "input": 270,
+          "cachedInput": 0,
+          "output": 6
+        },
+        "costUSD": 0.0001176,
+        "latencyMs": 1385.4926669999986,
+        "requestId": "req_f59efeee6b4241318d0b57a7ef0fa348",
+        "stopReason": "stop"
+      }
+    },
+    {
+      "protocol": "openai-responses",
+      "model": "gpt-4.1-mini",
+      "id": "json-lookup-3",
+      "result": {
+        "correct": true,
+        "text": "lookup2-55@example.com",
+        "usage": {
+          "input": 280,
+          "cachedInput": 0,
+          "output": 7
+        },
+        "costUSD": 0.0001232,
+        "latencyMs": 3484.5175000000017,
+        "requestId": "req_8da7cda8d7b7438790ef47ff98e2750e",
+        "stopReason": "completed"
+      }
+    }
+  ],
+  "verdict": true
+}

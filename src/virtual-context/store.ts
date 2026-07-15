@@ -281,13 +281,16 @@ export class VirtualContextStore {
         `\\b${escapeRegExp(field)}\\b\\s*(?:(is|equals?|[:=])\\s*)?(['"]?[A-Za-z0-9_.@-]+['"]?)`,
         'gi',
       ))];
-      if (matches.length > 1) return undefined;
-      const match = matches[0];
+      const selectorMatches = matches.filter((match) => {
+        if (!match[2]) return false;
+        const value = primitive(match[2]);
+        return match[1] != null || (isKeyField(field) && typeof value === 'number');
+      });
+      if (selectorMatches.length > 1) return undefined;
+      const match = selectorMatches[0];
       if (!match?.[2]) continue;
       const value = primitive(match[2]);
-      const explicitOperator = match[1] != null;
-      const implicitNumericKey = isKeyField(field) && typeof value === 'number';
-      if (explicitOperator || implicitNumericKey) selectors.push({ field, value });
+      selectors.push({ field, value });
     }
     if (selectors.length !== 1) return undefined;
 
@@ -389,13 +392,16 @@ export class VirtualContextStore {
           `\\b${escapeRegExp(field)}\\b\\s*(?:(is|equals?|[:=])\\s*)?(['"]?[A-Za-z0-9_.@-]+['"]?)`,
           'gi',
         ))];
-        if (matches.length > 1) return undefined;
-        const match = matches[0];
+        const selectorMatches = matches.filter((match) => {
+          if (!match[2]) return false;
+          const value = primitive(match[2]);
+          return match[1] != null || (isKeyField(field) && typeof value === 'number');
+        });
+        if (selectorMatches.length > 1) return undefined;
+        const match = selectorMatches[0];
         if (!match?.[2]) continue;
         const value = primitive(match[2]);
-        const explicitOperator = match[1] != null;
-        const implicitNumericKey = isKeyField(field) && typeof value === 'number';
-        if (explicitOperator || implicitNumericKey) where[field] = value;
+        where[field] = value;
       }
       const whereFields = new Set(Object.keys(where));
       const fields = mentioned.filter((field) => !whereFields.has(field));

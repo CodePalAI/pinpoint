@@ -4,14 +4,26 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## Unreleased
 
+## 0.1.1 - 2026-07-15
+
 ### Added
 
 - Deterministic one-hop unique-key QCV joins across two JSON tool results, with exact local projection and no model-planned retrieval.
 - Expanded exact-QCV breadth evidence: 42/42 positive tasks across seven categories and 20/20 adversarial controls refused.
+- Automated packed-consumer smoke coverage for all public exports, declarations, CLI help/version, and the offline demo.
+- A project Code of Conduct, five scoped starter issues, and npm/GitHub Actions dependency automation.
+
+### Changed
+
+- CI now verifies maintained Node.js 22 and 24 releases, with package smoke coverage on Linux, macOS, and Windows.
+- Release recovery verifies a signed existing tag, rebuilds one checksummed tarball, and supports granular npm tokens that cannot list organization membership.
 
 ### Safety
 
 - Exact joins fall through on duplicate selector rows, duplicate destination keys, competing datasets, multiple valid join paths, missing rows, oversized projections, or insufficient atomic store capacity. Unsafe JSON integers fall through instead of being rounded.
+- Sidecar deadlines now cover response-body parsing, and closing during proxy startup cannot leave a listening server behind.
+- Third-party proposals validate nested stage and reversible-handle shapes and cannot mutate host-owned state without claiming its region.
+- CCR limits retain finite minimum caps, use safe defaults for non-finite values, and roll back transforms whose reversible batch cannot fit.
 
 ## 0.1.0 - 2026-07-14
 

@@ -44,12 +44,13 @@ Recommended tools: VHS for deterministic terminal capture, or Screen Studio/Quic
 - [x] Make `CodePalAI/pinpoint` public before publishing npm so provenance and repository links resolve. Verified public on 2026-07-14.
 - [ ] Confirm Apache-2.0 ownership, `NOTICE`, upstream attribution, and the security contact with counsel or the responsible owner.
 - [x] Add `NPM_TOKEN` to the `release` environment for the bootstrap publication. Verified 2026-07-14.
-- [ ] Publish GitHub Release `v0.1.0`; verify the release workflow publishes `@codepal/pinpoint@0.1.0` with provenance.
-- [ ] On clean Node 22 and 24 environments across Linux, macOS, and Windows, run `npx @codepal/pinpoint@0.1.0 demo`, import every public subpath, and test `pinpoint --help`.
+- [x] Preserve signed source-only `v0.1.0`; its npm publication failed before registry upload and it is superseded by the reviewed patch release. Verified 2026-07-15.
+- [ ] Publish GitHub Release `v0.1.1`; verify the release workflow publishes `@codepal/pinpoint@0.1.1` with provenance.
+- [ ] On clean Node 22 and 24 environments across Linux, macOS, and Windows, run `npx @codepal/pinpoint@0.1.1 demo`, import every public subpath, and test `pinpoint --help`.
 - [ ] Confirm `npm view @codepal/pinpoint version repository.url dist.integrity` points to this repository.
-- [ ] After the registry confirms `@codepal/pinpoint@0.1.0`, verify the prepared `npx @codepal/pinpoint demo`, `npm install -g @codepal/pinpoint`, and `npm install @codepal/pinpoint` commands from clean environments.
+- [ ] After the registry confirms `@codepal/pinpoint@0.1.1`, verify the prepared `npx @codepal/pinpoint demo`, `npm install -g @codepal/pinpoint`, and `npm install @codepal/pinpoint` commands from clean environments.
 - [ ] Add npm version and weekly-download badges only after the registry data exists.
-- [ ] Create a signed `v0.1.0` tag and attach the npm tarball SHA-512/integrity value to the release notes.
+- [ ] Create a signed `v0.1.1` tag from the final reviewed commit and attach the npm tarball SHA-512/integrity value to the release notes.
 
 ## Gate 4: GitHub conversion surface
 
@@ -61,7 +62,7 @@ Recommended tools: VHS for deterministic terminal capture, or Screen Studio/Quic
 - [x] Add the Discussions link to the README. Verified 2026-07-14.
 - [x] Publish a welcome discussion with the demo, supported operations, current limits, and a request for sanitized traces and independent replications: [Discussion #2](https://github.com/CodePalAI/pinpoint/discussions/2).
 - [ ] Pin [Discussion #2](https://github.com/CodePalAI/pinpoint/discussions/2) in the web UI; GitHub exposes no pin-discussion API mutation.
-- [ ] Create 5-10 scoped `good first issue` items before launch. Prefer protocol fixtures, docs, adapters, and adversarial cases over architecture rewrites.
+- [x] Create 5 scoped `good first issue` items before launch: [#9](https://github.com/CodePalAI/pinpoint/issues/9), [#10](https://github.com/CodePalAI/pinpoint/issues/10), [#11](https://github.com/CodePalAI/pinpoint/issues/11), [#12](https://github.com/CodePalAI/pinpoint/issues/12), and [#13](https://github.com/CodePalAI/pinpoint/issues/13). Verified 2026-07-14.
 - [ ] Confirm bug, optimizer, and benchmark-replication issue forms work while logged out of the maintainer account.
 - [x] Add a Code of Conduct with CodePal enforcement and a private reporting channel. Verified 2026-07-14.
 

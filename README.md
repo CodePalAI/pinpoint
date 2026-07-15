@@ -1,8 +1,8 @@
 <h1 align="center">Pinpoint</h1>
 
-<p align="center"><strong>Give the model the answer, not the whole tool output.</strong></p>
+<p align="center"><strong>Your agent needs one answer. Stop resending the whole tool output.</strong></p>
 
-<p align="center">Pinpoint is a local context-virtualization layer for coding agents and LLM apps. It keeps old JSON, logs, and source output on your machine, materializes the exact slice needed for the current turn, and forwards everything else to the same model unchanged.</p>
+<p align="center">Pinpoint sits between your CLI or app and the LLM provider. It keeps bulky old JSON, logs, and source output local, sends the exact row, count, or symbol needed now, and forwards everything else to the same model unchanged.</p>
 
 <p align="center">An open-source part of the internal LLM optimization system developed at <a href="https://codepal.ai"><strong>CodePal</strong></a>.</p>
 
@@ -16,9 +16,9 @@
 
 <p align="center">
        <a href="#try-the-exact-path-offline">Start</a> ·
-       <a href="#use-it-with-your-agent-or-app">Use it</a> ·
-  <a href="#proof">Proof</a> ·
-  <a href="#how-it-works">How it works</a> ·
+         <a href="#choose-your-path">CLI / SDK / API</a> ·
+         <a href="#what-pinpoint-can-optimize">What it optimizes</a> ·
+         <a href="#proof">Proof</a> ·
        <a href="#safety-and-privacy">Safety</a> ·
        <a href="./benchmarks/REPORT.md">Benchmarks</a> ·
        <a href="./llms.txt">LLM index</a> ·
@@ -26,7 +26,7 @@
        <a href="https://codepal.ai">CodePal.ai</a>
 </p>
 
-<p align="center"><sub>Local by default | No Pinpoint account | Works with your existing provider credentials</sub></p>
+<p align="center"><sub>Same model | Same provider | Same SDK response types | Less repeated input when a safe rule matches</sub></p>
 
 <p align="center">
        <a href="./benchmarks/results/direct-anthropic-virtual.json">
@@ -38,20 +38,33 @@
 
 <!-- LAUNCH(demo-video): Put a 15-25 second terminal recording here after independent replication. Keep the generated receipt card above as the static fallback. -->
 
+## The difference in one request
+
+Your agent loaded 1,000 account rows earlier in the conversation. Now you ask:
+
+> What is the email for account ID 733?
+
+| Without Pinpoint | With Pinpoint |
+|---|---|
+| Send all 1,000 rows to the provider again | Keep the rows in bounded local memory |
+| Make the model search the pile | Look up ID 733 exactly on your machine |
+| Spend 13,821 estimated tokens on the dataset region | Send a 172-token reference plus the exact result |
+| Hope the model copies the right value | Materialize `user733@example.com` deterministically |
+
+Pinpoint does not change your model or replace your provider. It removes repeated input before the request leaves your machine, and only when it can do so under an explicit rule.
+
 ## Try the exact path offline
 
-You need Node.js 22 or newer. Run the exact-data demo directly from npm:
+You need Node.js 22 or newer and Git. Until the first npm package is live, run the real production path from a checkout:
 
 ```bash
-npx @codepal/pinpoint demo
-```
-
-Or install the CLI globally:
-
-```bash
-npm install -g @codepal/pinpoint
+git clone https://github.com/CodePalAI/pinpoint.git
+cd pinpoint
+npm install && npm link
 pinpoint demo
 ```
+
+<!-- LAUNCH(npm): Replace the checkout flow above with `npx @codepal/pinpoint demo` and `npm install -g @codepal/pinpoint` only after the registry confirms the package. -->
 
 The demo runs the production exact-data path against 1,000 JSON rows. It needs no API key, model call, or network request:
 
@@ -67,69 +80,66 @@ model-driven fallback: not needed
 network requests: 0
 ```
 
-## Why not summarize it?
+## What you get
 
-Summaries are useful when the model needs the gist. They are a bad primitive for exact IDs, counts, paths, and rows.
+- **Less repeated input.** Large old tool results stop riding along in full when the next question needs one supported lookup, count, projection, or join.
+- **More useful context.** The model's window stays available for your current code, instructions, and reasoning instead of yesterday's 10,000-line payload.
+- **Exact structured answers.** Pinpoint computes supported operations locally. It does not ask the model to summarize an ID, count, path, or row and hope it survives.
+- **No provider migration.** Keep your model, API key, SDK, streaming behavior, and response types.
+- **A safe no-op.** If the request is short, recent, ambiguous, unsupported, or not smaller after optimization, Pinpoint forwards the original request.
 
-| Approach | What reaches the provider | Exact structured data | Best fit |
-|---|---|---:|---|
-| Send raw history | The entire old tool result | Yes | Small or recent context |
-| Summarize or compress | A reduced approximation | Depends on the compressor | Prose and gist-heavy context |
-| **Pinpoint exact path** | A stable dataset reference plus the exact requested slice | **Yes, for supported operations** | Large old JSON, logs, and source output |
+Pinpoint helps on requests that actually contain reusable bulk context. Ordinary chat and small prompts may not change at all.
 
-If a question is ambiguous, unsupported, or unsafe to answer locally, Pinpoint leaves the original result alone. Optional compression integrations can handle other request regions without touching the bytes owned by the exact path.
+## Choose your path
 
-### How Pinpoint fits
-
-These techniques solve different parts of the context problem and can coexist:
-
-| Technique | Primary job | Relationship to Pinpoint |
+| You use an LLM through... | Start here | What stays unchanged |
 |---|---|---|
-| Provider prompt caching | Discounts repeated byte-identical prefixes | Pinpoint keeps stable dataset references across supported exact turns so caches can still help |
-| Provider compaction | Shortens conversation history inside one provider | Pinpoint intercepts large provider tool results before the request and works across Anthropic and OpenAI protocols |
-| Text or image compression | Reduces general prose, code, or static context | Pinpoint composes pinned [Headroom](https://github.com/headroomlabs-ai/headroom) and [pxpipe](https://github.com/teamchong/pxpipe) integrations on request regions the exact path does not own |
-| **Pinpoint exact path** | Materializes a supported lookup or count from local old tool data | Keeps the original bytes local and passes through ambiguous or unsupported questions |
+| A coding CLI | `pinpoint wrap <agent>` | The CLI, model, login, and provider |
+| Anthropic or OpenAI TypeScript SDK | `withPinpoint(client)` | Native client methods, return types, streams, retries |
+| Any other language or HTTP client | `pinpoint proxy` | Your client and provider protocol |
+| Nothing yet; you just want proof | `pinpoint demo` | No key, model call, sidecar, or network needed |
 
-Pinpoint does not claim to replace provider caching, compaction, or general compression. It adds an exact structured-data path and a transactional runtime that prevents optimizers from rewriting the same bytes twice.
+### Coding CLI: the main path
 
-## 22,614 tokens in. 594 tokens out.
-
-LLM agents routinely resend thousands of lines of old JSON, logs, source code, and tool output on every turn. The model may need one row. It gets billed for the whole pile.
-
-Pinpoint sits between your app and the provider. The full data stays in bounded local memory; supported lookups and counts are computed exactly on your machine. You keep the same model, SDK, and response format.
-
-In a controlled paid Haiku 4.5 pilot, measured against sending the same requests directly to the model:
-
-| Workload | Direct input | Pinpoint input | Input saved | Exact score |
-|---|---:|---:|---:|---:|
-| 2 structured JSON/log tasks | 22,614 | 594 | **97.4%** | 1/2 -> 2/2 |
-
-Modeled cost, calculated from provider-reported tokens and published prices, fell 97.1%. This was a small controlled pilot with synthetic fixtures, one model, and one run per task. It shows what Pinpoint did when requests contained large old tool output. Short prompts and ordinary chat may not change at all.
-
-## Use it with your agent or app
-
-### Coding agents
-
-- **Claude Code:** run `pinpoint wrap claude`. Every request is checked automatically. Claude subscription/OAuth traffic stays in safer subscription mode, so the exact-data path remains off. Optional text compression may still run if installed.
-- **Codex:** run `pinpoint wrap codex`. Every request is checked automatically. Codex CLI traffic uses the safer subscription mode.
-- **Aider, OpenCode, Goose, OpenHands, or Vibe:** run `pinpoint agent list`, then `pinpoint wrap <agent>`. Requests made with provider API keys can use the exact-data rules listed below.
-- **GitHub Copilot CLI:** run `pinpoint doctor copilot`, then `pinpoint wrap copilot`. Pinpoint uses the existing Copilot subscription login through the optional text-compression integration.
-- **Cursor:** run `pinpoint wrap cursor` to print the base URL setup. Cursor traffic stays in safer subscription mode.
-- **Cline or Continue:** run `pinpoint wrap cline` or `pinpoint wrap continue` to print the base URL setup. API-key requests can use the exact-data rules.
-
-`wrap` changes only the launched process environment. It does not rewrite your agent configuration.
-
-**Automatic does not mean forced compression.** Pinpoint checks every request from the wrapped process, changes only requests that match a safe rule, and forwards everything else unchanged. You must use `pinpoint wrap ...` each time you launch the agent; plain future launches bypass Pinpoint.
-
-### TypeScript SDK
-
-Install Pinpoint in your app, alongside the provider SDK you already use:
+Run your usual agent through Pinpoint:
 
 ```bash
-npm install @codepal/pinpoint
+pinpoint agent list
+
+pinpoint wrap claude      # Claude Code
+pinpoint wrap codex       # Codex CLI
+pinpoint wrap opencode    # OpenCode
+pinpoint wrap aider       # Aider
 ```
 
-Pinpoint is ESM-only. TypeScript projects should use `"module": "NodeNext"` and `"moduleResolution": "NodeNext"`; JavaScript projects should set `"type": "module"` or use `.mjs` files.
+Pinpoint changes only the launched process environment. It does not rewrite the agent's config, and a future plain launch bypasses Pinpoint.
+
+**What optimization applies depends on how that CLI authenticates:**
+
+| CLI traffic | Exact local JSON/log/source path | What to expect |
+|---|:---:|---|
+| Provider API key | **On** | Supported old tool results can become exact local answers instead of full repeated payloads |
+| Subscription or OAuth | Off | Conservative pass-through posture; optional Headroom text compression may still run if installed |
+| GitHub Copilot CLI | Delegated | `pinpoint doctor copilot`, then `pinpoint wrap copilot`; compression is handled by the optional Headroom integration |
+| Cursor, Cline, Continue | Config printed | `pinpoint wrap <agent>` prints the local base URL; keep the proxy running while the editor uses it |
+
+> **About the 97.4% headline:** it came from provider API-key traffic containing large eligible old tool output. It is not a promise for subscription/OAuth CLI sessions or ordinary chat.
+
+Pinpoint checks every request, applies only a matching safe rule, and forwards everything else unchanged. Automatic routing is not forced compression.
+
+### TypeScript SDK: native client in, native response out
+
+Until Pinpoint is on npm, build a checkout and install that local directory in your app:
+
+```bash
+git clone https://github.com/CodePalAI/pinpoint.git
+cd pinpoint && npm install && npm run build
+cd /path/to/your-app && npm install /path/to/pinpoint
+```
+
+<!-- LAUNCH(npm): Replace the checkout flow above with `npm install @codepal/pinpoint` after registry verification. -->
+
+Pinpoint is ESM-only. TypeScript projects should use `"module": "NodeNext"` and `"moduleResolution": "NodeNext"`; JavaScript projects should set `"type": "module"` or use `.mjs` files. Requests made with your provider API key can use the exact-data path.
 
 Wrap an Anthropic client:
 
@@ -140,16 +150,16 @@ import { withPinpoint } from '@codepal/pinpoint/anthropic';
 const anthropic = await withPinpoint(new Anthropic());
 
 try {
-       const message = await anthropic.messages.create({
-              model: 'claude-haiku-4-5',
-              max_tokens: 1024,
-              messages: [{ role: 'user', content: 'Find the failed account in this tool output...' }],
-       });
+  const message = await anthropic.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: 'Find the failed account in this tool output...' }],
+  });
 
-       console.log(message.content);
-       console.log(anthropic.pinpoint.stats());
+  console.log(message.content);
+  console.log(anthropic.pinpoint.stats());
 } finally {
-       await anthropic.pinpoint.close();
+  await anthropic.pinpoint.close();
 }
 ```
 
@@ -162,21 +172,21 @@ import { withPinpoint } from '@codepal/pinpoint/openai';
 const openai = await withPinpoint(new OpenAI());
 
 try {
-       const response = await openai.responses.create({
-              model: 'gpt-4.1-mini',
-              input: 'Find the failed account in this tool output...',
-       });
+  const response = await openai.responses.create({
+    model: 'gpt-4.1-mini',
+    input: 'Find the failed account in this tool output...',
+  });
 
-       console.log(response.output_text);
-       console.log(openai.pinpoint.stats());
+  console.log(response.output_text);
+  console.log(openai.pinpoint.stats());
 } finally {
-       await openai.pinpoint.close();
+  await openai.pinpoint.close();
 }
 ```
 
 `withPinpoint()` starts an ephemeral loopback proxy and points that client at it. The official SDK still owns response parsing and streaming, so its native return types and stream APIs stay intact. `close()` stops Pinpoint and restores the client's original `baseURL`. Provider keys remain configured on the original client and are never written to disk.
 
-### Proxy or another language
+### Any language or HTTP client: change the base URL
 
 Start Pinpoint:
 
@@ -194,32 +204,48 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:8788 your-command
 OPENAI_BASE_URL=http://127.0.0.1:8788/v1 your-command
 ```
 
-Keep your normal provider key configured in the client. Pinpoint forwards it to the provider and does not write it to disk.
+Keep your normal provider key configured in the client. Pinpoint forwards it to the same provider and does not write it to disk. Anthropic Messages, OpenAI Chat Completions, and OpenAI Responses are supported.
 
-## What Pinpoint changes and what it leaves alone
+## What Pinpoint can optimize
 
-There is no hidden category. The default rules are concrete:
-
-A **tool result** is data an agent gets back from reading a file, running a shell command, searching, querying a database, or calling an API. **Older** means the result is already in the conversation history rather than the current turn.
+Pinpoint targets repeated **tool results**: data your agent already received from a file read, shell command, search, database, or API call. **Older** means it is already in conversation history rather than the current turn.
 
 By default, the exact-data path considers older tool results between 6,000 and 2,000,000 characters. Within that range:
 
-| What the request contains | What the exact-data path does |
-|---|---|
-| JSON plus a clear field/value lookup, such as "email for id 73" | Stores the full JSON locally and sends the one exact matching value |
-| JSON plus a filtered count, such as "how many records have active is true?" | Counts matching records locally and sends the exact number |
-| Two JSON arrays with one explicit selector and one unique shared key, such as "email for order_id 73" | Follows the one-to-one key locally and sends the exact projected value |
-| Logs plus a level count, such as "how many ERROR lines?" | Counts matching log lines locally and sends the exact number |
-| Source code plus "which classes are exported?" | Finds and sends the exact `export class` lines |
-| A range, negation, repeated selector, competing datasets or join paths, duplicate keys, integers outside JavaScript's exact JSON range, or unclear question | Leaves the original tool result unchanged |
-| A short prompt, normal chat, recent turn, image, or unsupported content | Leaves it unchanged; another installed compression module may still handle a different part of the request |
-| Subscription or OAuth traffic | Keeps the exact-data path off; other safe configured compression may still run |
+| You ask next... | Pinpoint does locally | The provider receives |
+|---|---|---|
+| "What is the email for ID 73?" | Exact JSON lookup | The matching value, not the whole array |
+| "How many records have `active: true`?" | Exact filtered count | The exact number |
+| "Which customer owns order 981?" | One-hop unique-key join across two JSON results | The bounded joined projection |
+| "How many ERROR lines are there?" | Boundary-aware log count | The exact count |
+| "Which classes are exported?" | Source export scan | The matching `export class` lines |
+| A range, negation, duplicate key, competing dataset, or unclear question | Refuse to guess | The original tool result, unchanged |
+
+Pinpoint intentionally leaves short prompts, normal chat, recent turns, images, unsupported content, and unsafe or ambiguous operations alone. Subscription/OAuth traffic keeps the exact-data path off. Optional compression integrations may still reduce other, non-overlapping request regions.
 
 Optional compression modules can reduce other parts of a request, but Pinpoint never applies two transformations to the same bytes.
 
 Every request gets an honest savings report, including negative savings and extra provider rounds used for local retrieval.
 
 The safe exact-data path is already on. Most users do not need to configure it.
+
+<details>
+<summary><strong>How this differs from summarization, prompt caching, and compaction</strong></summary>
+
+<br>
+
+Summaries are useful when the model needs the gist. They are a poor primitive for exact IDs, counts, paths, and rows. Pinpoint's exact path retains the original locally and computes only supported deterministic operations.
+
+| Technique | Primary job | Relationship to Pinpoint |
+|---|---|---|
+| Provider prompt caching | Discounts repeated byte-identical prefixes | Pinpoint keeps stable dataset references across supported exact turns so caching can still help |
+| Provider compaction | Shortens provider-managed conversation history | Pinpoint acts before the request on intercepted tool results |
+| Text or image compression | Reduces general prose, code, or static context | Optional [Headroom](https://github.com/headroomlabs-ai/headroom) and [pxpipe](https://github.com/teamchong/pxpipe) integrations handle regions the exact path does not own |
+| Pinpoint exact path | Materializes a supported answer from local old tool data | Keeps exact bytes local and passes through questions it cannot answer safely |
+
+Pinpoint composes with these techniques; it does not claim to replace them.
+
+</details>
 
 ## How it works
 
@@ -330,7 +356,7 @@ pinpoint integration list    # installed compression and policy modules
 pinpoint mcp                 # MCP tools over stdio
 ```
 
-Provider wrappers are exported from `pinpoint/anthropic` and `pinpoint/openai`. Other public subpaths expose the integration kernel, protocols, normalized output events, agent adapters, virtual-context APIs, capture/replay, and OTLP telemetry.
+Provider wrappers are exported from `@codepal/pinpoint/anthropic` and `@codepal/pinpoint/openai`. Other public subpaths expose the integration kernel, protocols, normalized output events, agent adapters, virtual-context APIs, capture/replay, and OTLP telemetry.
 
 </details>
 
@@ -367,7 +393,7 @@ The offline corpus runs real Pinpoint transforms over agent-shaped requests and 
 
 This offline result validates transformation and token accounting, not model quality. The paid pilots are also small: synthetic fixtures, one model, one randomized pair per task, and no retries. Cache behavior, retrievals, model choice, and how often real requests match the rules can change the net saving.
 
-The broader exact-data test suite runs 42 deterministic tasks across JSON lookup, filtered counts, logs, source exports, tabular JSON, nested projections, and one-hop unique-key JSON joins. It produced 42/42 exact answers, replaced the large old tool output in 42/42 cases, and never exposed model-planned retrieval. The measured tool-output regions fell from 144,272 to 7,583 estimated tokens. It also refused 20/20 ambiguous, competing-dataset, unsafe-join, and lossy-number controls. This is offline operation coverage, not live-model quality evidence.
+The broader exact-data test suite runs 42 deterministic tasks across JSON lookup, filtered counts, logs, source exports, tabular JSON, nested projections, and one-hop unique-key joins. It produced 42/42 exact materializations, replaced the large old tool output in 42/42 cases, and never exposed model-planned retrieval. The measured tool-output regions fell from 144,272 to 7,583 estimated tokens. It also refused 20/20 ambiguous, competing-dataset, unsafe-join, and lossy-number controls. This is offline operation coverage, not live-model quality evidence.
 
 The full [benchmark report](./benchmarks/REPORT.md) keeps live, offline, agentic, and simulated evidence separate. It also preserves failed experiments instead of averaging them into successful results.
 
@@ -491,7 +517,7 @@ node benchmarks/proof.mjs       # constructed additivity check
 node benchmarks/rd_frontier.mjs # simulated RD surface
 node benchmarks/adaptive.mjs    # controller simulation
 npm run bench:virtual           # QCV vs current full stack, no provider calls
-npm run bench:qcv-quality       # 36 exact structured tasks, no provider calls
+npm run bench:qcv-quality       # 42 exact tasks + 20 refusal controls, no provider calls
 npm run bench:profile           # paired direct-vs-proxy local profile + raw samples
 npm run bench:profile:isolated  # separate load, proxy, and upstream processes
 ```

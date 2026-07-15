@@ -97,16 +97,14 @@ jobs:
           mkdir ../npm-cli
           tar -xzf npm-12.0.1.tgz -C ../npm-cli
           test "$(node ../npm-cli/package/bin/npm-cli.js --version)" = "12.0.1"
-      - name: Verify npm scope ownership
+      - name: Verify npm authentication
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
           NPM_USER=$(node "$NPM_CLI" whoami)
-          MEMBERSHIP=$(node "$NPM_CLI" org ls codepal "$NPM_USER" --json)
-          ROLE=$(node -e 'const membership = JSON.parse(process.argv[1]); process.stdout.write(membership[process.argv[2]] ?? "")' "$MEMBERSHIP" "$NPM_USER")
-          test -n "$ROLE"
-          echo "authenticated npm user $NPM_USER has codepal organization role $ROLE"
+          test -n "$NPM_USER"
+          echo "authenticated npm user: $NPM_USER"
       - name: Check whether version is already published
         id: registry
         run: |

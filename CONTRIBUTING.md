@@ -11,6 +11,7 @@ npm ci
 npm run typecheck
 PINPOINT_HEADROOM_AUTOSPAWN=0 npm test
 npm run build
+npm run package:smoke
 ```
 
 The default suite uses fake local upstreams and does not require provider credentials. Two live-sidecar tests are skipped unless their explicit environment gate is enabled.

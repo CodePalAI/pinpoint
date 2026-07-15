@@ -1,6 +1,6 @@
 {
   "name": "@codepal/pinpoint",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CodePal's open-source LLM context optimizer for reducing repeated input while preserving exact tool data.",
   "type": "module",
   "license": "Apache-2.0",
@@ -97,6 +97,7 @@
   "scripts": {
     "assets:readme": "node scripts/render-readme-assets.mjs",
     "docs:check": "node scripts/check-readme.mjs",
+    "package:smoke": "node scripts/smoke-package.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "npm run clean && tsc -p tsconfig.json",
     "prepare": "npm run build",
@@ -114,7 +115,13 @@
     "bench:anthropic:preflight": "npm run build && node benchmarks/v2/direct_anthropic.mjs --phase preflight",
     "bench:anthropic:canary": "npm run build && node benchmarks/v2/direct_anthropic.mjs --phase canary",
     "bench:anthropic": "npm run build && node benchmarks/v2/direct_anthropic.mjs --phase benchmark",
-    "prepublishOnly": "npm run assets:readme && npm run docs:check && npm run typecheck && npm test && npm run build"
+    "bench:evidence:self-test": "npm run build && node benchmarks/v2/evidence_gate.mjs --phase self-test",
+    "bench:evidence:preflight": "npm run build && node benchmarks/v2/evidence_gate.mjs --phase preflight",
+    "bench:evidence:canary": "npm run build && node benchmarks/v2/evidence_gate.mjs --phase canary",
+    "bench:evidence": "npm run build && node benchmarks/v2/evidence_gate.mjs --phase benchmark",
+    "bench:agent-traces:canary": "npm run build && node benchmarks/v2/agent_trace_gate.mjs --phase canary",
+    "bench:agent-traces": "npm run build && node benchmarks/v2/agent_trace_gate.mjs --phase benchmark",
+    "prepublishOnly": "npm run assets:readme && npm run docs:check && npm run typecheck && npm test && npm run build && npm run package:smoke"
   },
   "publishConfig": {
     "access": "public",

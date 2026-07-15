@@ -69,6 +69,25 @@ describe('CcrStore', () => {
     expect(store.size).toBe(0);
   });
 
+  it('clamps finite non-positive CCR limits to one', () => {
+    let now = 0;
+    const store = new CcrStore(undefined, undefined, {
+      maxEntries: 0,
+      maxStoredBytes: -10,
+      ttlMs: 0,
+      now: () => now,
+    });
+    store.registerReversible([{ id: 'one', origin: 'optical', original: 'x' }]);
+    store.registerReversible([{ id: 'two', origin: 'optical', original: 'y' }]);
+
+    expect(store.size).toBe(1);
+    expect(store.has('one')).toBe(false);
+    expect(store.has('two')).toBe(true);
+    expect(store.bytes).toBe(1);
+    now = 2;
+    expect(store.size).toBe(0);
+  });
+
   it('rejects a transformed request when its reversible batch cannot fit', async () => {
     const integration: ProcessorIntegration = {
       id: 'test.oversized-reversible',

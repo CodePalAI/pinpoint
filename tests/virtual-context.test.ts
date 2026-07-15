@@ -40,6 +40,9 @@ describe('VirtualContextStore', () => {
       fields: ['email'],
     });
     expect(prefetch?.result).toContain('two@example.com');
+    expect(
+      store.prefetch(descriptor, 'What is the email for id 2? Return only the email address.')?.result,
+    ).toContain('two@example.com');
   });
 
   it('queries line-oriented text without changing stored bytes', () => {

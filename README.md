@@ -8,9 +8,13 @@
                   The exact context layer for AI agents
 </pre></div>
 
-<p align="center"><strong>Your agent already read it. Stop paying the model to read it again.</strong></p>
+<p align="center"><strong>Save money on LLM input tokens. Pay for the answer, not the whole tool output.</strong></p>
 
-<p align="center"><strong>On matching structured tool output: 97.2% fewer input tokens and 96.8% lower modeled cost than Headroom · 150/150 exact</strong></p>
+<p align="center">Pinpoint answers exact questions over old JSON, logs, and source locally, then sends only the row, count, symbol, or join your model needs.</p>
+
+<p align="center"><strong>150-prompt live gate: Raw $1.198998 · Headroom $1.062131 · Pinpoint $0.034462</strong></p>
+
+<p align="center"><strong>96.8% lower modeled cost than Headroom · 97.2% fewer input tokens · 150/150 exact</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
@@ -37,7 +41,16 @@
 
 ---
 
-Pinpoint keeps bulky old JSON, logs, and source output on your machine. When your agent needs one row, count, symbol, or unique-key join, Pinpoint sends that exact result instead of resending the whole payload. If it cannot answer safely or make the request smaller, it forwards the original request unchanged.
+## What your prompts turn into
+
+| Your next prompt | Without Pinpoint, the model receives | With Pinpoint, the model receives |
+|---|---|---|
+| "What is the email for account ID 733?" | The full 1,000-row JSON again: 13,821 estimated tokens | A small dataset reference plus `user733@example.com`: 172 estimated tokens |
+| "How many ERROR lines are there?" | The entire old log, then the model tries to count it | The exact count computed locally |
+| "Who owns order 981?" | Both complete order and customer arrays | The exact joined customer projection |
+| An ambiguous range, duplicate key, or unsupported question | The original tool output | The original tool output, unchanged |
+
+That is how Pinpoint saves money: it removes repeated input tokens before provider billing. In the live gate, Headroom sent 1,713,184 input tokens and Pinpoint sent 48,439. Raw requests sent 1,899,030. Pinpoint does not directly reduce output-token pricing, and prompts that do not match a safe exact rule pass through unchanged.
 
 <p align="center">
   <a href="./benchmarks/results/evidence-gate.first-party-macos-arm64-20260715.json">
@@ -78,21 +91,6 @@ exact answer materialized: user733@example.com
 model-driven fallback: not needed
 network requests: 0
 ```
-
-## Why exact context wins
-
-Your agent loaded 1,000 account rows earlier in the conversation. Now you ask:
-
-> What is the email for account ID 733?
-
-| Without Pinpoint | With Pinpoint |
-|---|---|
-| Send all 1,000 rows to the provider again | Keep the rows in bounded local memory |
-| Make the model search the pile | Look up ID 733 exactly on your machine |
-| Spend 13,821 estimated tokens on the dataset region | Send a 172-token reference plus the exact result |
-| Hope the model copies the right value | Materialize `user733@example.com` deterministically |
-
-Pinpoint does not change your model or replace your provider. It removes repeated input before the request leaves your machine, and only when it can do so under an explicit rule.
 
 ## What it does
 

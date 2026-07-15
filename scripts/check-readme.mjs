@@ -106,14 +106,23 @@ for (const value of evidenceStrings) {
   if (!proofAsset.includes(value)) fail(`proof asset is missing paid-receipt value: ${value}`);
 }
 
+for (const value of [
+  `$${receipt.summary.arms.raw.costUSD.toFixed(6)}`,
+  `$${headroom.costUSD.toFixed(6)}`,
+  `$${qcv.costUSD.toFixed(6)}`,
+  percentage(comparison.inputReduction),
+]) {
+  if (!readme.includes(value)) fail(`README is missing above-fold value: ${value}`);
+}
+
 if (!readme.includes('./assets/qcv-evidence-gate.svg')) fail('README does not render the proof asset');
 if (!existsSync(join(root, 'llms.txt'))) fail('llms.txt is missing');
 if (!readme.includes('./llms.txt')) fail('README does not link llms.txt');
 const endUserSignals = [
   'The exact context layer for AI agents',
-  'Your agent already read it. Stop paying the model to read it again.',
+  'Save money on LLM input tokens. Pay for the answer, not the whole tool output.',
+  '## What your prompts turn into',
   '## Get started (60 seconds)',
-  '## Why exact context wins',
   '## What it does',
   '## Works with your stack',
   '## Choose your path',

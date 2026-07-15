@@ -35,11 +35,25 @@ describe('classifyAuthMode', () => {
     expect(classifyAuthMode({})).toBe('payg');
   });
 
-  it('lets the subscription User-Agent win over the bearer token shape', () => {
-    // A Claude Code session carries an sk-ant-oat token but is a subscription client.
+  it('lets an explicit API key override an agent User-Agent', () => {
     expect(
       classifyAuthMode({ 'user-agent': 'claude-code/1', authorization: 'Bearer sk-ant-api03-x' }),
-    ).toBe('subscription');
+    ).toBe('payg');
+    expect(
+      classifyAuthMode({ 'user-agent': 'claude-code/1', 'x-api-key': 'sk-ant-api03-x' }),
+    ).toBe('payg');
+    expect(
+      classifyAuthMode({ 'user-agent': 'codex-cli/1', authorization: 'Bearer sk-proj-openai' }),
+    ).toBe('payg');
+  });
+
+  it('keeps OAuth agent traffic in stealth mode', () => {
+    expect(
+      classifyAuthMode({ 'user-agent': 'claude-code/1', authorization: 'Bearer sk-ant-oat01-x' }),
+    ).toBe('oauth');
+    expect(
+      classifyAuthMode({ 'user-agent': 'codex-cli/1', authorization: 'Bearer a.b.c' }),
+    ).toBe('oauth');
   });
 
   it('is case-insensitive on header names', () => {

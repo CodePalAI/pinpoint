@@ -187,15 +187,17 @@ function prepareWorkspace(task) {
   return workspace;
 }
 
-function promptFor(task) {
+function promptFor(task, workspace) {
   if (task.join) {
     return (
-      'Use your file-reading or shell tools to read orders.json and customers.json in full. ' +
+      'You must use your file-reading or shell tools before answering. Read these files in full: ' +
+      `${join(workspace, 'orders.json')} and ${join(workspace, 'customers.json')}. ` +
       `What is the email for order_id ${task.target}? Return only the email address.`
     );
   }
   return (
-    'Use your file-reading or shell tools to read dataset.json in full. ' +
+    'You must use your file-reading or shell tools before answering. Read this file in full: ' +
+    `${join(workspace, 'dataset.json')}. ` +
     `What is the email for id ${task.target}? Return only the email address.`
   );
 }
@@ -204,7 +206,8 @@ function spawnAgent(task, workspace, proxyUrl, keys, secrets) {
   const commonEnv = { ...process.env, CI: '1', NO_COLOR: '1', TERM: 'dumb' };
   delete commonEnv.COPILOT_AGENT;
   delete commonEnv.COPILOT_DEBUG_NONCE;
-  const prompt = promptFor(task);
+  const prompt = promptFor(task, workspace);
+  const debugFile = join(workspace, 'agent-debug.log');
   const command = task.agent === 'claude' ? 'claude' : 'codex';
   const args = task.agent === 'claude'
     ? [
@@ -213,6 +216,7 @@ function spawnAgent(task, workspace, proxyUrl, keys, secrets) {
         '--max-budget-usd', '0.20',
         '--output-format', 'json',
         '--no-session-persistence',
+        '--debug-file', debugFile,
         '--allowedTools', 'Read',
       ]
     : [
@@ -258,7 +262,11 @@ function spawnAgent(task, workspace, proxyUrl, keys, secrets) {
         signal,
         correct: output.toLowerCase().includes(task.expected.toLowerCase()),
         outputSha256: sha256(output),
+        outputTail: output.slice(-1_000),
         stderrTail: stderr.slice(-500),
+        debugTail: task.agent === 'claude' && existsSync(debugFile)
+          ? sanitize(readFileSync(debugFile, 'utf8').slice(-2_000), secrets, workspace)
+          : '',
       });
     });
   });
@@ -277,6 +285,7 @@ async function startForwarder(provider, injectRetry, budget) {
   let failurePending = injectRetry;
   let requests = 0;
   let injectedFailures = 0;
+  const errors = [];
   const server = http.createServer((request, response) => {
     void readRequest(request).then(async (body) => {
       requests += 1;
@@ -300,9 +309,23 @@ async function startForwarder(provider, injectRetry, budget) {
       }
       budget.reserve(provider, body.length);
       const root = provider === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com';
-      const headers = { ...request.headers };
-      delete headers.host;
-      delete headers['content-length'];
+      const headers = new Headers();
+      const skippedHeaders = new Set([
+        'connection',
+        'content-length',
+        'host',
+        'keep-alive',
+        'proxy-authenticate',
+        'proxy-authorization',
+        'te',
+        'trailer',
+        'transfer-encoding',
+        'upgrade',
+      ]);
+      for (const [name, value] of Object.entries(request.headers)) {
+        if (skippedHeaders.has(name) || value == null) continue;
+        headers.set(name, Array.isArray(value) ? value.join(', ') : value);
+      }
       const upstream = await fetch(`${root}${request.url}`, {
         method: request.method,
         headers,
@@ -318,6 +341,7 @@ async function startForwarder(provider, injectRetry, budget) {
       response.writeHead(upstream.status, responseHeaders);
       response.end(payload);
     }).catch((error) => {
+      errors.push(error instanceof Error ? error.message : String(error));
       response.writeHead(502, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ error: { message: error.message } }));
     });
@@ -326,7 +350,7 @@ async function startForwarder(provider, injectRetry, budget) {
   const address = server.address();
   return {
     url: `http://127.0.0.1:${address.port}`,
-    stats: () => ({ requests, injectedFailures }),
+    stats: () => ({ requests, injectedFailures, errors }),
     close: () => new Promise((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     ),
@@ -335,6 +359,28 @@ async function startForwarder(provider, injectRetry, budget) {
 
 function hasAppliedQcv(record) {
   return record.report?.rows?.some((row) => row.stage === 'virtual' && row.applied) ?? false;
+}
+
+function structuralDiagnostics(records) {
+  const rows = records.map((record) => {
+    const body = record.originalBody ?? {};
+    const strings = [];
+    const pending = [body];
+    while (pending.length > 0) {
+      const value = pending.pop();
+      if (typeof value === 'string') strings.push(value.length);
+      else if (Array.isArray(value)) pending.push(...value);
+      else if (value != null && typeof value === 'object') pending.push(...Object.values(value));
+    }
+    return {
+      provider: record.provider,
+      maxStringChars: Math.max(0, ...strings),
+      virtual: record.report?.rows
+        ?.filter((row) => row.stage === 'virtual')
+        .map((row) => ({ applied: row.applied, reason: row.reason })) ?? [],
+    };
+  });
+  return { records: records.length, rows };
 }
 
 function textContent(content) {
@@ -514,13 +560,23 @@ async function runSession(task, keys, secrets, budget) {
     if (!existsSync(sourceCapture)) {
       throw new Error(
         `${task.id}: agent exited ${result.code}${result.signal ? ` (${result.signal})` : ''} ` +
-          `before its first provider request: ${result.stderrTail}`,
+          `before its first provider request: ${result.stderrTail} debug: ${result.debugTail}`,
       );
     }
     const records = readCaptureFile(sourceCapture);
     const applied = records.filter(hasAppliedQcv);
     const sourceRecord = applied.at(-1);
-    if (!sourceRecord) throw new Error(`${task.id}: real agent produced no QCV-applied request`);
+    if (!sourceRecord) {
+      throw new Error(
+        `${task.id}: real agent produced no QCV-applied request: ` +
+          JSON.stringify({
+            ...structuralDiagnostics(records),
+            agentExitCode: result.code,
+            agentCorrect: result.correct,
+            outputTail: result.outputTail,
+          }),
+      );
+    }
     const seen = new Set();
     let retryObserved = false;
     for (const record of records) {

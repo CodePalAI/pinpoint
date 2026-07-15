@@ -53,11 +53,6 @@ function headerValue(headers: HeaderBag, name: string): string {
  * revoked subscription).
  */
 export function classifyAuthMode(headers: HeaderBag): AuthMode {
-  const ua = headerValue(headers, 'user-agent').toLowerCase();
-  for (const prefix of SUBSCRIPTION_UA_PREFIXES) {
-    if (ua.includes(prefix)) return 'subscription';
-  }
-
   const auth = headerValue(headers, 'authorization');
   if (auth.startsWith('Bearer ')) {
     const token = auth.slice('Bearer '.length);
@@ -74,6 +69,11 @@ export function classifyAuthMode(headers: HeaderBag): AuthMode {
 
   if (headerValue(headers, 'x-api-key')) return 'payg';
   if (headerValue(headers, 'x-goog-api-key')) return 'payg';
+
+  const ua = headerValue(headers, 'user-agent').toLowerCase();
+  for (const prefix of SUBSCRIPTION_UA_PREFIXES) {
+    if (ua.includes(prefix)) return 'subscription';
+  }
 
   return 'payg';
 }

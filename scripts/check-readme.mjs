@@ -97,6 +97,21 @@ for (const value of evidenceStrings) {
 if (!readme.includes('./assets/qcv-paid-pilot.svg')) fail('README does not render the proof asset');
 if (!existsSync(join(root, 'llms.txt'))) fail('llms.txt is missing');
 if (!readme.includes('./llms.txt')) fail('README does not link llms.txt');
+const endUserSignals = [
+  'Your agent needs one answer. Stop resending the whole tool output.',
+  '## The difference in one request',
+  '## Choose your path',
+  '### Coding CLI: the main path',
+  '### TypeScript SDK: native client in, native response out',
+  '### Any language or HTTP client: change the base URL',
+  'Provider API key',
+  'Subscription or OAuth',
+  'About the 97.4% headline',
+  '## What Pinpoint can optimize',
+];
+for (const signal of endUserSignals) {
+  if (!readme.includes(signal)) fail(`README is missing end-user onboarding signal: ${signal}`);
+}
 if (/[]/.test(readme)) fail('README contains control characters');
 if (/[—–“”]/.test(readme)) fail('README contains non-ASCII dash or quote punctuation');
 

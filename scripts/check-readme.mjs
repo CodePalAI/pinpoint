@@ -110,8 +110,12 @@ if (!readme.includes('./assets/qcv-evidence-gate.svg')) fail('README does not re
 if (!existsSync(join(root, 'llms.txt'))) fail('llms.txt is missing');
 if (!readme.includes('./llms.txt')) fail('README does not link llms.txt');
 const endUserSignals = [
-  'Your agent needs one answer. Stop resending the whole tool output.',
-  '## The difference in one request',
+  'The exact context layer for AI agents',
+  'Your agent already read it. Stop paying the model to read it again.',
+  '## Get started (60 seconds)',
+  '## Why exact context wins',
+  '## What it does',
+  '## Works with your stack',
   '## Choose your path',
   '### Coding CLI: the main path',
   '### TypeScript SDK: native client in, native response out',

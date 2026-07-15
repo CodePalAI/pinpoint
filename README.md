@@ -1,32 +1,43 @@
-<h1 align="center">Pinpoint</h1>
+<div align="center"><pre>
+██████╗ ██╗███╗   ██╗██████╗  ██████╗ ██╗███╗   ██╗████████╗
+██╔══██╗██║████╗  ██║██╔══██╗██╔═══██╗██║████╗  ██║╚══██╔══╝
+██████╔╝██║██╔██╗ ██║██████╔╝██║   ██║██║██╔██╗ ██║   ██║
+██╔═══╝ ██║██║╚██╗██║██╔═══╝ ██║   ██║██║██║╚██╗██║   ██║
+██║     ██║██║ ╚████║██║     ╚██████╔╝██║██║ ╚████║   ██║
+╚═╝     ╚═╝╚═╝  ╚═══╝╚═╝      ╚═════╝ ╚═╝╚═╝  ╚═══╝   ╚═╝
+                  The exact context layer for AI agents
+</pre></div>
 
-<p align="center"><strong>Your agent needs one answer. Stop resending the whole tool output.</strong></p>
+<p align="center"><strong>Your agent already read it. Stop paying the model to read it again.</strong></p>
 
-<p align="center">Pinpoint sits between your CLI or app and the LLM provider. It keeps bulky old JSON, logs, and source output local, sends the exact row, count, or symbol needed now, and forwards everything else to the same model unchanged.</p>
-
-<p align="center">An open-source part of the internal LLM optimization system developed at <a href="https://codepal.ai"><strong>CodePal</strong></a>.</p>
+<p align="center"><strong>On matching structured tool output: 97.2% fewer input tokens and 96.8% lower modeled cost than Headroom · 150/150 exact</strong></p>
 
 <p align="center">
-  <img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg">
-       <a href="https://github.com/CodePalAI/pinpoint/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/CodePalAI/pinpoint/actions/workflows/ci.yml/badge.svg"></a>
-       <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg">
-       <img alt="status" src="https://img.shields.io/badge/status-experimental-orange.svg">
-         <a href="https://codepal.ai"><img alt="Built by CodePal" src="https://img.shields.io/badge/built%20by-CodePal-2563eb.svg"></a>
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
+  <a href="https://github.com/CodePalAI/pinpoint/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/CodePalAI/pinpoint/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg">
+  <a href="./benchmarks/results/evidence-gate.first-party-macos-arm64-20260715.json"><img alt="live evidence: 150/150 exact" src="https://img.shields.io/badge/live%20evidence-150%2F150%20exact-2ea44f.svg"></a>
+  <img alt="status" src="https://img.shields.io/badge/status-experimental-orange.svg">
+  <a href="https://codepal.ai"><img alt="Built by CodePal" src="https://img.shields.io/badge/built%20by-CodePal-2563eb.svg"></a>
 </p>
 
 <p align="center">
-       <a href="#try-the-exact-path-offline">Start</a> ·
-         <a href="#choose-your-path">CLI / SDK / API</a> ·
-         <a href="#what-pinpoint-can-optimize">What it optimizes</a> ·
-         <a href="#proof">Proof</a> ·
-       <a href="#safety-and-privacy">Safety</a> ·
-       <a href="./benchmarks/REPORT.md">Benchmarks</a> ·
-       <a href="./llms.txt">LLM index</a> ·
-       <a href="https://github.com/CodePalAI/pinpoint/discussions">Community</a> ·
-       <a href="https://codepal.ai">CodePal.ai</a>
+  <a href="#get-started-60-seconds">Start</a> ·
+  <a href="#choose-your-path">Use it</a> ·
+  <a href="#proof">Proof</a> ·
+  <a href="#works-with-your-stack">Agents</a> ·
+  <a href="#safety-and-privacy">Safety</a> ·
+  <a href="./benchmarks/REPORT.md">Benchmarks</a> ·
+  <a href="https://github.com/CodePalAI/pinpoint/discussions">Community</a>
 </p>
 
-<p align="center"><sub>Same model | Same provider | Same SDK response types | Less repeated input when a safe rule matches</sub></p>
+<p align="center"><sub>Local-first | Same model and provider | Anthropic + OpenAI | Exact when supported, unchanged when not</sub></p>
+
+<p align="center"><sub><strong>AI agents / LLMs:</strong> read <a href="./llms.txt"><code>/llms.txt</code></a> for the compact project index.</sub></p>
+
+---
+
+Pinpoint keeps bulky old JSON, logs, and source output on your machine. When your agent needs one row, count, symbol, or unique-key join, Pinpoint sends that exact result instead of resending the whole payload. If it cannot answer safely or make the request smaller, it forwards the original request unchanged.
 
 <p align="center">
   <a href="./benchmarks/results/evidence-gate.first-party-macos-arm64-20260715.json">
@@ -38,7 +49,37 @@
 
 <!-- LAUNCH(demo-video): Put a 15-25 second terminal recording here after independent replication. Keep the generated receipt card above as the static fallback. -->
 
-## The difference in one request
+## Get started (60 seconds)
+
+You need Node.js 22 or newer and Git. Until the first npm package is live, build the CLI from a checkout:
+
+```bash
+git clone https://github.com/CodePalAI/pinpoint.git
+cd pinpoint
+npm install && npm link
+
+pinpoint demo            # prove the exact path offline
+pinpoint wrap claude     # launch Claude Code through Pinpoint
+pinpoint proxy           # or use it as an Anthropic/OpenAI proxy
+```
+
+<!-- LAUNCH(npm): Replace the checkout flow above with `npx @codepal/pinpoint demo` and `npm install -g @codepal/pinpoint` only after the registry confirms the package. -->
+
+Start with `pinpoint demo`. It runs the production exact-data path against 1,000 JSON rows without an API key, model call, sidecar, or network request:
+
+```console
+$ pinpoint demo
+
+pinpoint QCV demo (offline)
+dataset: 1,000 exact JSON rows (55,281 chars)
+question: What is the email for id 733?
+dataset region: 13,821 -> 172 estimated tokens (98.8% smaller)
+exact answer materialized: user733@example.com
+model-driven fallback: not needed
+network requests: 0
+```
+
+## Why exact context wins
 
 Your agent loaded 1,000 account rows earlier in the conversation. Now you ask:
 
@@ -53,44 +94,31 @@ Your agent loaded 1,000 account rows earlier in the conversation. Now you ask:
 
 Pinpoint does not change your model or replace your provider. It removes repeated input before the request leaves your machine, and only when it can do so under an explicit rule.
 
-## Try the exact path offline
+## What it does
 
-You need Node.js 22 or newer and Git. Until the first npm package is live, run the real production path from a checkout:
-
-```bash
-git clone https://github.com/CodePalAI/pinpoint.git
-cd pinpoint
-npm install && npm link
-pinpoint demo
-```
-
-<!-- LAUNCH(npm): Replace the checkout flow above with `npx @codepal/pinpoint demo` and `npm install -g @codepal/pinpoint` only after the registry confirms the package. -->
-
-The demo runs the production exact-data path against 1,000 JSON rows. It needs no API key, model call, or network request:
-
-```console
-$ pinpoint demo
-
-pinpoint QCV demo (offline)
-dataset: 1,000 exact JSON rows (55,281 chars)
-question: What is the email for id 733?
-dataset region: 13,821 -> 172 estimated tokens (98.8% smaller)
-exact answer materialized: user733@example.com
-model-driven fallback: not needed
-network requests: 0
-```
-
-## What you get
-
-- **Less repeated input.** Large old tool results stop riding along in full when the next question needs one supported lookup, count, projection, or join.
-- **More useful context.** The model's window stays available for your current code, instructions, and reasoning instead of yesterday's 10,000-line payload.
-- **Exact structured answers.** Pinpoint computes supported operations locally. It does not ask the model to summarize an ID, count, path, or row and hope it survives.
-- **No provider migration.** Keep your model, API key, SDK, streaming behavior, and response types.
-- **A safe no-op.** If the request is short, recent, ambiguous, unsupported, or not smaller after optimization, Pinpoint forwards the original request.
+- **Exact local context.** Resolve supported JSON lookups, filtered counts, log counts, source exports, projections, and unique-key joins before the request leaves your machine.
+- **Drop-in adoption.** Wrap a coding CLI, wrap the official Anthropic/OpenAI SDK, or change one base URL. Keep the same model, provider, streaming behavior, and response types.
+- **More usable context.** Stop spending the model's window and your provider budget on an old 10,000-line result when the current question needs one value.
+- **Safe composition.** Headroom and pxpipe can optimize other request regions, while Pinpoint prevents two optimizers from rewriting the same bytes.
+- **Fail-safe routing.** Short, recent, ambiguous, unsafe, unsupported, or unprofitable requests pass through unchanged.
 
 Pinpoint helps on requests that actually contain reusable bulk context. Ordinary chat and small prompts may not change at all.
 
+## Works with your stack
+
+| Client or protocol | Start with | Exact path on API-key traffic | Subscription / OAuth |
+|---|---|:---:|---|
+| Claude Code | `pinpoint wrap claude` | Yes | Safe pass-through |
+| Codex CLI | `pinpoint wrap codex` | Yes when tool output meets the exact-data rules | Safe pass-through |
+| Anthropic SDK / Messages | `@codepal/pinpoint/anthropic` or proxy | Yes | Safe pass-through |
+| OpenAI SDK / Chat / Responses | `@codepal/pinpoint/openai` or proxy | Yes | Safe pass-through |
+| Aider, OpenCode, Goose, OpenHands, Vibe | `pinpoint wrap <agent>` | Protocol-dependent | Safe pass-through |
+| GitHub Copilot CLI | `pinpoint doctor copilot` | Delegated to Headroom | Headroom subscription path |
+| Cursor, Cline, Continue | `pinpoint wrap <agent>` | Pinpoint prints the local base URL | Depends on configured auth |
+
 ## Choose your path
+
+No new provider account. No model migration. Pick the integration surface you already use:
 
 | You use an LLM through... | Start here | What stays unchanged |
 |---|---|---|
@@ -419,35 +447,6 @@ The broader exact-data test suite runs 42 deterministic tasks across JSON lookup
 
 The full [benchmark report](./benchmarks/REPORT.md) keeps live, offline, agentic, and simulated evidence separate. It also preserves failed experiments instead of averaging them into successful results.
 
-## Built at CodePal
-
-[CodePal](https://codepal.ai) builds AI-powered development products that help people move from an idea to production software. Pinpoint open-sources part of the internal context-optimization algorithms and runtime developed for that work.
-
-Inside CodePal's broader system, this work helps:
-
-- reduce repeated model input and provider cost;
-- preserve exact tool data instead of relying only on summaries;
-- leave more of the model's context window available for useful project information;
-- improve reliability on structured lookups and counts;
-- measure savings, retries, retrievals, and failures before an optimization is accepted;
-- support competitive product pricing without treating maximum token deletion as the goal.
-
-CodePal uses these techniques to pursue better AI development results and lower serving cost together. Pinpoint is one public component, not the complete CodePal product, model stack, or internal infrastructure.
-
-To use CodePal's full AI development product, visit [codepal.ai](https://codepal.ai).
-
-## Compatibility
-
-| API | Exact local lookups | Streaming exact lookups | Automatic local retrieval |
-|---|:---:|:---:|:---:|
-| Anthropic Messages | Yes | Yes | Yes |
-| OpenAI Chat Completions | Yes | Yes | Yes |
-| OpenAI Responses | Yes | Yes | Yes |
-
-Exact local lookups run when Pinpoint sees an explicit provider API key, including API-key Claude Code and Codex CLI traffic. OAuth/JWT and subscription traffic remain in the safer pass-through posture. Another installed compression module may still handle part of those requests.
-
-Wrappers are included for Claude Code, Codex, Aider, OpenCode, Goose, OpenHands, Vibe, GitHub Copilot CLI, Cursor, Cline, and Continue. Run `pinpoint agent list` to see whether each adapter proxies traffic, delegates to another local path, or prints configuration.
-
 ## Safety and privacy
 
 - Pinpoint binds to `127.0.0.1` by default. It has no public login or access-control layer, so do not expose it directly to the internet.
@@ -528,6 +527,12 @@ pinpoint doctor
 
 If that background process is unavailable, its stage does nothing while the exact-data path and other available modules continue. Configure an existing process with `PINPOINT_HEADROOM_URL`, or disable auto-start with `PINPOINT_HEADROOM_AUTOSPAWN=0`. Only use an external sidecar you trust with the selected tool output and prose sent for compression. See [UPSTREAM.md](./UPSTREAM.md) for versioning and attribution.
 
+## Built at CodePal
+
+Pinpoint open-sources one part of the context-optimization system developed at [CodePal](https://codepal.ai). It is the exact-context runtime and evidence harness, not CodePal's complete product, model stack, or infrastructure.
+
+CodePal builds AI development tools for moving from an idea to production software. Visit [codepal.ai](https://codepal.ai) for the full product.
+
 ## Contributing
 
 Start with [`CONTRIBUTING.md`](./CONTRIBUTING.md). The main local checks are:
@@ -552,8 +557,8 @@ Pinpoint is experimental but usable today for local evaluation and API-key traff
 
 Pinpoint is developed and maintained by [CodePal](https://codepal.ai) with contributions from the open-source community.
 
-- **Implemented:** exact local lookups across providers, streaming support, automatic local retrieval, capture/replay, OpenTelemetry export, Node.js library, MCP server, and agent wrappers.
-- **Still being proved:** repeated live-model quality across larger task sets, real sanitized agent traces, independent adoption, and lower proxy overhead under heavy concurrency.
+- **Validated first-party:** 150 independently parameterized live task variants across two models and three protocols, plus 10 real Claude Code/Codex sessions with retries, cache shape, long turns, and hash-matched replay.
+- **Still being proved:** independent replication, the eligible share of organic traffic, external adoption, customer demand, and lower proxy overhead under heavy concurrency.
 
 The [product assessment](./planning/product_assessment.md) explains the evidence and current limits without marketing shortcuts.
 

@@ -8,8 +8,43 @@ Measures token consumption (and, for live arms, response correctness) for **head
 
 - `unit-simulation` — hand-parameterized mechanism/controller checks; useful for unit behavior, not competitive claims.
 - `offline-real-transform` — real compressor code over synthetic or fixture inputs; valid for transform/token accounting only.
+- `protocol-integration` — real gateway and protocol processes over a deterministic fixture, without a model; valid for wire behavior, exact grading, and local timing only.
 - `live-controlled` — real model call with a fixed, directly graded prompt; currently single-run unless stated otherwise.
 - `live-agentic` — real tool-using agent run; correctness is useful, while tokens/latency are high-variance without paired repetitions.
+
+## Value-opaque MCP dataflow
+
+### Protocol integration gate
+
+Evidence: `protocol-integration`. Production stdio gateway plus an unmodified deterministic MCP fixture; no model or provider call.
+
+| Check | Result |
+|---|---:|
+| Exact hidden destination acceptances | 30/30 |
+| Policy/resource/query/capability bypasses denied | 7/7 |
+| Private canaries absent from client transcript | 400/400 |
+| Signed receipts and receipt chain valid | 30/30 |
+| Modified receipt rejected | Yes |
+| Identical payload commitments publicly unlinkable | 30/30 distinct |
+| Constructed direct transcript | 31,013 bytes |
+| Opaque source + flow transcript | 2,628 bytes |
+| Visible-byte reduction | 91.5% |
+| Internal flow latency p50 / p95 / p99 | 0.27 / 0.91 / 1.08 ms |
+
+The protected source was 26,231 bytes while the ordinary virtualization threshold was deliberately set to 100,000,000 characters. Capture therefore occurred because of policy, not optimization eligibility. The destination accepted the exact 40-record projection. Public content hashes, source values, destination arguments, and destination result values were absent from the client transcript.
+
+This is an exact synthetic trace check, not semantic noninterference, a provider token measurement, a production-demand estimate, or a benchmark against IFC/code-execution systems. Counts, sizes, field names, timing, and success status remain visible. See `results/mcp-opaque-flow.first-party-macos-arm64-20260715.json`.
+
+### Live cross-host gate
+
+Evidence: `live-agentic`. One authorized synthetic flow, independently executed by two installed clients.
+
+| Host | Source + flow calls | Model called destination | Receipt | Destination | Values in event stream | Final |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Claude Code 2.1.197 / Haiku 4.5 | Yes | No | Valid | Accepted 40 | 0/400 canaries | `VALIDATED` |
+| GitHub Copilot CLI 1.0.71-2 / GPT-5.3 Codex | Yes | No | Valid | Accepted 40 | 0/400 canaries | `VALIDATED` |
+
+Claude completed in four turns with $0.014894 observed cost. Copilot reported zero premium requests and no file changes. Neither public source nor selected-payload hash appeared in either event stream. This proves two-host protocol usability for one first-party fixture, not organic prevalence or general model quality. See `results/mcp-opaque-flow-cross-host.first-party-macos-arm64-20260715.json`.
 
 ## Benchmark v2 — no-op proxy profile
 

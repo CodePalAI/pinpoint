@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "exposeQueryTool": false,
+  "exposeArtifactResources": false,
+  "opaqueArtifactIds": true,
+  "flows": [
+    {
+      "name": "validate_renewal_projection",
+      "description": "Project generated renewal email fields into a local synthetic conformance validator.",
+      "sourceTool": "synthetic_accounts_list",
+      "sourceKind": "json-array",
+      "destinationTool": "synthetic_projection_validate",
+      "destinationArgument": "projectedRecords",
+      "fixedDestinationArguments": {
+        "testCase": "renewal-email-projection"
+      },
+      "allowedOps": [
+        "json_select"
+      ],
+      "allowedWhereFields": [
+        "segment"
+      ],
+      "allowedFields": [
+        "email"
+      ],
+      "maxItems": 50,
+      "maxBytes": 8192,
+      "hideDestinationTool": true
+    }
+  ]
+}

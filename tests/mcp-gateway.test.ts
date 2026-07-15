@@ -1,12 +1,15 @@
 import { PassThrough } from 'node:stream';
+import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
 import {
+  MCP_FLOW_TOOL_NAME,
   MCP_QUERY_TOOL_NAME,
   McpResultFirewall,
   runMcpGateway,
 } from '../src/mcp/gateway.js';
+import { verifyMcpOpaqueFlowReceipt } from '../src/mcp/flow.js';
 
 function send(stream: PassThrough, message: unknown): void {
   stream.write(`${JSON.stringify(message)}\n`);
@@ -98,6 +101,50 @@ describe('McpResultFirewall', () => {
       result: error,
       virtualized: false,
     });
+  });
+
+  it('captures protected sources at any size and fails closed without value disclosure', () => {
+    const firewall = new McpResultFirewall({
+      minChars: 100_000,
+      exposeQueryTool: false,
+      flowToolAvailable: true,
+      protectedSourceTools: ['secrets_read'],
+    });
+    const raw = JSON.stringify([{ email: 'tiny-private@example.com' }]);
+    const protectedResult = firewall.transformResult('secrets_read', {
+      content: [{ type: 'text', text: raw }],
+      _meta: { diagnostic: 'meta-private-value' },
+      extensionValue: 'extension-private-value',
+    });
+
+    expect(protectedResult.virtualized).toBe(true);
+    expect(JSON.stringify(protectedResult.result)).not.toContain('tiny-private@example.com');
+    expect(JSON.stringify(protectedResult.result)).not.toContain('meta-private-value');
+    expect(JSON.stringify(protectedResult.result)).not.toContain('extension-private-value');
+    expect(protectedResult.result.content).toHaveLength(1);
+    expect(protectedResult.descriptor?.id).not.toBe(
+      `vctx_${createHash('sha256').update(raw).digest('hex').slice(0, 32)}`,
+    );
+
+    const protectedError = firewall.transformResult('secrets_read', {
+      content: [{ type: 'text', text: 'password=error-secret' }],
+      isError: true,
+    });
+    expect(protectedError.result.isError).toBe(true);
+    expect(JSON.stringify(protectedError.result)).not.toContain('error-secret');
+
+    const capacityBound = new McpResultFirewall({
+      minChars: 1,
+      maxStoredBytes: 1,
+      exposeQueryTool: false,
+      flowToolAvailable: true,
+      protectedSourceTools: ['secrets_read'],
+    });
+    const refused = capacityBound.transformResult('secrets_read', {
+      content: [{ type: 'text', text: raw }],
+    });
+    expect(refused.result.isError).toBe(true);
+    expect(JSON.stringify(refused.result)).not.toContain('tiny-private@example.com');
   });
 
   it('finds the only nested record array in structured MCP output', () => {
@@ -354,5 +401,271 @@ describe('McpResultFirewall', () => {
     controller.abort();
 
     expect(await running).toBeNull();
+  });
+
+  it('moves an exact projection into an allowlisted tool without exposing values to the client', async () => {
+    const secretRows = Array.from({ length: 100 }, (_, id) => ({
+      id,
+      active: id % 2 === 0,
+      email: `private${id}@example.com`,
+      apiKey: `secret-key-${id}`,
+    }));
+    const selected = secretRows
+      .filter(({ active }) => active)
+      .map(({ email }) => ({ email }));
+    const selectedText = JSON.stringify(selected);
+    const selectedHash = createHash('sha256').update(selectedText).digest('hex');
+    const deterministicArtifactId = `vctx_${createHash('sha256')
+      .update(JSON.stringify(secretRows))
+      .digest('hex')
+      .slice(0, 32)}`;
+    const upstream = String.raw`
+      import { createHash } from 'node:crypto';
+      import { createInterface } from 'node:readline';
+      const rows = ${JSON.stringify(secretRows)};
+      const reply = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
+      const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+      for await (const line of lines) {
+        const message = JSON.parse(line);
+        if (message.method === 'initialize') {
+          reply(message.id, {
+            protocolVersion: '2024-11-05',
+            capabilities: { tools: {} },
+            serverInfo: { name: 'private-pipeline', version: '1.0.0' },
+          });
+        } else if (message.method === 'tools/list') {
+          reply(message.id, { tools: [
+            {
+              name: 'secrets_list',
+              description: 'Return private account records.',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'campaign_deliver',
+              description: 'Deliver a campaign to exact recipients.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  campaign: { type: 'string' },
+                  recipients: { type: 'array', items: { type: 'object' } },
+                },
+                required: ['campaign', 'recipients'],
+              },
+            },
+          ] });
+        } else if (message.method === 'tools/call') {
+          if (message.params.name === 'secrets_list') {
+            reply(message.id, {
+              content: [{ type: 'text', text: JSON.stringify(rows) }],
+            });
+          } else if (message.params.name === 'campaign_deliver') {
+            const recipients = message.params.arguments.recipients;
+            const payloadHash = createHash('sha256').update(JSON.stringify(recipients)).digest('hex');
+            const valid = payloadHash === '${selectedHash}' && message.params.arguments.campaign === 'renewal';
+            reply(message.id, {
+              content: [{ type: 'text', text: JSON.stringify({ accepted: recipients.length, valid }) }],
+              structuredContent: { accepted: recipients.length, valid },
+              ...(valid ? {} : { isError: true }),
+            });
+          }
+        }
+      }
+    `;
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const next = responses(output);
+    const visible: string[] = [];
+    output.on('data', (chunk) => visible.push(String(chunk)));
+    const running = runMcpGateway(process.execPath, ['--input-type=module', '--eval', upstream], {
+      input,
+      output,
+      error: new PassThrough(),
+      minChars: 500,
+      flows: [{
+        name: 'deliver_active_accounts',
+        description: 'Send active account emails to the campaign delivery tool.',
+        sourceTool: 'secrets_list',
+        sourceKind: 'json-array',
+        destinationTool: 'campaign_deliver',
+        destinationArgument: 'recipients',
+        allowedDestinationArguments: ['campaign'],
+        allowedOps: ['json_select'],
+        allowedWhereFields: ['active'],
+        allowedFields: ['email'],
+        maxItems: 60,
+        maxBytes: 10_000,
+        hideDestinationTool: true,
+      }],
+    });
+
+    send(input, { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+    const initialized = await next();
+    expect((initialized.result as { capabilities: Record<string, unknown> }).capabilities).not.toHaveProperty(
+      'resources',
+    );
+    const initializedVerifier = (initialized.result as {
+      _meta: { pinpoint: { opaqueFlow: { receiptVerifier: Record<string, unknown> } } };
+    })._meta.pinpoint.opaqueFlow.receiptVerifier;
+    send(input, { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+    const listed = await next();
+    expect((listed.result as { tools: Array<{ name: string }> }).tools.map(({ name }) => name)).toEqual([
+      'secrets_list',
+      MCP_FLOW_TOOL_NAME,
+    ]);
+
+    send(input, {
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: { name: 'secrets_list', arguments: {} },
+    });
+    const source = await next();
+    const sourceText = JSON.stringify(source);
+    expect(sourceText).not.toContain('resource_link');
+    const artifactId = sourceText.match(/vctx_[a-f0-9]{32,64}/)?.[0];
+    expect(artifactId).toBeDefined();
+    expect(artifactId).not.toBe(deterministicArtifactId);
+
+    send(input, {
+      jsonrpc: '2.0',
+      id: 31,
+      method: 'resources/read',
+      params: { uri: `pinpoint://artifact/${artifactId}` },
+    });
+    expect(await next()).toMatchObject({ id: 31, error: { code: -32002 } });
+
+    send(input, {
+      jsonrpc: '2.0',
+      id: 32,
+      method: 'tools/call',
+      params: { name: MCP_QUERY_TOOL_NAME, arguments: { id: artifactId, op: 'slice', limit: 1 } },
+    });
+    expect(await next()).toMatchObject({
+      id: 32,
+      result: { isError: true },
+    });
+
+    send(input, {
+      jsonrpc: '2.0',
+      id: 33,
+      method: 'tools/call',
+      params: { name: 'campaign_deliver', arguments: { recipients: [], campaign: 'renewal' } },
+    });
+    expect(await next()).toMatchObject({
+      id: 33,
+      result: { isError: true },
+    });
+
+    send(input, {
+      jsonrpc: '2.0',
+      id: 34,
+      method: 'tools/call',
+      params: {
+        name: MCP_FLOW_TOOL_NAME,
+        arguments: {
+          flow: 'deliver_active_accounts',
+          id: artifactId,
+          op: 'json_select',
+          where: { active: true },
+          fields: ['apiKey'],
+        },
+      },
+    });
+    expect(await next()).toMatchObject({ id: 34, result: { isError: true } });
+
+    send(input, {
+      jsonrpc: '2.0',
+      id: 4,
+      method: 'tools/call',
+      params: {
+        name: MCP_FLOW_TOOL_NAME,
+        arguments: {
+          flow: 'deliver_active_accounts',
+          id: artifactId,
+          op: 'json_select',
+          where: { active: true },
+          fields: ['email'],
+          destinationArguments: { campaign: 'renewal' },
+        },
+      },
+    });
+    const flowed = await next();
+    const receiptText = (flowed.result as { content: Array<{ text: string }> }).content[0]?.text ?? '';
+    const receipt = JSON.parse(receiptText).pinpointFlow;
+    expect(receipt).toMatchObject({
+      receiptVersion: 1,
+      sequence: 1,
+      flow: 'deliver_active_accounts',
+      sourceTool: 'secrets_list',
+      destinationTool: 'campaign_deliver',
+      destinationArgument: 'recipients',
+      op: 'json_select',
+      whereFields: ['active'],
+      projectionFields: ['email'],
+      destinationArgumentNames: ['campaign'],
+      policyShapeSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      policyLimits: { maxItems: 60, maxBytes: 10_000 },
+      items: selected.length,
+      payloadBytes: Buffer.byteLength(selectedText),
+      commitmentAlgorithm: 'HMAC-SHA256',
+      payloadCommitment: expect.stringMatching(/^hmac-sha256:[a-f0-9]{64}$/),
+      queryCommitment: expect.stringMatching(/^hmac-sha256:[a-f0-9]{64}$/),
+      destinationSucceeded: true,
+      destinationResultCommitment: expect.stringMatching(/^hmac-sha256:[a-f0-9]{64}$/),
+      previousReceiptHash: '0'.repeat(64),
+      signingKeyId: expect.stringMatching(/^[a-f0-9]{64}$/),
+      receiptHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      verifier: {
+        algorithm: 'Ed25519',
+        publicKey: expect.any(String),
+      },
+      signature: expect.any(String),
+      disclosure: 'receipt',
+    });
+    expect(receipt.verifier).toEqual({
+      algorithm: initializedVerifier.algorithm,
+      publicKey: initializedVerifier.publicKey,
+    });
+    expect(receipt.signingKeyId).toBe(initializedVerifier.signingKeyId);
+    expect(verifyMcpOpaqueFlowReceipt(receipt)).toBe(true);
+    expect(verifyMcpOpaqueFlowReceipt({ ...receipt, items: receipt.items + 1 })).toBe(false);
+
+    send(input, {
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: {
+        name: MCP_FLOW_TOOL_NAME,
+        arguments: {
+          flow: 'deliver_active_accounts',
+          id: artifactId,
+          op: 'json_select',
+          where: { active: true },
+          fields: ['email'],
+          destinationArguments: { campaign: 'renewal' },
+        },
+      },
+    });
+    const secondFlow = await next();
+    const secondText = (secondFlow.result as { content: Array<{ text: string }> }).content[0]?.text ?? '';
+    const secondReceipt = JSON.parse(secondText).pinpointFlow;
+    expect(secondReceipt).toMatchObject({
+      sequence: 2,
+      previousReceiptHash: receipt.receiptHash,
+      destinationSucceeded: true,
+    });
+    expect(secondReceipt.payloadCommitment).not.toBe(receipt.payloadCommitment);
+    expect(verifyMcpOpaqueFlowReceipt(secondReceipt)).toBe(true);
+
+    const clientVisible = visible.join('');
+    for (const row of secretRows) {
+      expect(clientVisible).not.toContain(row.email);
+      expect(clientVisible).not.toContain(row.apiKey);
+    }
+    expect(clientVisible).not.toContain(selectedText);
+    expect(clientVisible).not.toContain(selectedHash);
+
+    input.end();
+    expect(await running).toBe(0);
   });
 });

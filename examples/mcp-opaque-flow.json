@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "exposeQueryTool": false,
+  "exposeArtifactResources": false,
+  "opaqueArtifactIds": true,
+  "flows": [
+    {
+      "name": "deliver_active_accounts",
+      "description": "Project active account email fields into the configured delivery tool.",
+      "sourceTool": "accounts_list",
+      "sourceKind": "json-array",
+      "destinationTool": "campaign_deliver",
+      "destinationArgument": "recipients",
+      "fixedDestinationArguments": {
+        "campaign": "renewal"
+      },
+      "allowedOps": [
+        "json_select"
+      ],
+      "allowedWhereFields": [
+        "active"
+      ],
+      "allowedFields": [
+        "email"
+      ],
+      "maxItems": 100,
+      "maxBytes": 16384,
+      "hideDestinationTool": true
+    }
+  ]
+}

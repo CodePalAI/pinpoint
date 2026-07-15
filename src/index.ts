@@ -33,11 +33,14 @@ export type { ProtocolAdapter, ProtocolMatchInput } from './protocols/types.js';
 export {
   DEFAULT_MCP_VIRTUALIZE_CHARS,
   MCP_ARTIFACT_URI_PREFIX,
+  MCP_FLOW_TOOL_NAME,
   MCP_QUERY_TOOL,
   MCP_QUERY_TOOL_NAME,
   McpResultFirewall,
   runMcpGateway,
   runMcpServer,
+  parseMcpOpaqueFlowConfig,
+  verifyMcpOpaqueFlowReceipt,
 } from './mcp/index.js';
 export type {
   McpCallToolResult,
@@ -45,6 +48,10 @@ export type {
   McpGatewayOptions,
   McpResultFirewallOptions,
   McpResultTransformation,
+  McpOpaqueFlowConfig,
+  McpOpaqueFlowOperation,
+  McpOpaqueFlowPolicy,
+  McpOpaqueFlowReceipt,
 } from './mcp/index.js';
 
 export {

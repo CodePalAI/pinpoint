@@ -11,6 +11,7 @@ npm ci
 npm run demo:qcv
 npm run bench:qcv-quality
 npm run bench:virtual
+npm run bench:mcp-opaque-flow
 ```
 
 What they establish:
@@ -20,8 +21,23 @@ What they establish:
 | `npm run demo:qcv` | Offline real transform | The shipped exact path can answer one supported lookup and replace its dataset region |
 | `npm run bench:qcv-quality` | Offline real transform | Exact-operation and refusal coverage over the committed synthetic fixtures |
 | `npm run bench:virtual` | Offline real transform | Token accounting for QCV against the committed comparison fixtures |
+| `npm run bench:mcp-opaque-flow` | Protocol integration | Fail-closed source capture, hidden exact destination calls, bypass denial, transcript canary absence, signed receipt verification/chaining, and local latency |
 
 They do not establish live model quality, provider-reported usage, real-agent savings, or production latency.
+
+The opaque-flow protocol gate starts the committed unmodified stdio fixture, runs 30 exact flows and seven adversarial calls, scans 400 generated canaries, verifies every receipt and chain link, mutates one receipt to prove rejection, and compares client-visible bytes with a constructed direct-MCP transcript. It makes no provider request. The committed receipt is `results/mcp-opaque-flow.first-party-macos-arm64-20260715.json`.
+
+## Live cross-host opaque-flow gate
+
+Install and authenticate current Claude Code and GitHub Copilot CLI clients, then run:
+
+```bash
+npm run bench:mcp-opaque-flow:cross-host
+```
+
+The script sets a $0.15 Claude budget cap, disables unrelated Claude tools, exposes only the synthetic MCP server to Copilot, and retains no raw event stream or debug log. It fails unless both hosts call the source plus `pinpoint_flow`, neither model calls the hidden destination or query tool, both signed receipts verify, both hidden destinations accept the exact 40-record projection, all 800 aggregate canaries and both public value hashes are absent, both final answers equal `VALIDATED`, and no repository file changes occur.
+
+This is one explicitly sequenced first-party synthetic task. It does not measure tool discovery among unrelated servers, external demand, semantic side channels, or production data. Review the content-free receipt before publishing a replication.
 
 ## Repeated multi-provider evidence gate
 

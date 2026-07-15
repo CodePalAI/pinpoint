@@ -13,17 +13,24 @@ All notable changes are documented here. This project follows semantic versionin
 - A real Claude Code MCP gate in which an 81,665-character, 1,000-row result became a 513-character handle and Claude autonomously queried the exact email through the expected SHA-derived artifact.
 - A matching GitHub Copilot CLI gate using auto-routed GPT-5.3 Codex: the same artifact id, upstream call, exact query, and final email passed with zero premium requests and no file changes.
 - A content-free cross-host receipt that counts 2/2 executed clients and explicitly excludes unauthenticated Cursor and blocked Codex cells.
+- Operator-configured `pinpoint_flow` dataflow: exact local projections can enter a hidden unmodified destination tool without source or destination values crossing the client-facing MCP transcript.
+- Versioned flow-policy parsing with source/destination provenance, operation/filter/projection allowlists, fixed and dynamic destination-argument policy, and item/byte bounds.
+- Random session capability ids, per-sequence HMAC-SHA256 value commitments, Ed25519-signed hash-chained receipts, initialization-time verifier pinning, and a public receipt verifier.
+- A no-model protocol gate with 30/30 exact hidden destination acceptances, 7/7 denied bypasses, zero of 400 private canaries leaked, a 91.5% constructed visible-byte reduction, and sub-millisecond p95 local flow latency on the recorded run.
+- A live Claude Code and GitHub Copilot CLI gate in which both hosts completed the same exact 40-record hidden destination flow, emitted valid receipts, and exposed zero fixture values in retained event-stream grades.
 
 ### Changed
 
 - The primary product boundary moved from the model API proxy to the MCP tool boundary, before host truncation and provider context ingestion. Provider-wire QCV remains a secondary path for eligible API-key traffic.
 - Upstream MCP output schemas are advertised as an object union accepting either the original structured result or Pinpoint's artifact envelope.
+- Supplying a flow policy changes configured source tools from ordinary optimization semantics to mandatory fail-closed capture at every result size. Programmatic flow users inherit strict query/resource/capability defaults.
 
 ### Safety
 
 - MCP errors, media, mixed blocks, small results, ambiguous nested collections, unsupported values, and unprofitable transformations pass through unchanged.
 - Artifact capacity is reserved atomically before a handle is emitted; insufficient storage fails open with the original result.
 - Gateway query and resource outputs are bounded independently, artifacts are process-scoped, and upstream commands use `shell: false`.
+- Strict flows hide direct query, resources, previews, and destination tools; scrub protected metadata/extensions and protocol errors; suppress protected stderr and unsolicited server messages; and validate configured tools against the upstream catalog before accepting calls.
 
 ### Fixed
 

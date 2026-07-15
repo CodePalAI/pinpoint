@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "evidenceLevel": "live-agentic",
+  "kind": "mcp-value-opaque-flow-cross-host-gate",
+  "date": "2026-07-15",
+  "passed": true,
+  "source": {
+    "description": "Two installed unmodified agent hosts independently executed the same synthetic value-opaque flow through the production CLI gateway.",
+    "persistedData": "Only content-free grading summaries and receipt identifiers are retained. Event streams, debug logs, synthetic values, credentials, and personal paths are not persisted.",
+    "fingerprints": {
+      "src/mcp/flow.ts": "d84efa59c06d99436ddaea0fd1eda828a30b60f6e43fc018ee0447751aa000ee",
+      "src/mcp/gateway.ts": "a0b79694595ca7d2cfb0b0238b45dcd53f10c14946ac0982e3f665bdbe5ded2b",
+      "src/virtual-context/store.ts": "7b0bbc2de4e400b7cb85a23d926bf5ec2c898c7242df57b220026bf3cbc36783",
+      "src/cli/main.ts": "c9d2677e188b197be550448073e8e02a49db04dd7642203d27372c198ba1f22b",
+      "benchmarks/v2/mcp_opaque_flow_cross_host_gate.mjs": "9cc7d34a2819cc2eb880e19d36d4250068196441bde30ee9463bc36cd8e2ca95",
+      "benchmarks/fixtures/opaque_flow_server.mjs": "1a70a6162a7b30ae71f72616d611b7e3e0081806ee666ef64db1dc9bd006d603",
+      "benchmarks/fixtures/opaque_flow_config.json": "22932fa0db79f426e2e17ddc2258c05ddc9b7ec8738a7584fa9665d6ae9bc77c"
+    }
+  },
+  "fixture": {
+    "task": "Select generated renewal email fields locally and pass them to a hidden local validator without exposing values to the host/model.",
+    "selectedRecords": 40,
+    "normalVirtualizationThresholdChars": 100000000,
+    "sourceTool": "synthetic_accounts_list",
+    "flowTool": "pinpoint_flow",
+    "destinationTool": "synthetic_projection_validate",
+    "finalAnswer": "VALIDATED"
+  },
+  "summary": {
+    "hostsExecuted": 2,
+    "hostsPassed": 2,
+    "sourceCallsObserved": 2,
+    "flowCallsObserved": 2,
+    "modelDestinationCallsObserved": 0,
+    "exactDestinationAcceptances": 2,
+    "privateCanariesScannedPerHost": 400,
+    "privateCanariesLeaked": 0,
+    "publicValueHashesLeaked": false,
+    "fileChanges": 0
+  },
+  "hosts": [
+    {
+      "host": "Claude Code",
+      "clientVersion": "2.1.197 (Claude Code)",
+      "model": "claude-haiku-4-5-20251001",
+      "status": "passed",
+      "exitCode": 0,
+      "calls": [
+        "mcp__opaque_conformance__synthetic_accounts_list",
+        "mcp__opaque_conformance__pinpoint_flow"
+      ],
+      "artifactCapabilities": 1,
+      "randomCapability": true,
+      "receipt": {
+        "count": 1,
+        "valid": true,
+        "destinationSucceeded": true,
+        "items": 40,
+        "projectionFields": [
+          "email"
+        ],
+        "whereFields": [
+          "segment"
+        ],
+        "artifactId": "vctx_eef5916d37fdb9d17eb76ae8b2d5868e",
+        "receiptHash": "a02e3174c63fc2198388a0472161741b1899a33a22c6261663555ab03f417e3f",
+        "signingKeyId": "731fcb59a73af30089f55f5595598a6b93548e6cf1d366221084e791056734f2"
+      },
+      "privateCanariesLeaked": 0,
+      "publicValueHashesLeaked": false,
+      "answer": "VALIDATED",
+      "turns": 4,
+      "observedCostUSD": 0.0148942,
+      "exceededOutputCap": false,
+      "diagnostic": null
+    },
+    {
+      "host": "GitHub Copilot CLI",
+      "clientVersion": "GitHub Copilot CLI 1.0.71-2.",
+      "model": "gpt-5.3-codex",
+      "status": "passed",
+      "exitCode": 0,
+      "calls": [
+        "opaque_conformance-synthetic_accounts_list",
+        "opaque_conformance-pinpoint_flow"
+      ],
+      "artifactCapabilities": 1,
+      "randomCapability": true,
+      "receipt": {
+        "count": 1,
+        "valid": true,
+        "destinationSucceeded": true,
+        "items": 40,
+        "projectionFields": [
+          "email"
+        ],
+        "whereFields": [
+          "segment"
+        ],
+        "artifactId": "vctx_b07a16fb2247622342fb8cb3bddef139",
+        "receiptHash": "7e367ccef52678925dbc11ae7251576ebeac73dedcadf94a815115fefe4f14d2",
+        "signingKeyId": "3c10fa0c987a91cc1466d628a03c6521d5d47773dff86f77321ecb955697800b"
+      },
+      "privateCanariesLeaked": 0,
+      "publicValueHashesLeaked": false,
+      "answer": "VALIDATED",
+      "usage": {
+        "premiumRequests": 0,
+        "totalApiDurationMs": 8069,
+        "sessionDurationMs": 12146,
+        "codeChanges": {
+          "linesAdded": 0,
+          "linesRemoved": 0,
+          "filesModified": []
+        }
+      },
+      "exceededOutputCap": false,
+      "diagnostic": null
+    }
+  ],
+  "limitations": [
+    "This is one first-party synthetic task on two installed clients, not a prevalence estimate or customer-production trace.",
+    "The prompt explicitly requests the opaque_conformance MCP server and flow sequence; it measures autonomous protocol use, not tool discovery among unrelated servers.",
+    "The upstream synthetic process is trusted with source and destination values. The measured confidentiality boundary is each client event stream and model-visible MCP transcript.",
+    "Exact canary absence proves non-occurrence for this fixture trace, not semantic noninterference against timing, cardinality, field-name, or success-status side channels.",
+    "Receipt keys are ephemeral session keys pinned in MCP initialize responses, not operator identity certificates or hardware attestations."
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "evidenceLevel": "protocol-integration",
+  "kind": "mcp-value-opaque-flow-gate",
+  "date": "2026-07-15",
+  "passed": true,
+  "environment": {
+    "platform": "darwin",
+    "release": "25.5.0",
+    "architecture": "arm64",
+    "node": "v26.0.0"
+  },
+  "source": {
+    "description": "Production gateway and an unmodified deterministic stdio MCP fixture; no model or provider call.",
+    "persistedData": "Synthetic values are not persisted in this receipt. Only counts, byte sizes, source fingerprints, and commitment receipts are retained.",
+    "fingerprints": {
+      "src/mcp/flow.ts": "d84efa59c06d99436ddaea0fd1eda828a30b60f6e43fc018ee0447751aa000ee",
+      "src/mcp/gateway.ts": "a0b79694595ca7d2cfb0b0238b45dcd53f10c14946ac0982e3f665bdbe5ded2b",
+      "src/virtual-context/store.ts": "7b0bbc2de4e400b7cb85a23d926bf5ec2c898c7242df57b220026bf3cbc36783",
+      "src/cli/main.ts": "c9d2677e188b197be550448073e8e02a49db04dd7642203d27372c198ba1f22b",
+      "benchmarks/v2/mcp_opaque_flow_gate.mjs": "044ce31735a248be9ea453bece32f7efe6add8522ed930e5d399586d4106071c",
+      "benchmarks/fixtures/opaque_flow_server.mjs": "1a70a6162a7b30ae71f72616d611b7e3e0081806ee666ef64db1dc9bd006d603",
+      "benchmarks/fixtures/opaque_flow_config.json": "22932fa0db79f426e2e17ddc2258c05ddc9b7ec8738a7584fa9665d6ae9bc77c"
+    }
+  },
+  "fixture": {
+    "sourceRecords": 200,
+    "selectedRecords": 40,
+    "sourceBytes": 26231,
+    "selectedBytes": 1739,
+    "normalVirtualizationThresholdChars": 100000000,
+    "sourceCapturedBelowThreshold": true
+  },
+  "summary": {
+    "flowCalls": 30,
+    "destinationAcceptedCalls": 30,
+    "bypassAttempts": 7,
+    "bypassesDenied": 7,
+    "privateCanariesScanned": 400,
+    "privateCanariesLeaked": 0,
+    "publicValueHashesLeaked": false,
+    "baselineVisibleBytes": 31013,
+    "opaqueVisibleBytes": 2628,
+    "visibleByteReductionPercent": 91.52613420178635
+  },
+  "security": {
+    "randomCapability": true,
+    "artifactResourcesDisabled": true,
+    "queryToolHidden": true,
+    "destinationToolHidden": true,
+    "receiptsValid": true,
+    "receiptChainValid": true,
+    "verifierPinnedAtInitialize": true,
+    "commitmentsUnlinkableAcrossIdenticalPayloads": true,
+    "tamperedReceiptRejected": true,
+    "destinationAcceptedExactProjection": true,
+    "receiptChain": {
+      "count": 30,
+      "signingKeyId": "886b0ca3ba918fad327cbf16a53f71b01e37869c4cd21cf5f1716cd76db4cc77",
+      "firstReceiptHash": "154de3f525aa04ffbd42d7048037b1807c0fbd6f07646f3e3f58e96caebf8874",
+      "lastReceiptHash": "153467a6b192a274dc49b7047ceb065512c4d5c803a984e2bf796955483ca28b"
+    }
+  },
+  "latencyMs": {
+    "samples": 30,
+    "p50": 0.2703329999999937,
+    "p95": 0.9145419999999831,
+    "p99": 1.082790999999986,
+    "max": 1.082790999999986
+  },
+  "firstReceipt": {
+    "receiptVersion": 1,
+    "sequence": 1,
+    "flow": "validate_renewal_projection",
+    "artifactId": "vctx_32c70e1263b52c5b4fcd53cbc659ccaf",
+    "sourceTool": "synthetic_accounts_list",
+    "destinationTool": "synthetic_projection_validate",
+    "destinationArgument": "projectedRecords",
+    "op": "json_select",
+    "whereFields": [
+      "segment"
+    ],
+    "projectionFields": [
+      "email"
+    ],
+    "destinationArgumentNames": [
+      "testCase"
+    ],
+    "policyShapeSha256": "5e4507e8357da59497d7d977213abf4fd08e4c127cd97a14f1dd601555a951f9",
+    "policyLimits": {
+      "maxItems": 50,
+      "maxBytes": 8192
+    },
+    "items": 40,
+    "payloadBytes": 1739,
+    "commitmentAlgorithm": "HMAC-SHA256",
+    "payloadCommitment": "hmac-sha256:b7e87856f164fc95b8586ff934a941444271c25cbf436b491b565c80fa8b06b8",
+    "queryCommitment": "hmac-sha256:576d0e4eb2a1514b081b4dc5d370b91d32646f3b5943b3284bed9941c4110615",
+    "destinationSucceeded": true,
+    "destinationResultBytes": 120,
+    "destinationResultCommitment": "hmac-sha256:db7c8c0adcd831aae7bb2598ed3f9accc8c9fa7c4af826321ecb909b78d94249",
+    "previousReceiptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "signingKeyId": "886b0ca3ba918fad327cbf16a53f71b01e37869c4cd21cf5f1716cd76db4cc77",
+    "disclosure": "receipt",
+    "receiptHash": "154de3f525aa04ffbd42d7048037b1807c0fbd6f07646f3e3f58e96caebf8874",
+    "verifier": {
+      "algorithm": "Ed25519",
+      "publicKey": "MCowBQYDK2VwAyEACezwN3_IywqsuRwBcOSdrLCrA5c36azkfB6cVzf43dA"
+    },
+    "signature": "l_oJXtWOiRd_L0S5QRzudnb_l1Anc1h4dp0b4UjDOvP7YO60TXV0F3oe2Rxk7lJ_-5fhrrPeFU33y0rYdpWuBQ"
+  },
+  "limitations": [
+    "This is a deterministic first-party protocol integration, not a model-quality or production-demand measurement.",
+    "The upstream MCP process is trusted with source and destination values; the confidentiality boundary is the client/model-visible MCP transcript.",
+    "Counts, byte sizes, field names, tool names, timing, and success status remain observable metadata.",
+    "The receipt key is ephemeral and pinned in the initialize transcript; it is not an operator identity certificate or hardware attestation.",
+    "The baseline byte count is a constructed direct-MCP transcript for the identical source and destination payload, not a provider token bill."
+  ]
+}

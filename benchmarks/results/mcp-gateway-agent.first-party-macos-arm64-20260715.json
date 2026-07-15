@@ -7,9 +7,9 @@
     "description": "One real Claude Code session against a disposable synthetic stdio MCP server wrapped by the production Pinpoint CLI gateway.",
     "persistedData": "Only this content-free receipt is retained. The Claude stream, debug log, provider credentials, and temporary MCP state are not persisted.",
     "fingerprints": {
-      "src/mcp/gateway.ts": "a94985e81c304b34185ff3ef012bf163b3007fc6b87bc2df3a8f6d955b1963ff",
+      "src/mcp/gateway.ts": "a0b79694595ca7d2cfb0b0238b45dcd53f10c14946ac0982e3f665bdbe5ded2b",
       "src/virtual-context/store.ts": "7b0bbc2de4e400b7cb85a23d926bf5ec2c898c7242df57b220026bf3cbc36783",
-      "src/cli/main.ts": "ee9f86a97d7e1004f72a46c45b6a37fcbe2b5b3e0204880ae380b999fcda5224",
+      "src/cli/main.ts": "c9d2677e188b197be550448073e8e02a49db04dd7642203d27372c198ba1f22b",
       "benchmarks/v2/mcp_gateway_agent_gate.mjs": "ed9a2e1c75e6f4824f744055356c83aef5ff93d0d9a12a18e6fb9957b0499641"
     }
   },
@@ -53,10 +53,10 @@
       "mcp__accounts__pinpoint_query"
     ],
     "upstreamStructuredChars": 81665,
-    "largestModelVisibleToolResultChars": 513,
-    "modelVisibleCharacterReduction": 0.9937182391477377,
-    "turns": 5,
-    "observedCostUSD": 0.026493600000000003,
+    "largestModelVisibleToolResultChars": 508,
+    "modelVisibleCharacterReduction": 0.9937794648870385,
+    "turns": 6,
+    "observedCostUSD": 0.02322345,
     "expected": "user733@example.com",
     "answer": "user733@example.com"
   },

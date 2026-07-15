@@ -5,14 +5,14 @@
 ██╔═══╝ ██║██║╚██╗██║██╔═══╝ ██║   ██║██║██║╚██╗██║   ██║
 ██║     ██║██║ ╚████║██║     ╚██████╔╝██║██║ ╚████║   ██║
 ╚═╝     ╚═╝╚═╝  ╚═══╝╚═╝      ╚═════╝ ╚═╝╚═╝  ╚═══╝   ╚═╝
-                 The lossless MCP result firewall for AI agents
+                 The value-opaque MCP dataflow firewall for AI agents
 </pre></div>
 
-<p align="center"><strong>Stop oversized MCP results before they hit the context window.</strong></p>
+<p align="center"><strong>Move exact data between MCP tools without putting the values in model context.</strong></p>
 
-<p align="center">Wrap any stdio MCP server. Pinpoint keeps large exact results local and gives the agent a small resource handle plus deterministic select, count, grep, slice, and join operations.</p>
+<p align="center">Wrap an unmodified stdio MCP server. Pinpoint can keep large exact results queryable, or pass an allowlisted projection into a hidden destination tool and return only a signed receipt.</p>
 
-<p align="center"><strong>Real cross-host gate: Claude Code + GitHub Copilot CLI both queried the same 81,665-character MCP artifact and returned the exact email</strong></p>
+<p align="center"><strong>Real cross-host gate: Claude Code + GitHub Copilot CLI both completed the same hidden 40-record destination flow with zero fixture values in either client event stream</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
@@ -25,6 +25,7 @@
 
 <p align="center">
   <a href="#get-started-60-seconds">Start</a> ·
+  <a href="#value-opaque-flows">Opaque flows</a> ·
   <a href="#mcp-gateway-the-main-path">Gateway</a> ·
   <a href="#how-it-works">How</a> ·
   <a href="#proof">Proof</a> ·
@@ -34,7 +35,7 @@
   <a href="https://github.com/CodePalAI/pinpoint/discussions">Community</a>
 </p>
 
-<p align="center"><sub>Local-first | Provider-independent | Subscription-compatible | Exact when supported, unchanged when not</sub></p>
+<p align="center"><sub>The lossless MCP result firewall for AI agents | Local-first | Provider-independent | Subscription-compatible</sub></p>
 
 <p align="center"><sub><strong>AI agents / LLMs:</strong> read <a href="./llms.txt"><code>/llms.txt</code></a> for the compact project index.</sub></p>
 
@@ -47,6 +48,7 @@
 | 1,000 JSON records | The host inserts every row into conversation history | A content-addressed `pinpoint://artifact/...` link and schema |
 | A large log or source dump | The host truncates it or spends context on it | A local exact artifact with bounded `grep`, `count`, and `slice` |
 | Wrapped data under `data.results` or `data.items` | The wrapper and every nested row enter context | Pinpoint finds the only unambiguous record collection and keeps the complete wrapper locally |
+| One tool's values must become another tool's input | The model or generated code copies the values between calls | A predeclared `pinpoint_flow` projects locally, calls the hidden destination, and returns a signed commitment-only receipt |
 | Small, error, media, mixed, ambiguous, or unprofitable output | The original result | The original result, byte-equivalent |
 
 The gateway runs between the MCP host and server, before Claude Code, Codex, Copilot, Cursor, or another host can truncate or persist the result. It does not need a provider API key and does not depend on the model API protocol.
@@ -93,6 +95,34 @@ The upstream command is spawned directly, without a shell. Its normal tools rema
 - **Fail open.** Leave errors, media, mixed blocks, small results, ambiguous wrappers, unsupported data, and unprofitable transformations unchanged.
 
 The existing Anthropic/OpenAI proxy and SDK path still supports provider-wire QCV and optional Headroom/pxpipe composition. It is now a secondary path, not the main product claim.
+
+## Value-opaque flows
+
+An operator can predeclare one exact path from a source tool to a destination tool:
+
+```bash
+pinpoint mcp gateway \
+  --flow-config ./flow-policy.json \
+  -- npx -y <your-mcp-server-package>
+```
+
+The policy names the source, destination, destination argument, allowed operations,
+filter fields, projection fields, fixed or dynamic destination arguments, and byte/item
+limits. See the [complete example](./examples/mcp-opaque-flow.json).
+
+With a flow policy loaded, Pinpoint defaults to strict mode:
+
+1. configured source results are captured at every size, even when normal virtualization would be unprofitable;
+2. source capture fails closed instead of returning values when exact retention is impossible;
+3. the model receives a random process-local capability, not a content hash;
+4. `pinpoint_query`, artifact resources, previews, and direct destination calls are unavailable;
+5. `pinpoint_flow` accepts only the configured operation, fields, filters, limits, and non-payload arguments;
+6. Pinpoint calls the unmodified destination tool internally and suppresses its result values;
+7. the model receives one Ed25519-signed, hash-chained receipt with HMAC commitments, counts, field names, limits, and success status, but no source or destination values.
+
+The session verification key is pinned in the MCP `initialize` response. SDK users can call `verifyMcpOpaqueFlowReceipt()` to verify a receipt. This is value-opaque composition, not a claim of zero information leakage: tool names, field names, counts, byte sizes, timing, and success remain observable.
+
+Anthropic and Cloudflare already demonstrated privacy-preserving MCP composition through generated code and sandboxing; Microsoft Fides established agent information-flow control. Pinpoint's narrower candidate contribution is declarative composition between unmodified tools through a host-independent gateway, without generated code or a sandbox, plus signed disclosure-bounded receipts. The [technical claim and prior-art analysis](./planning/value_opaque_mcp_dataflow.md) states the boundary in detail.
 
 ## Works with your stack
 
@@ -228,6 +258,8 @@ The MCP gateway virtualizes a result only when every safety condition holds:
 5. Structured data has an exact query shape. A nested record array is selected only when it is the sole candidate within three wrapper levels.
 
 Everything else passes through unchanged. That includes error results, images and other media, mixed content blocks, small responses, multiple competing nested arrays, unsupported values, and results that cannot fit in the local store.
+
+Those are the ordinary **optimization** rules. A source named in an opaque-flow policy is a **confidentiality** boundary instead: Pinpoint captures it regardless of size or envelope profitability and returns a value-free error if exact capture fails. Protected result metadata, extension fields, JSON-RPC errors, stderr, and unsolicited server messages cannot act as alternate value paths. This intentional fail-closed behavior applies only when the operator loads a flow policy.
 
 Artifacts live only for the gateway process lifetime. The default store is capped at 256 entries and 64 MiB with least-recently-used eviction. Query outputs are capped independently; clients cannot use `pinpoint_query` to dump an unbounded artifact back into context.
 
@@ -392,23 +424,38 @@ Provider wrappers are exported from `@codepal/pinpoint/anthropic` and `@codepal/
 
 CodePal publishes Pinpoint's raw benchmark artifacts, negative results, and safety checks so people can inspect the claims rather than trust a headline.
 
+### Cross-host value-opaque flow gate
+
+Claude Code 2.1.197 with Claude Haiku 4.5 and GitHub Copilot CLI 1.0.71-2 with GPT-5.3 Codex independently executed the same authorized synthetic flow through the production CLI gateway. Each host called only `synthetic_accounts_list` and `pinpoint_flow`. Neither model called the hidden `synthetic_projection_validate` destination or `pinpoint_query`.
+
+| Host | Source call | Opaque flow | Model destination call | Signed receipt | Exact destination acceptance | Final answer |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Claude Code | Yes | Yes | No | Valid | 40 records | `VALIDATED` |
+| GitHub Copilot CLI | Yes | Yes | No | Valid | 40 records | `VALIDATED` |
+
+The grader scanned 400 synthetic private canaries per host, 800 total, and found zero occurrences in either client event stream. It also found neither public source nor selected-payload hashes. Claude completed in four turns for $0.014894 observed provider cost. Copilot reported zero premium requests and zero file changes. Inspect the [content-free cross-host receipt](./benchmarks/results/mcp-opaque-flow-cross-host.first-party-macos-arm64-20260715.json) or rerun `npm run bench:mcp-opaque-flow:cross-host` with both clients authenticated.
+
+The no-model protocol gate exercised the same production gateway 30 times and recorded 30/30 exact destination acceptances, 7/7 denied bypasses, 400/400 absent canaries, valid signatures and receipt chain, rejection of a modified receipt, and distinct commitments for 30 identical payloads. The protected 26,231-byte source was captured even with the ordinary threshold set to 100,000,000 characters. A constructed direct transcript was 31,013 bytes; the source plus signed opaque-flow result was 2,628 bytes, 91.5% lower. Local p95 flow latency was 0.91 ms over 30 samples on the recorded machine. Inspect the [protocol receipt](./benchmarks/results/mcp-opaque-flow.first-party-macos-arm64-20260715.json) or run `npm run bench:mcp-opaque-flow` without a provider call.
+
+These tests prove exact behavior for committed synthetic traces, not semantic noninterference, production demand, or a universal security guarantee. Counts, sizes, field names, timing, and success remain visible. The wrapped process is trusted with values, and receipt keys are ephemeral session keys rather than operator identity certificates. The [value-opaque design note](./planning/value_opaque_mcp_dataflow.md) compares verified prior art and lists the remaining breakthrough gates.
+
 ### Cross-host MCP gateway gate
 
 Claude Code 2.1.197 and GitHub Copilot CLI 1.0.71-2 independently used the production gateway against the same disposable synthetic MCP server. The upstream `accounts_list` tool intentionally had no filter and returned 1,000 records under `structuredContent.data.accounts`. Both clients received the same artifact id and returned exactly `user733@example.com`.
 
 | Host | Model | Upstream call | Exact query | Final answer | Bounded result evidence |
 |---|---|:---:|:---:|:---:|---|
-| Claude Code | Claude Haiku 4.5 | Yes | Yes | Exact | Largest model-visible tool result: 513 characters |
-| GitHub Copilot CLI | GPT-5.3 Codex | Yes | Yes | Exact | Largest complete tool-event record: 2,965 characters; includes event metadata |
+| Claude Code | Claude Haiku 4.5 | Yes | Yes | Exact | Largest model-visible tool result: 508 characters |
+| GitHub Copilot CLI | GPT-5.3 Codex | Yes | Yes | Exact | Largest complete tool-event record: 2,840 characters; includes event metadata |
 
 Claude autonomously performed this sequence:
 
 1. discovered and called `mcp__accounts__accounts_list`;
-2. received a 513-character artifact result instead of the 81,665-character structured payload, a 99.4% reduction in model-visible characters for that tool result;
+2. received a 508-character artifact result instead of the 81,665-character structured payload, a 99.4% reduction in model-visible characters for that tool result;
 3. called `mcp__accounts__pinpoint_query` with `accountId: 733` and `fields: ["email"]`;
 4. returned exactly `user733@example.com`.
 
-The final artifact-asserting gate completed in five agent turns for $0.026494 observed provider cost. Filesystem, shell, subagent, and editing tools were denied, and the run failed unless both MCP calls occurred, exactly one expected artifact id appeared, every visible tool result stayed below 5,000 characters, and the final answer matched exactly. Inspect the [content-free receipt](./benchmarks/results/mcp-gateway-agent.first-party-macos-arm64-20260715.json) or rerun `npm run bench:mcp-gateway:agent` with Claude Code authenticated.
+The final artifact-asserting gate completed in six agent turns for $0.023223 observed provider cost. Filesystem, shell, subagent, and editing tools were denied, and the run failed unless both MCP calls occurred, exactly one expected artifact id appeared, every visible tool result stayed below 5,000 characters, and the final answer matched exactly. Inspect the [content-free receipt](./benchmarks/results/mcp-gateway-agent.first-party-macos-arm64-20260715.json) or rerun `npm run bench:mcp-gateway:agent` with Claude Code authenticated.
 
 Copilot auto-routed to `gpt-5.3-codex`, exposed only the synthetic `accounts` MCP server, called both tools, changed no files, and used zero premium requests. Rerun with `npm run bench:mcp-gateway:copilot`.
 
@@ -482,11 +529,17 @@ The full [benchmark report](./benchmarks/REPORT.md) keeps live, offline, agentic
 
 ## Safety and privacy
 
+- Opaque-flow policies are operator-owned JSON loaded before startup. The model cannot choose an arbitrary source, destination, payload argument, operation, field, or limit.
+- Configured source tools are fail-closed at every result size. Protected content, metadata, extension fields, JSON-RPC errors, stderr, and unsolicited server messages are not forwarded as alternate value paths.
+- Strict flow mode uses random 128-bit process-local capabilities. Public content hashes, artifact resources, previews, `pinpoint_query`, and direct hidden-destination calls are disabled by default.
+- Flow receipts expose field names, counts, sizes, limits, and success status. Values are represented by per-sequence HMAC-SHA256 commitments; equal values do not produce equal public commitments.
+- Receipts are Ed25519-signed and hash-chained. The session verification key is pinned at MCP initialization. This detects receipt modification but is not operator identity, hardware attestation, or proof that the upstream process is honest.
+- The wrapped upstream process is trusted with source and destination values. Pinpoint does not stop that process from using its own network, filesystem, subprocess, timing, or other operating-system channels.
 - The MCP gateway spawns the configured upstream command directly with `shell: false`. Upstream arguments are never interpolated into a shell command.
 - Gateway artifacts stay in bounded process memory and disappear at shutdown. Text blocks retain their exact text. Structured content is retained as canonical JSON after MCP parsing.
 - Store capacity is reserved atomically before a handle is emitted. If the artifact cannot fit, the complete original result passes through instead of producing a dead reference.
 - `pinpoint_query` accepts only bounded deterministic operations and caps every result. `resources/read` returns a bounded preview, never the complete unbounded artifact.
-- Error results, media, mixed content, ambiguous nested collections, and unsupported output pass through unchanged. The host may still apply its own truncation to those results.
+- Outside configured opaque-flow sources, error results, media, mixed content, ambiguous nested collections, and unsupported output pass through unchanged. The host may still apply its own truncation to those results.
 - Upstream MCP output is untrusted. Virtualization reduces initial exposure, but queried rows or lines can still contain prompt injection or malicious data and must be treated like any other tool result.
 - Pinpoint binds to `127.0.0.1` by default. It has no public login or access-control layer, so do not expose it directly to the internet.
 - Provider credentials are forwarded to the configured provider and are not stored by Pinpoint.
@@ -521,6 +574,8 @@ The defaults are designed for local use. These are the controls most people need
 | Env | Purpose | Default |
 |---|---|---|
 | `PINPOINT_HOST` / `PINPOINT_PORT` | listen interface / port | `127.0.0.1` / `8788` |
+| `PINPOINT_MCP_MIN_CHARS` | ordinary MCP result-firewall threshold | `16000` |
+| `PINPOINT_MCP_FLOW_CONFIG` | versioned value-opaque flow policy file | unset |
 | `PINPOINT_MAX_INSPECTION_BYTES` | maximum request bytes buffered for optimization; larger requests stream unchanged | `33554432` |
 | `PINPOINT_MODE` | `audit` (no processors), `shadow` (propose only), `optimize` (commit), `enforce` (reserved output policy) | `optimize` |
 | `PINPOINT_VIRTUAL_CONTEXT` | exact-data path; set `0` to turn it off | `on` |

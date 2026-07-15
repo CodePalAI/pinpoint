@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
 
@@ -9,10 +10,18 @@ import {
   type VirtualContextJoinQuery,
   type VirtualContextQuery,
 } from '../virtual-context/store.js';
+import {
+  MCP_FLOW_TOOL_NAME,
+  McpOpaqueFlowEngine,
+  type McpOpaqueFlowPolicy,
+  type PreparedMcpOpaqueFlow,
+} from './flow.js';
 
 export const MCP_QUERY_TOOL_NAME = VIRTUAL_QUERY_TOOL_NAME;
 export const MCP_ARTIFACT_URI_PREFIX = 'pinpoint://artifact/';
 export const DEFAULT_MCP_VIRTUALIZE_CHARS = 16_000;
+export { MCP_FLOW_TOOL_NAME };
+export type { McpOpaqueFlowPolicy };
 
 type JsonPrimitive = string | number | boolean | null;
 
@@ -39,6 +48,11 @@ export interface McpResultFirewallOptions {
   readonly maxResultChars?: number;
   readonly maxEntries?: number;
   readonly maxStoredBytes?: number;
+  readonly exposeQueryTool?: boolean;
+  readonly exposeArtifactResources?: boolean;
+  readonly opaqueArtifactIds?: boolean;
+  readonly flowToolAvailable?: boolean;
+  readonly protectedSourceTools?: readonly string[];
 }
 
 export interface McpGatewayOptions extends McpResultFirewallOptions {
@@ -49,6 +63,7 @@ export interface McpGatewayOptions extends McpResultFirewallOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly signal?: AbortSignal;
   readonly shutdownGraceMs?: number;
+  readonly flows?: readonly McpOpaqueFlowPolicy[];
 }
 
 export interface McpResultTransformation {
@@ -121,8 +136,9 @@ const MCP_ARTIFACT_OUTPUT_SCHEMA = {
         fields: { type: 'array', items: { type: 'string' } },
         dataPath: { type: 'array', items: { type: 'string' } },
         queryTool: { type: 'string' },
+        flowTool: { type: 'string' },
       },
-      required: ['id', 'sourceTool', 'kind', 'bytes', 'items', 'fields', 'queryTool'],
+      required: ['id', 'sourceTool', 'kind', 'bytes', 'items', 'fields'],
       additionalProperties: false,
     },
   },
@@ -236,6 +252,10 @@ function virtualResult(
   sourceTool: string,
   descriptor: VirtualContextDescriptor,
   original: McpCallToolResult,
+  queryToolAvailable: boolean,
+  flowToolAvailable: boolean,
+  resourceAvailable: boolean,
+  protectedSource: boolean,
 ): McpCallToolResult {
   const label = displayToolName(sourceTool);
   const artifact = {
@@ -246,29 +266,35 @@ function virtualResult(
     items: descriptor.items,
     fields: descriptor.fields,
     ...(descriptor.dataPath ? { dataPath: descriptor.dataPath } : {}),
-    queryTool: MCP_QUERY_TOOL_NAME,
+    ...(queryToolAvailable ? { queryTool: MCP_QUERY_TOOL_NAME } : {}),
+    ...(flowToolAvailable ? { flowTool: MCP_FLOW_TOOL_NAME } : {}),
   };
+  const access = queryToolAvailable
+    ? `Call ${MCP_QUERY_TOOL_NAME} with this id for bounded exact access.`
+    : flowToolAvailable
+      ? `Use ${MCP_FLOW_TOOL_NAME} with a configured flow to transfer an allowlisted projection without revealing it.`
+      : 'The exact result is available only through its local resource handle.';
   const text = [
     `Pinpoint kept the exact ${descriptor.bytes}-byte result from ${label} outside model context.`,
     JSON.stringify(artifact),
-    `Call ${MCP_QUERY_TOOL_NAME} with this id for bounded exact access; use schema when the fields are unclear.`,
+    access,
   ].join('\n');
 
   return {
-    ...original,
+    ...(protectedSource ? {} : original),
     content: [
       { type: 'text', text },
-      {
+      ...(resourceAvailable ? [{
         type: 'resource_link',
         uri: `${MCP_ARTIFACT_URI_PREFIX}${descriptor.id}`,
         name: `${label} result`,
-        description: `Exact ${descriptor.kind} result retained by Pinpoint; query with ${MCP_QUERY_TOOL_NAME}.`,
+        description: `Exact ${descriptor.kind} result retained by Pinpoint outside model context.`,
         mimeType: artifactMimeType(descriptor),
-      },
+      }] : []),
     ],
     structuredContent: { pinpointArtifact: artifact },
     _meta: {
-      ...(isRecord(original._meta) ? original._meta : {}),
+      ...(!protectedSource && isRecord(original._meta) ? original._meta : {}),
       pinpoint: { virtualized: true, artifact },
     },
   };
@@ -288,10 +314,24 @@ function errorResult(message: string): McpCallToolResult {
 export class McpResultFirewall {
   readonly store: VirtualContextStore;
   readonly minChars: number;
-  private readonly descriptors = new Map<string, { descriptor: VirtualContextDescriptor; sourceTool: string }>();
+  readonly exposeQueryTool: boolean;
+  readonly exposeArtifactResources: boolean;
+  readonly opaqueArtifactIds: boolean;
+  readonly flowToolAvailable: boolean;
+  private readonly protectedSourceTools: ReadonlySet<string>;
+  private readonly descriptors = new Map<string, {
+    descriptor: VirtualContextDescriptor;
+    sourceTool: string;
+    storeId: string;
+  }>();
 
   constructor(options: McpResultFirewallOptions = {}) {
     this.minChars = Math.max(1, Math.trunc(options.minChars ?? DEFAULT_MCP_VIRTUALIZE_CHARS));
+    this.exposeQueryTool = options.exposeQueryTool ?? true;
+    this.exposeArtifactResources = options.exposeArtifactResources ?? this.exposeQueryTool;
+    this.opaqueArtifactIds = options.opaqueArtifactIds ?? !this.exposeQueryTool;
+    this.flowToolAvailable = options.flowToolAvailable ?? false;
+    this.protectedSourceTools = new Set(options.protectedSourceTools ?? []);
     this.store = new VirtualContextStore(
       options.maxResultChars,
       options.maxEntries,
@@ -299,27 +339,75 @@ export class McpResultFirewall {
     );
   }
 
-  get tools(): readonly [typeof MCP_QUERY_TOOL] {
-    return [MCP_QUERY_TOOL];
+  get tools(): readonly (typeof MCP_QUERY_TOOL)[] {
+    return this.exposeQueryTool ? [MCP_QUERY_TOOL] : [];
   }
 
   private pruneDescriptors(): void {
-    for (const id of this.descriptors.keys()) {
-      if (!this.store.has(id)) this.descriptors.delete(id);
+    for (const [id, artifact] of this.descriptors) {
+      if (!this.store.has(artifact.storeId)) this.descriptors.delete(id);
     }
   }
 
+  private artifactId(storeId: string): string {
+    if (!this.opaqueArtifactIds) return storeId;
+    let id: string;
+    do id = `vctx_${randomBytes(16).toString('hex')}`;
+    while (this.descriptors.has(id));
+    return id;
+  }
+
+  private resolveQuery(query: VirtualContextQuery | VirtualContextJoinQuery): VirtualContextQuery | VirtualContextJoinQuery {
+    const source = this.descriptors.get(query.id);
+    if (!source) return query;
+    if (query.op !== 'json_join') return { ...query, id: source.storeId };
+    const destination = this.descriptors.get(query.joinId);
+    return {
+      ...query,
+      id: source.storeId,
+      ...(destination ? { joinId: destination.storeId } : {}),
+    };
+  }
+
+  isProtectedSourceTool(name: string): boolean {
+    return this.protectedSourceTools.has(name);
+  }
+
+  private refusedProtectedResult(sourceTool: string, reason: string): McpResultTransformation {
+    return {
+      result: errorResult(`Pinpoint blocked the protected result from ${displayToolName(sourceTool)}: ${reason}`),
+      virtualized: false,
+    };
+  }
+
   transformResult(sourceTool: string, result: McpCallToolResult): McpResultTransformation {
+    const protectedSource = this.isProtectedSourceTool(sourceTool);
     try {
       const raw = exactPayload(result);
-      if (raw == null || raw.length < this.minChars) return { result, virtualized: false };
+      if (raw == null) {
+        return protectedSource
+          ? this.refusedProtectedResult(sourceTool, 'the response was not an eligible exact text or JSON payload')
+          : { result, virtualized: false };
+      }
+      if (!protectedSource && raw.length < this.minChars) return { result, virtualized: false };
 
       const inspected = this.store.inspect(raw, '').descriptor;
       if ((inspected.recordCollections ?? 0) > 1) {
-        return { result, virtualized: false };
+        return protectedSource
+          ? this.refusedProtectedResult(sourceTool, 'the response contained ambiguous record collections')
+          : { result, virtualized: false };
       }
-      const candidate = virtualResult(sourceTool, inspected, result);
-      if (JSON.stringify(candidate).length >= JSON.stringify(result).length) {
+      const exposedDescriptor = { ...inspected, id: this.artifactId(inspected.id) };
+      const candidate = virtualResult(
+        sourceTool,
+        exposedDescriptor,
+        result,
+        this.exposeQueryTool,
+        this.flowToolAvailable,
+        this.exposeArtifactResources,
+        protectedSource,
+      );
+      if (!protectedSource && JSON.stringify(candidate).length >= JSON.stringify(result).length) {
         return { result, virtualized: false };
       }
 
@@ -327,18 +415,27 @@ export class McpResultFirewall {
       try {
         descriptor = this.store.putMany([raw], new Set([inspected.id]))[0]!;
       } catch {
-        return { result, virtualized: false };
+        return protectedSource
+          ? this.refusedProtectedResult(sourceTool, 'bounded local storage could not retain it')
+          : { result, virtualized: false };
       }
-      if (!this.store.has(descriptor.id)) return { result, virtualized: false };
+      if (!this.store.has(descriptor.id)) {
+        return protectedSource
+          ? this.refusedProtectedResult(sourceTool, 'the exact artifact was not committed')
+          : { result, virtualized: false };
+      }
       this.pruneDescriptors();
-      this.descriptors.set(descriptor.id, { descriptor, sourceTool });
+      const exposed = { ...descriptor, id: exposedDescriptor.id };
+      this.descriptors.set(exposed.id, { descriptor: exposed, sourceTool, storeId: descriptor.id });
       return {
         result: candidate,
         virtualized: true,
-        descriptor,
+        descriptor: exposed,
       };
     } catch {
-      return { result, virtualized: false };
+      return protectedSource
+        ? this.refusedProtectedResult(sourceTool, 'exact capture failed')
+        : { result, virtualized: false };
     }
   }
 
@@ -346,7 +443,7 @@ export class McpResultFirewall {
     if (name !== MCP_QUERY_TOOL_NAME) return errorResult(`unknown Pinpoint tool: ${name}`);
     try {
       const query = parseQuery(args);
-      const text = this.store.query(query);
+      const text = this.store.query(this.resolveQuery(query));
       const parsed = JSON.parse(text) as unknown;
       const failed = isRecord(parsed) && typeof parsed.error === 'string';
       return {
@@ -359,10 +456,21 @@ export class McpResultFirewall {
     }
   }
 
+  artifactInfo(id: string): { descriptor: VirtualContextDescriptor; sourceTool: string } | undefined {
+    this.pruneDescriptors();
+    const artifact = this.descriptors.get(id);
+    return artifact && this.store.has(artifact.storeId) ? artifact : undefined;
+  }
+
+  queryArtifact(query: VirtualContextQuery): string {
+    return this.store.query(this.resolveQuery(query));
+  }
+
   listResources(): readonly Record<string, unknown>[] {
+    if (!this.exposeArtifactResources) return [];
     this.pruneDescriptors();
     return [...this.descriptors.values()]
-      .filter(({ descriptor }) => this.store.has(descriptor.id))
+      .filter(({ storeId }) => this.store.has(storeId))
       .map(({ descriptor, sourceTool }) => ({
         uri: artifactUri(descriptor.id),
         name: `${sourceTool} result`,
@@ -373,11 +481,12 @@ export class McpResultFirewall {
   }
 
   readResource(uri: string): Record<string, unknown> | undefined {
+    if (!this.exposeArtifactResources) return undefined;
     if (!uri.startsWith(MCP_ARTIFACT_URI_PREFIX)) return undefined;
     const id = uri.slice(MCP_ARTIFACT_URI_PREFIX.length);
     const artifact = this.descriptors.get(id);
-    if (!artifact || !this.store.has(id)) return undefined;
-    const preview = this.store.query({ id, op: 'slice', offset: 0, limit: 20 });
+    if (!artifact || !this.store.has(artifact.storeId)) return undefined;
+    const preview = this.store.query({ id: artifact.storeId, op: 'slice', offset: 0, limit: 20 });
     return {
       contents: [
         {
@@ -409,6 +518,11 @@ interface PendingRequest {
   readonly method: string;
   readonly toolName?: string;
   readonly firstPage?: boolean;
+  readonly opaqueFlow?: {
+    readonly clientId: JsonRpcMessage['id'];
+    readonly plan: PreparedMcpOpaqueFlow;
+  };
+  readonly protectedSource?: boolean;
 }
 
 function rpcKey(id: JsonRpcMessage['id']): string {
@@ -453,9 +567,9 @@ function localResources(firewall: McpResultFirewall): Record<string, unknown> {
   return { resources: firewall.listResources() };
 }
 
-function localResourceTemplates(): Record<string, unknown> {
+function localResourceTemplates(firewall?: McpResultFirewall): Record<string, unknown> {
   return {
-    resourceTemplates: [
+    resourceTemplates: firewall?.exposeArtifactResources === false ? [] : [
       {
         uriTemplate: `${MCP_ARTIFACT_URI_PREFIX}{id}`,
         name: 'Pinpoint exact MCP artifact',
@@ -466,28 +580,59 @@ function localResourceTemplates(): Record<string, unknown> {
   };
 }
 
-function mergeInitialize(result: unknown): unknown {
+function mergeInitialize(
+  result: unknown,
+  exposeLocalResources: boolean,
+  flowEngine?: McpOpaqueFlowEngine,
+): unknown {
   if (!isRecord(result)) return result;
   const capabilities = isRecord(result.capabilities) ? result.capabilities : {};
-  const resources = isRecord(capabilities.resources) ? capabilities.resources : {};
+  const upstreamResources = isRecord(capabilities.resources) ? capabilities.resources : undefined;
   const serverInfo = isRecord(result.serverInfo) ? result.serverInfo : {};
+  const meta = isRecord(result._meta) ? result._meta : {};
   return {
     ...result,
-    capabilities: { ...capabilities, tools: isRecord(capabilities.tools) ? capabilities.tools : {}, resources },
+    capabilities: {
+      ...capabilities,
+      tools: isRecord(capabilities.tools) ? capabilities.tools : {},
+      ...(upstreamResources || exposeLocalResources
+        ? { resources: upstreamResources ?? {} }
+        : {}),
+    },
     serverInfo: {
       ...serverInfo,
       name: `pinpoint-gateway/${typeof serverInfo.name === 'string' ? serverInfo.name : 'upstream'}`,
     },
+    ...(flowEngine ? {
+      _meta: {
+        ...meta,
+        pinpoint: {
+          opaqueFlow: {
+            receiptVerifier: flowEngine.receiptVerifier,
+          },
+        },
+      },
+    } : {}),
   };
 }
 
-function mergeTools(result: unknown, firewall: McpResultFirewall, includeLocal: boolean): unknown {
+function mergeTools(
+  result: unknown,
+  firewall: McpResultFirewall,
+  flowEngine: McpOpaqueFlowEngine | undefined,
+  includeLocal: boolean,
+): unknown {
   if (!isRecord(result) || !Array.isArray(result.tools)) return result;
   const tools = result.tools.filter(isRecord);
-  if (tools.some(({ name }) => name === MCP_QUERY_TOOL_NAME)) {
-    throw new Error(`upstream MCP server uses reserved tool name ${MCP_QUERY_TOOL_NAME}`);
+  const reserved = new Set([MCP_QUERY_TOOL_NAME, ...(flowEngine ? [MCP_FLOW_TOOL_NAME] : [])]);
+  const collision = tools.find(({ name }) => typeof name === 'string' && reserved.has(name));
+  if (collision) {
+    throw new Error(`upstream MCP server uses reserved tool name ${String(collision.name)}`);
   }
-  const wrapped = tools.map((tool) =>
+  const visible = flowEngine
+    ? tools.filter(({ name }) => typeof name !== 'string' || !flowEngine.hiddenDestinationTools.has(name))
+    : tools;
+  const wrapped = visible.map((tool) =>
     isRecord(tool.outputSchema) && tool.outputSchema.type === 'object'
       ? {
           ...tool,
@@ -498,17 +643,32 @@ function mergeTools(result: unknown, firewall: McpResultFirewall, includeLocal: 
         }
       : tool,
   );
-  return { ...result, tools: includeLocal ? [...wrapped, ...firewall.tools] : wrapped };
+  const local = [...firewall.tools, ...(flowEngine ? [flowEngine.tool] : [])];
+  return { ...result, tools: includeLocal ? [...wrapped, ...local] : wrapped };
 }
 
 function mergeResources(result: unknown, firewall: McpResultFirewall, includeLocal: boolean): unknown {
-  if (!isRecord(result) || !Array.isArray(result.resources) || !includeLocal) return result;
+  if (
+    !isRecord(result) ||
+    !Array.isArray(result.resources) ||
+    !includeLocal ||
+    !firewall.exposeArtifactResources
+  ) return result;
   return { ...result, resources: [...result.resources, ...firewall.listResources()] };
 }
 
-function mergeResourceTemplates(result: unknown, includeLocal: boolean): unknown {
-  if (!isRecord(result) || !Array.isArray(result.resourceTemplates) || !includeLocal) return result;
-  const local = localResourceTemplates().resourceTemplates as unknown[];
+function mergeResourceTemplates(
+  result: unknown,
+  firewall: McpResultFirewall,
+  includeLocal: boolean,
+): unknown {
+  if (
+    !isRecord(result) ||
+    !Array.isArray(result.resourceTemplates) ||
+    !includeLocal ||
+    !firewall.exposeArtifactResources
+  ) return result;
+  const local = localResourceTemplates(firewall).resourceTemplates as unknown[];
   return { ...result, resourceTemplates: [...result.resourceTemplates, ...local] };
 }
 
@@ -539,7 +699,22 @@ export async function runMcpGateway(
   const input = options.input ?? process.stdin;
   const output = options.output ?? process.stdout;
   const error = options.error ?? process.stderr;
-  const firewall = new McpResultFirewall(options);
+  const flows = options.flows ?? [];
+  const exposeQueryTool = options.exposeQueryTool ?? flows.length === 0;
+  const exposeArtifactResources = options.exposeArtifactResources ?? flows.length === 0;
+  const opaqueArtifactIds = options.opaqueArtifactIds ?? flows.length > 0;
+  const firewall = new McpResultFirewall({
+    ...options,
+    exposeQueryTool,
+    exposeArtifactResources,
+    opaqueArtifactIds,
+    flowToolAvailable: flows.length > 0,
+    protectedSourceTools: flows.map(({ sourceTool }) => sourceTool),
+  });
+  const flowEngine = flows.length > 0 ? new McpOpaqueFlowEngine(firewall, flows) : undefined;
+  if (!firewall.exposeQueryTool && !flowEngine) {
+    throw new TypeError('disabling pinpoint_query requires at least one opaque flow policy');
+  }
   const child = spawn(command, [...args], {
     cwd: options.cwd,
     env: options.env ?? process.env,
@@ -552,9 +727,25 @@ export async function runMcpGateway(
   let clientQueue = Promise.resolve();
   let upstreamQueue = Promise.resolve();
   let forceKillTimer: NodeJS.Timeout | undefined;
+  let activeOpaqueFlows = 0;
+  let activeProtectedSources = 0;
+  let protectedDataHandled = false;
+  let flowPoliciesValidated = flowEngine == null;
+  let suppressedSensitiveStderr = false;
+  const sensitiveOperationActive = (): boolean => activeOpaqueFlows + activeProtectedSources > 0;
+  const resetSensitiveStderr = (): void => {
+    if (!sensitiveOperationActive()) suppressedSensitiveStderr = false;
+  };
 
   child.stderr.setEncoding('utf8');
-  child.stderr.on('data', (chunk: string) => error.write(chunk));
+  child.stderr.on('data', (chunk: string) => {
+    if (!sensitiveOperationActive() && !protectedDataHandled) {
+      error.write(chunk);
+    } else if (!suppressedSensitiveStderr) {
+      suppressedSensitiveStderr = true;
+      error.write('[pinpoint mcp gateway] suppressed upstream stderr during protected dataflow\n');
+    }
+  });
   child.stdin.on('error', (cause) => {
     error.write(`[pinpoint mcp gateway] upstream stdin: ${cause.message}\n`);
   });
@@ -572,8 +763,47 @@ export async function runMcpGateway(
 
     if (message.method === 'tools/call' && message.id !== undefined) {
       const call = callParams(message.params);
+      if (flowEngine && !flowPoliciesValidated) {
+        writeRpc(output, rpcError(message.id, -32003, 'opaque flow policies require a successful tools/list first'));
+        return;
+      }
       if (call?.name === MCP_QUERY_TOOL_NAME) {
-        writeRpc(output, rpcResult(message.id, firewall.callTool(call.name, call.arguments)));
+        const result = firewall.exposeQueryTool
+          ? firewall.callTool(call.name, call.arguments)
+          : errorResult(`${MCP_QUERY_TOOL_NAME} is disabled; use a configured ${MCP_FLOW_TOOL_NAME} flow`);
+        writeRpc(output, rpcResult(message.id, result));
+        return;
+      }
+      if (call?.name === MCP_FLOW_TOOL_NAME && flowEngine) {
+        try {
+          const plan = flowEngine.prepare(call.arguments);
+          const internalId = `pinpoint-flow:${randomUUID()}`;
+          pending.set(rpcKey(internalId), {
+            method: 'tools/call',
+            toolName: plan.policy.destinationTool,
+            opaqueFlow: { clientId: message.id, plan },
+          });
+          protectedDataHandled = true;
+          activeOpaqueFlows += 1;
+          child.stdin.write(`${JSON.stringify({
+            jsonrpc: '2.0',
+            id: internalId,
+            method: 'tools/call',
+            params: {
+              name: plan.policy.destinationTool,
+              arguments: plan.destinationArguments,
+            },
+          })}\n`);
+        } catch (cause) {
+          writeRpc(output, rpcResult(message.id, flowEngine.error(cause)));
+        }
+        return;
+      }
+      if (call && flowEngine?.hiddenDestinationTools.has(call.name)) {
+        writeRpc(
+          output,
+          rpcResult(message.id, errorResult(`${call.name} is restricted to a configured ${MCP_FLOW_TOOL_NAME} flow`)),
+        );
         return;
       }
     }
@@ -603,19 +833,25 @@ export async function runMcpGateway(
       message.id !== undefined &&
       !upstreamHasResources
     ) {
-      writeRpc(output, rpcResult(message.id, localResourceTemplates()));
+      writeRpc(output, rpcResult(message.id, localResourceTemplates(firewall)));
       return;
     }
 
     if (message.id !== undefined && message.method) {
       const call = message.method === 'tools/call' ? callParams(message.params) : undefined;
+      const protectedSource = call != null && firewall.isProtectedSourceTool(call.name);
       pending.set(rpcKey(message.id), {
         method: message.method,
         ...(call ? { toolName: call.name } : {}),
+        ...(protectedSource ? { protectedSource: true } : {}),
         ...(['tools/list', 'resources/list', 'resources/templates/list'].includes(message.method)
           ? { firstPage: firstPage(message.params) }
           : {}),
       });
+      if (protectedSource) {
+        protectedDataHandled = true;
+        activeProtectedSources += 1;
+      }
     }
     child.stdin.write(`${JSON.stringify(message)}\n`);
   };
@@ -624,6 +860,12 @@ export async function runMcpGateway(
     const message = parseRpc(line.trim());
     if (!message) {
       error.write(`[pinpoint mcp gateway] ignored non-JSON upstream stdout: ${line.slice(0, 200)}\n`);
+      return;
+    }
+    if (message.method && (sensitiveOperationActive() || protectedDataHandled)) {
+      if (message.id !== undefined) {
+        child.stdin.write(`${JSON.stringify(rpcError(message.id, -32601, 'server requests are disabled during opaque flows'))}\n`);
+      }
       return;
     }
     if (message.id === undefined || message.method) {
@@ -637,8 +879,28 @@ export async function runMcpGateway(
       return;
     }
     pending.delete(rpcKey(message.id));
+    if (request.opaqueFlow) {
+      activeOpaqueFlows = Math.max(0, activeOpaqueFlows - 1);
+      resetSensitiveStderr();
+      const destinationResult = message.error != null
+        ? errorResult('destination returned a JSON-RPC error')
+        : asToolResult(message.result) ?? errorResult('destination returned an invalid MCP tool result');
+      const result = flowEngine?.complete(request.opaqueFlow.plan, destinationResult) ??
+        errorResult('opaque flow engine unavailable');
+      writeRpc(output, rpcResult(request.opaqueFlow.clientId, result));
+      return;
+    }
+    if (request.protectedSource) {
+      activeProtectedSources = Math.max(0, activeProtectedSources - 1);
+      resetSensitiveStderr();
+    }
     if (message.error != null) {
-      writeRpc(output, message);
+      writeRpc(
+        output,
+        request.protectedSource
+          ? rpcError(message.id, -32603, 'protected source returned a JSON-RPC error')
+          : message,
+      );
       return;
     }
 
@@ -648,13 +910,25 @@ export async function runMcpGateway(
         if (isRecord(result) && isRecord(result.capabilities)) {
           upstreamHasResources = isRecord(result.capabilities.resources);
         }
-        result = mergeInitialize(result);
+        result = mergeInitialize(result, firewall.exposeArtifactResources, flowEngine);
       } else if (request.method === 'tools/list') {
-        result = mergeTools(result, firewall, request.firstPage === true);
+        if (flowEngine && request.firstPage === true) {
+          if (!isRecord(result) || !Array.isArray(result.tools)) {
+            throw new TypeError('opaque flow policy validation requires a complete first tools/list page');
+          }
+          flowEngine.validateToolCatalog(new Set(
+            result.tools
+              .filter(isRecord)
+              .map(({ name }) => name)
+              .filter((name): name is string => typeof name === 'string'),
+          ));
+          flowPoliciesValidated = true;
+        }
+        result = mergeTools(result, firewall, flowEngine, request.firstPage === true);
       } else if (request.method === 'resources/list') {
         result = mergeResources(result, firewall, request.firstPage === true);
       } else if (request.method === 'resources/templates/list') {
-        result = mergeResourceTemplates(result, request.firstPage === true);
+        result = mergeResourceTemplates(result, firewall, request.firstPage === true);
       } else if (request.method === 'tools/call' && request.toolName) {
         const toolResult = asToolResult(result);
         if (toolResult) result = firewall.transformResult(request.toolName, toolResult).result;

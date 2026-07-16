@@ -31,6 +31,13 @@ body:
       description: Label it unit-simulation, offline-real-transform, protocol-integration, live-controlled, or live-agentic.
     validations:
       required: true
+  - type: textarea
+    id: maintenance
+    attributes:
+      label: Maintenance and release impact
+      description: Identify new dependencies, package-size impact, public API/config changes, migration needs, and the owner who will maintain the integration.
+    validations:
+      required: true
   - type: checkboxes
     id: constraints
     attributes:

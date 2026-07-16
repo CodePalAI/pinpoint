@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -28,6 +29,11 @@ const publicEntries = [
   '@codepal/pinpoint/telemetry',
   '@codepal/pinpoint/mcp',
 ];
+const packageBudget = {
+  maxFiles: 200,
+  maxPackedBytes: 400_000,
+  maxUnpackedBytes: 1_100_000,
+};
 
 try {
   const packed = JSON.parse(
@@ -37,9 +43,38 @@ try {
   if (!artifact || artifact.name !== '@codepal/pinpoint') {
     throw new Error('npm pack returned the wrong package identity');
   }
+  const packedBytes = readFileSync(join(temporary, artifact.filename));
+  const packedIntegrity = `sha512-${createHash('sha512').update(packedBytes).digest('base64')}`;
+  if (artifact.integrity !== packedIntegrity) {
+    throw new Error('npm pack integrity does not match the generated tarball bytes');
+  }
+  const fileCount = artifact.files?.length ?? 0;
+  if (fileCount > packageBudget.maxFiles) {
+    throw new Error(`packed artifact has ${fileCount} files; budget is ${packageBudget.maxFiles}`);
+  }
+  if (artifact.size > packageBudget.maxPackedBytes) {
+    throw new Error(`packed artifact is ${artifact.size} bytes; budget is ${packageBudget.maxPackedBytes}`);
+  }
+  if (artifact.unpackedSize > packageBudget.maxUnpackedBytes) {
+    throw new Error(
+      `unpacked artifact is ${artifact.unpackedSize} bytes; budget is ${packageBudget.maxUnpackedBytes}`,
+    );
+  }
   const paths = new Set((artifact.files ?? []).map((file) => file.path));
+  for (const path of paths) {
+    if (
+      path.endsWith('.map') ||
+      path.endsWith('.log') ||
+      path.endsWith('.tgz') ||
+      /(?:^|\/)(?:\.env|\.git|node_modules|coverage)(?:\/|$)/.test(path) ||
+      /\.(?:pem|key|p12|pfx)$/.test(path)
+    ) {
+      throw new Error(`packed artifact contains a forbidden path: ${path}`);
+    }
+  }
   for (const required of [
     'README.md',
+    'RELEASING.md',
     'CODE_OF_CONDUCT.md',
     'MAINTAINERS.md',
     'LICENSE',
@@ -159,14 +194,25 @@ try {
     'pinpoint',
     'README.md',
   );
+  const sourceReadmeText = readFileSync(join(root, 'README.md'), 'utf8');
+  const installedPackageJson = JSON.parse(readFileSync(join(
+    temporary,
+    'node_modules',
+    '@codepal',
+    'pinpoint',
+    'package.json',
+  ), 'utf8'));
+  if (
+    installedPackageJson.name !== artifact.name ||
+    installedPackageJson.version !== artifact.version ||
+    installedPackageJson.types !== './dist/index.d.ts' ||
+    installedPackageJson.sideEffects !== false
+  ) {
+    throw new Error('installed package metadata does not match the reviewed contract');
+  }
   const installedReadmeText = readFileSync(installedReadme, 'utf8');
-  for (const expected of [
-    'This benchmark requires the source checkout',
-    'pinpoint demo',
-  ]) {
-    if (!installedReadmeText.includes(expected)) {
-      throw new Error(`installed README is missing package-scope guidance: ${expected}`);
-    }
+  if (installedReadmeText !== sourceReadmeText) {
+    throw new Error('installed README does not exactly match the reviewed source README');
   }
   const installedReceipt = join(
     temporary,
@@ -186,7 +232,8 @@ try {
   if (verification.valid !== true) throw new Error('installed standalone receipt verifier failed');
 
   console.log(
-    `package smoke: ok (${artifact.name}@${artifact.version}, ${publicEntries.length} exports, ${paths.size} files)`,
+    `package smoke: ok (${artifact.name}@${artifact.version}, ${publicEntries.length} exports, ` +
+      `${paths.size}/${packageBudget.maxFiles} files, ${artifact.size}/${packageBudget.maxPackedBytes} bytes)`,
   );
 } finally {
   rmSync(temporary, { recursive: true, force: true });

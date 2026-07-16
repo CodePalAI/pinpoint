@@ -47,12 +47,13 @@ Recommended tools: VHS for deterministic terminal capture, or Screen Studio/Quic
 - [ ] Confirm Apache-2.0 ownership, `NOTICE`, upstream attribution, and the security contact with counsel or the responsible owner.
 - [x] Add `NPM_TOKEN` to the `release` environment for the bootstrap publication. Verified 2026-07-14.
 - [x] Preserve signed source-only `v0.1.0`; its npm publication failed before registry upload and it is superseded by the reviewed patch release. Verified 2026-07-15.
-- [ ] Publish GitHub Release `v0.1.1`; verify the release workflow publishes `@codepal/pinpoint@0.1.1` with provenance.
-- [ ] On clean Node 22 and 24 environments across Linux, macOS, and Windows, run `npx @codepal/pinpoint@0.1.1 demo`, import every public subpath, and test `pinpoint --help`.
+- [ ] Create draft GitHub Release `v0.2.0`; dispatch the protected release workflow on `--ref v0.2.0`; verify it publishes npm with provenance, attaches checksummed assets, and only then publishes the GitHub Release.
+- [ ] On clean Node 22 and 24 environments across Linux, macOS, and Windows, run `npx @codepal/pinpoint@0.2.0 demo`, import every public subpath, and test `pinpoint --help`.
 - [ ] Confirm `npm view @codepal/pinpoint version repository.url dist.integrity` points to this repository.
-- [ ] After the registry confirms `@codepal/pinpoint@0.1.1`, verify the prepared `npx @codepal/pinpoint demo`, `npm install -g @codepal/pinpoint`, and `npm install @codepal/pinpoint` commands from clean environments.
+- [ ] After the registry confirms `@codepal/pinpoint@0.2.0`, configure npm Trusted Publisher, verify one manual `oidc` release, then remove `NPM_TOKEN`.
+- [ ] Verify the prepared `npx @codepal/pinpoint demo`, `npm install -g @codepal/pinpoint`, and `npm install @codepal/pinpoint` commands from clean environments.
 - [ ] Add npm version and weekly-download badges only after the registry data exists.
-- [ ] Create a signed `v0.1.1` tag from the final reviewed commit and attach the npm tarball SHA-512/integrity value to the release notes.
+- [ ] Create a signed `v0.2.0` tag from the final reviewed commit and attach the npm tarball SHA-512/integrity value to the release notes.
 
 ## Gate 4: GitHub conversion surface
 
@@ -98,12 +99,14 @@ Product Hunt is optional and secondary. HN, GitHub, npm, agent communities, and 
 
 Stars are attention, not the success metric. The useful launch outcomes are successful installs, repeated use, external traces, independent evidence, integrations, and maintainers who return.
 
-## README placeholder audit
+## README package-status audit
 
 Before launch, this command should return no unresolved placeholder whose gate is complete:
 
 ```bash
-rg 'LAUNCH\(' README.md
+rg 'PINPOINT_NPM_STATUS' README.md
 ```
 
-An unresolved placeholder is acceptable only when its corresponding capability is still unavailable. Hidden comments are intentional; visible `TODO`, fake badge, fake testimonial, or blank image is not.
+The command must return exactly one declared status. Use `candidate` on the signed
+release commit with verified npm commands, then switch to `published` after registry
+confirmation.

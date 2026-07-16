@@ -1,22 +1,30 @@
 name: Release to npm
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
         description: Existing release tag to verify and publish
         required: true
         type: string
+      auth_mode:
+        description: npm authentication mode (token is bootstrap-only)
+        required: true
+        default: token
+        type: choice
+        options:
+          - token
+          - oidc
 
 env:
-  RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+  RELEASE_TAG: ${{ inputs.tag }}
+  NPM_AUTH_MODE: ${{ inputs.auth_mode }}
 
 jobs:
   build:
     name: Verify and pack
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: read
     env:
@@ -31,26 +39,32 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.22.2
-          cache: npm
       - name: Validate release source
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
           TAG_COMMIT=$(git rev-list -n 1 "$RELEASE_TAG")
           test "$PACKAGE_NAME" = "@codepal/pinpoint"
           test "$RELEASE_TAG" = "v$PACKAGE_VERSION"
+          test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = "tag"
+          test "$(git for-each-ref --format='%(taggeremail)' "refs/tags/$RELEASE_TAG")" = "<support@codepal.ai>"
+          git config --local gpg.format ssh
+          git config --local gpg.ssh.allowedSignersFile "$PWD/.github/release-allowed-signers"
+          git verify-tag "$RELEASE_TAG"
           test "$(git rev-parse HEAD)" = "$TAG_COMMIT"
           git fetch --no-tags origin "$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
           git merge-base --is-ancestor "$TAG_COMMIT" "origin/$DEFAULT_BRANCH"
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)" = "$RELEASE_TAG"
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = "true"
       - run: npm ci --ignore-scripts
-      - run: npm audit --audit-level=high
       - name: Install Spin model checker
         run: sudo apt-get update && sudo apt-get install -y spin
       - name: Check opaque-flow reference model
         run: npm run formal:opaque-flow
-      - run: npm run prepublishOnly
+      - run: npm run verify:release
       - name: Verify generated files are committed
         run: git diff --exit-code
       - name: Pack release artifact
@@ -58,6 +72,8 @@ jobs:
           mkdir -p release
           npm pack --ignore-scripts --pack-destination release
           test "$(find release -maxdepth 1 -name '*.tgz' | wc -l)" -eq 1
+      - name: Generate production SBOM
+        run: npm run sbom -- --out release/sbom.cdx.json
       - name: Checksum release artifact
         run: |
           curl --fail --silent --show-error --location \
@@ -70,7 +86,7 @@ jobs:
           PACKAGE_SHA512=$(openssl dgst -sha512 -binary "$PACKAGE_TARBALL" | openssl base64 -A)
           printf 'sha512-%s\n' "$PACKAGE_SHA512" > release/PACKAGE_INTEGRITY
           cd release
-          shasum -a 512 ./*.tgz > SHA512SUMS
+          shasum -a 512 ./codepal-pinpoint-*.tgz ./sbom.cdx.json ./PACKAGE_INTEGRITY > SHA512SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: npm-release
@@ -82,9 +98,10 @@ jobs:
     name: Publish verified package
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: release
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -105,7 +122,27 @@ jobs:
           mkdir ../npm-cli
           tar -xzf npm-12.0.1.tgz -C ../npm-cli
           test "$(node ../npm-cli/package/bin/npm-cli.js --version)" = "12.0.1"
-      - name: Verify npm authentication
+          PACKAGE_VERSION=${RELEASE_TAG#v}
+          node -e '
+            const fs = require("node:fs");
+            const sbom = JSON.parse(fs.readFileSync("sbom.cdx.json", "utf8"));
+            const version = process.argv[1];
+            if (sbom.metadata?.component?.name !== "@codepal/pinpoint") throw new Error("invalid SBOM name");
+            if (sbom.metadata?.component?.version !== version) throw new Error("invalid SBOM version");
+            if (sbom.metadata?.component?.purl !== `pkg:npm/%40codepal/pinpoint@${version}`) throw new Error("invalid SBOM purl");
+          ' "$PACKAGE_VERSION"
+      - name: Resolve npm authentication mode
+        id: auth
+        run: |
+          AUTH_MODE="$NPM_AUTH_MODE"
+          case "$AUTH_MODE" in
+            token|oidc) ;;
+            *) echo "unsupported NPM_AUTH_MODE: $NPM_AUTH_MODE" >&2; exit 1 ;;
+          esac
+          echo "mode=$AUTH_MODE" >> "$GITHUB_OUTPUT"
+          echo "npm authentication mode: $AUTH_MODE"
+      - name: Verify bootstrap npm token
+        if: steps.auth.outputs.mode == 'token'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -133,8 +170,8 @@ jobs:
             cat "$REGISTRY_ERROR" >&2
             exit 1
           fi
-      - name: Publish
-        if: steps.registry.outputs.published == 'false'
+      - name: Publish with bootstrap token
+        if: steps.registry.outputs.published == 'false' && steps.auth.outputs.mode == 'token'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -142,3 +179,31 @@ jobs:
           PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
           test -n "$PACKAGE_TARBALL"
           node "$NPM_CLI" publish "$PACKAGE_TARBALL" --access public --provenance --ignore-scripts
+      - name: Publish with npm trusted publishing
+        if: steps.registry.outputs.published == 'false' && steps.auth.outputs.mode == 'oidc'
+        run: |
+          NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
+          PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
+          test -n "$PACKAGE_TARBALL"
+          node "$NPM_CLI" publish "$PACKAGE_TARBALL" --access public --ignore-scripts
+      - name: Attach verified release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
+          test -n "$PACKAGE_TARBALL"
+          test "$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' | wc -l)" -eq 1
+          for ASSET in "$PACKAGE_TARBALL" release/sbom.cdx.json release/PACKAGE_INTEGRITY release/SHA512SUMS; do
+            NAME=$(basename "$ASSET")
+            if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$NAME"; then
+              EXISTING=$(mktemp -d)
+              gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$NAME" --dir "$EXISTING"
+              cmp "$ASSET" "$EXISTING/$NAME"
+            else
+              gh release upload "$RELEASE_TAG" "$ASSET" --repo "$GITHUB_REPOSITORY"
+            fi
+          done
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false

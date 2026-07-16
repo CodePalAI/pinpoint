@@ -58,6 +58,13 @@ body:
       description: OS, Node version, model/provider, auth mode, and relevant PINPOINT_* settings.
     validations:
       required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification result
+      description: State whether `PINPOINT_HEADROOM_AUTOSPAWN=0 PINPOINT_LOG=silent npm run verify` passes, and include only the relevant sanitized failure summary.
+    validations:
+      required: true
   - type: checkboxes
     id: safety
     attributes:

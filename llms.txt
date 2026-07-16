@@ -11,11 +11,13 @@
 - [Breakthrough scorecard](https://github.com/CodePalAI/pinpoint/blob/main/planning/breakthrough_scorecard.md): strict local/external gates and the current not-yet-proven verdict
 - [Benchmark report](https://github.com/CodePalAI/pinpoint/blob/main/benchmarks/REPORT.md): generated evidence split by simulation, offline transform, live controlled, and live agent levels
 - [Reproducing benchmarks](https://github.com/CodePalAI/pinpoint/blob/main/benchmarks/REPRODUCING.md): no-key checks and capped paid replication workflow
+- [Common MCP comparisons](https://github.com/CodePalAI/pinpoint/blob/main/comparisons/README.md): ten paired workflows across seven pinned servers, adoption sources, exact results, and authenticated-service exclusions
 - [QCV design](https://github.com/CodePalAI/pinpoint/blob/main/planning/query_backed_context.md): exact-operation boundaries, threat model, rejected design, and prior art
 - [Product assessment](https://github.com/CodePalAI/pinpoint/blob/main/planning/product_assessment.md): evidence limits, competitive position, validation gates, and kill criteria
 - [MCP result firewall design](https://github.com/CodePalAI/pinpoint/blob/main/planning/mcp_result_firewall.md): upstream interception, exact artifact protocol, invariants, limits, and threat model
 - [OSS adoption research](https://github.com/CodePalAI/pinpoint/blob/main/planning/oss_adoption_research.md): source-backed README and launch patterns from high-attention AI developer projects
 - [Public launch checklist](https://github.com/CodePalAI/pinpoint/blob/main/planning/public_launch.md): manual evidence, media, npm, GitHub, community, and launch-sequence gates
+- [Release guide](https://github.com/CodePalAI/pinpoint/blob/main/RELEASING.md): canonical verification, signed-tag policy, token bootstrap, OIDC trusted publishing, SBOM, integrity, and post-publish checks
 
 ## Primary product path
 
@@ -41,6 +43,7 @@
 - [Published filesystem MCP receipt](https://github.com/CodePalAI/pinpoint/blob/main/benchmarks/results/mcp-oss-filesystem.first-party-macos-arm64-20260715.json): unmodified pinned OSS server, exact row recovery, 999 unrelated canaries absent
 - [Published cross-server MCP receipt](https://github.com/CodePalAI/pinpoint/blob/main/benchmarks/results/mcp-oss-cross-server.first-party-macos-arm64-20260716.json): unmodified filesystem -> memory servers, exact 40-entity side effect, 4/4 denials, 0/600 canaries, separate process environments
 - [Matched HCP comparison receipt](https://github.com/CodePalAI/pinpoint/blob/main/benchmarks/results/hcp-comparison.first-party-macos-arm64-20260716.json): byte-identical workflow; Pinpoint exact, HCP 30/30 exact, both 4/4 native denials and 0/600 canaries; no scalar winner
+- [Common-workflow receipt](https://github.com/CodePalAI/pinpoint/blob/main/benchmarks/results/mcp-common-workflows.first-party-macos-arm64-20260716.json): ten exact paired workflows across Filesystem, Memory, Git, Fetch, DBHub, Playwright, and Time; eight large-result wins and two byte-identical controls
 - [Contributing](https://github.com/CodePalAI/pinpoint/blob/main/CONTRIBUTING.md): architecture contract, evidence labels, tests, and release process
 - [Code of Conduct](https://github.com/CodePalAI/pinpoint/blob/main/CODE_OF_CONDUCT.md): community expectations, private reporting, and enforcement
 - [Upstream attribution](https://github.com/CodePalAI/pinpoint/blob/main/UPSTREAM.md): pinned pxpipe and Headroom contracts

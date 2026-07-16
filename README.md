@@ -23,16 +23,6 @@
 
 <p align="center"><sub>Open source · Local or VPC-side · Works before model context · Your host keeps its model and login</sub></p>
 
-<!--
-PRIMARY DEMO GIF PLACEHOLDER
-Target: assets/pinpoint-demo.gif, with assets/pinpoint-demo-poster.png as a fallback.
-Command: npm run bench:mcp-opaque-flow:cross-host
-Fixture: benchmarks/fixtures/opaque_flow_config.json and benchmarks/fixtures/opaque_flow_data.mjs.
-Capture: 15-20 seconds at 1280x720. Show accounts_list returning 200 synthetic rows, the host receiving only a vctx capability, pinpoint_flow running, the hidden destination accepting 40 rows, and a genuine signed receipt. End on a separate benchmark grade showing privateCanariesLeaked=0, not text inserted into the receipt.
-Hosts: Claude Code 2.1.197 and GitHub Copilot CLI 1.0.71. Use synthetic data, redact transient paths, and choose the first complete receipt as the poster frame.
-Do not add the image tag until both files exist and render correctly on GitHub light and dark themes.
--->
-
 <p align="center">
   <img src="./assets/pinpoint-policy-flow.svg" alt="Pinpoint controls an exact local projection from an existing source MCP tool into an existing destination MCP tool while the AI agent receives only a random capability and signed receipt" width="1100">
 </p>
@@ -190,6 +180,8 @@ That is the basic integration.
 
 ## Install
 
+<!-- PINPOINT_NPM_STATUS: unpublished -->
+
 You need Node.js 22 or newer. Until the npm package is publicly verified, install from the repository:
 
 ```bash
@@ -233,8 +225,6 @@ Look for these fields in the final JSON:
 ```
 
 The exact gate is `benchmarks/v2/mcp_oss_cross_server_gate.mjs`; the [reproduction guide](./benchmarks/REPRODUCING.md) explains the command. Its retained result is the [cross-server receipt](./benchmarks/results/mcp-oss-cross-server.first-party-macos-arm64-20260716.json).
-
-<!-- LAUNCH(npm): Replace the checkout flow above with verified npm commands only after the registry confirms the package. -->
 
 ## Pick your mode
 
@@ -399,13 +389,6 @@ pinpoint-verify-receipt receipt.json \
 
 SDK users can call `verifyMcpOpaqueFlowReceipt(receipt, initializedVerifier)`.
 
-<!--
-RECEIPT PROOF SCREENSHOT PLACEHOLDER
-Target: assets/pinpoint-receipt-proof.png at 1600x900.
-Commands: use pinpoint-verify-receipt against benchmarks/results/mcp-opaque-flow.first-party-macos-arm64-20260715.json with --path firstReceipt; then rerun with a wrong --operator-key-id. Use tests/receipt-verifier-cli.test.ts to stage the changed-policy rejection without exposing an opening record.
-Capture: one accepted receipt, one wrong-key rejection, and one changed-policy rejection. Show no private key, policy opening, transient path, or fixture value. Use the accepted result as the main frame.
--->
-
 ### Safe failure behavior
 
 Configured opaque sources fail closed if Pinpoint cannot capture them exactly.
@@ -423,12 +406,6 @@ Ordinary result-firewall optimization has separate fail-open behavior: unsupport
 | Finance operations | Transactions or invoices | Select approved records and reconciliation fields | ERP or reconciliation tool |
 | Data platform | Warehouse or analytics results | Apply exact filters and projection | Internal workflow tool |
 | Developer platform | Large JSON, logs, traces | Keep exact data local and query only what is needed | Agent context |
-
-<!--
-REAL-WORLD WORKFLOW IMAGE PLACEHOLDER
-Target: assets/pinpoint-before-after.png at 1600x900.
-Capture: two columns. Left shows a conventional MCP loop placing a synthetic customer result in model context. Right shows the same source behind Pinpoint with a compact capability, hidden destination, and receipt. Label model-visible values and destination-visible values explicitly.
--->
 
 Pinpoint is a good fit when one tool has structured data another tool needs, the transfer can be expressed exactly, and you control the MCP launch command.
 
@@ -452,13 +429,6 @@ Pinpoint is a good fit when one tool has structured data another tool needs, the
 | Node.js applications | Import `@codepal/pinpoint/mcp` | Packed consumer smoke |
 
 Pinpoint is **Subscription-compatible at the MCP layer**. The host keeps its current model, API key, OAuth, or subscription login. No new model provider key is required.
-
-<!--
-HOST SETUP GIF PLACEHOLDER
-Target: assets/pinpoint-host-setup.gif at 1200x675, under 5 MB.
-Command/config: reproduce benchmarks/v2/mcp_opaque_flow_cross_host_gate.mjs with benchmarks/fixtures/opaque_flow_config.json.
-Capture: replace one Claude Code 2.1.197 or Copilot CLI 1.0.71 MCP launch command with the Pinpoint wrapper, restart the host, execute the visible source plus pinpoint_flow, and finish on VALIDATED. Keep the clip under 15 seconds, use synthetic data, and redact home/temp paths. Use the VALIDATED frame as the poster.
--->
 
 ## Evidence
 
@@ -671,16 +641,18 @@ The earlier pilot reduced provider-reported input from **22,614 to 594 tokens**,
 Start with [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ```bash
-npm run typecheck
-npm test
+PINPOINT_HEADROOM_AUTOSPAWN=0 PINPOINT_LOG=silent npm run verify
+```
+
+Security-sensitive MCP or release changes also run:
+
+```bash
 npm run formal:opaque-flow
-npm run bench:mcp-opaque-flow
-npm run bench:mcp-oss-cross-server
-npm run bench:compare-hcp
-npm run package:smoke
+npm run formal:opaque-flow:mutation
 ```
 
 Use [GitHub Discussions](https://github.com/CodePalAI/pinpoint/discussions) for architecture questions and sanitized field reports. Report vulnerabilities through [SECURITY.md](./SECURITY.md).
+Maintainers follow [RELEASING.md](./RELEASING.md) for signed tags, protected publication, SBOMs, checksums, and npm provenance.
 
 ## Status
 

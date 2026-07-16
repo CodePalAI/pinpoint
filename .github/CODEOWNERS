@@ -9,8 +9,13 @@
 
 # Release and evidence integrity
 /.github/workflows/ @CodePalAI
+/.github/release-allowed-signers @CodePalAI
+/RELEASING.md @CodePalAI
 /package.json @CodePalAI
 /package-lock.json @CodePalAI
 /scripts/check-package-manifest.mjs @CodePalAI
+/scripts/check-licenses.mjs @CodePalAI
+/scripts/check-release.mjs @CodePalAI
+/scripts/generate-sbom.mjs @CodePalAI
 /scripts/smoke-package.mjs @CodePalAI
 /benchmarks/results/ @CodePalAI

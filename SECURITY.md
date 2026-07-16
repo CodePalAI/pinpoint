@@ -11,11 +11,30 @@ tool authorization, or compliance assessment.
 
 Use GitHub's private **Report a vulnerability** flow in the repository Security tab. Do not open a public issue with exploit details, credentials, private prompts, or raw agent traces. If private reporting is unavailable, email [support@codepal.ai](mailto:support@codepal.ai) to request a private channel and omit technical details from the first message.
 
-Expect an acknowledgement within seven days. Maintainers will confirm scope, coordinate a fix and disclosure, and credit reporters who want attribution.
+Expect an acknowledgement within three business days and an initial severity/scope
+assessment within seven calendar days. Critical reports that plausibly expose release
+integrity, credentials, or protected MCP values are triaged as soon as practical.
+Maintainers will coordinate remediation and disclosure with the reporter, avoid public
+details while users remain exposed, and credit reporters who want attribution. Timelines
+depend on complexity and downstream coordination; status updates continue until closure.
 
 ## Supported versions
 
-Security fixes target the latest published release and the `main` branch. Older prerelease versions may require upgrading.
+Until the first npm publication completes, security fixes target the `main` branch
+and signed GitHub release candidates. After publication, fixes target the latest npm
+release and `main`. Older prerelease versions may require upgrading.
+
+## Verifying a release
+
+Official release candidates use an annotated SSH-signed `v*` tag verified against the
+repository-pinned CodePal signer. The protected release workflow rebuilds one npm
+tarball, generates a production CycloneDX SBOM, checksums the tarball, SBOM, and npm
+integrity record, and attaches those immutable assets to the GitHub Release. npm
+publications from this public repository include provenance.
+
+Compare `dist.integrity` from npm with `PACKAGE_INTEGRITY` from the matching GitHub
+Release and verify `SHA512SUMS` before deployment. See [RELEASING.md](./RELEASING.md)
+for the complete producer and consumer checks.
 
 ## Deployment boundaries
 

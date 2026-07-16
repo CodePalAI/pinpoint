@@ -9,10 +9,7 @@ Current ownership and decision responsibilities are documented in [MAINTAINERS.m
 
 ```bash
 npm ci
-npm run typecheck
-PINPOINT_HEADROOM_AUTOSPAWN=0 npm test
-npm run build
-npm run package:smoke
+PINPOINT_HEADROOM_AUTOSPAWN=0 PINPOINT_LOG=silent npm run verify
 ```
 
 The default suite uses fake local upstreams and does not require provider credentials. Two live-sidecar tests are skipped unless their explicit environment gate is enabled.
@@ -44,9 +41,11 @@ Capture fixtures must remain metadata-only or contain synthetic bodies. Never co
 
 ## Releases
 
-Update the version in `package.json` and `package-lock.json`, move the changelog entries under a dated version heading, and validate with `npm run package:manifest-check`, `npm test`, and `npm pack --dry-run`. Publish a GitHub Release whose tag is exactly `v<package version>`; `.github/workflows/release.yml` rejects mismatched tags, rebuilds one artifact, and accepts an already-published version only when npm's `dist.integrity` exactly matches that artifact.
-
-The first npm publication requires a granular npm token stored as the `NPM_TOKEN` secret in GitHub's `release` environment. After the package exists, configure its npm Trusted Publisher for organization `CodePalAI`, repository `pinpoint`, workflow `release.yml`, environment `release`, and the `npm publish` action. Verify one OIDC release before deleting the bootstrap token. Releases from this public repository include npm provenance.
+Follow [RELEASING.md](./RELEASING.md). The release workflow requires an exact
+version tag, the repository-pinned SSH signer, a clean rebuild, checksum-verified
+artifacts, protected-environment approval, and registry-integrity equality on reruns.
+The first publication uses explicit bootstrap-token mode; normal releases use npm
+Trusted Publishing with OIDC and no long-lived publish token.
 
 ## Pull requests
 

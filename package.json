@@ -3,6 +3,8 @@
   "version": "0.2.0",
   "description": "Policy-controlled MCP dataflow for AI agents, with exact local projections and signed receipts.",
   "type": "module",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
   "license": "Apache-2.0",
   "author": {
     "name": "CodePal",
@@ -107,6 +109,7 @@
     "planning/common_mcp_workflow_evaluation.md",
     "formal/opaque_flow.pml",
     "README.md",
+    "RELEASING.md",
     "llms.txt",
     "CHANGELOG.md",
     "CODE_OF_CONDUCT.md",
@@ -128,6 +131,12 @@
     "build": "npm run clean && tsc -p tsconfig.json",
     "prepare": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "release:check": "node scripts/check-release.mjs",
+    "licenses:check": "node scripts/check-licenses.mjs",
+    "sbom": "node scripts/generate-sbom.mjs",
+    "supply-chain:check": "npm run licenses:check && npm audit --audit-level=high && npm audit signatures",
+    "verify": "npm run package:manifest-check && npm run release:check && npm run supply-chain:check && npm run docs:check && npm run typecheck && npm test && npm run build && npm run package:smoke",
+    "verify:release": "npm run assets:readme && npm run verify",
     "dev": "tsx src/cli/main.ts",
     "demo:qcv": "npm run build && node bin/cli.js demo",
     "pretest": "npm run build",
@@ -155,7 +164,7 @@
     "bench:mcp-oss-cross-server": "npm run build && node benchmarks/v2/mcp_oss_cross_server_gate.mjs",
     "bench:mcp-common-workflows": "npm run build && node benchmarks/v2/mcp_common_workflows_gate.mjs",
     "bench:compare-hcp": "npm run build && node benchmarks/v2/hcp_comparison_gate.mjs",
-    "prepublishOnly": "npm run assets:readme && npm run docs:check && npm run package:manifest-check && npm run typecheck && npm test && npm run build && npm run package:smoke"
+    "prepublishOnly": "npm run verify:release"
   },
   "publishConfig": {
     "access": "public",

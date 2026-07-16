@@ -30,12 +30,21 @@ All notable changes are documented here. This project follows semantic versionin
 - Deny-by-default destination environment policy: `envAllowlist` names are removed from the source process unless explicitly permitted in `sharedEnvAllowlist`; credential values remain outside JSON policy.
 - A two-published-server gate composing unmodified filesystem 2026.7.10 and memory 2026.7.4 packages, with an exact 40-entity persistent side effect, 4/4 native denials, and zero of 600 source canaries in the client transcript.
 - A matched Handle-Capability Protocol comparison over a byte-identical fixture: Pinpoint exact with 4/4 native denials and 0/600 canaries; HCP exact 30/30 with 4/4 different native denials and 0/600 canaries. The receipt preserves HCP's 293/296 public repository-test result and reports no scalar winner.
+- A paired common-workflow gate covering 10 exact tasks across seven pinned published MCP servers: Filesystem, Memory, Git, Fetch, DBHub, Playwright, and Time. Eight oversized results reduced data-bearing response bytes by 98.6% to 99.5%; two bounded controls remained byte-identical.
+- A receipt-backed public comparison gallery with one plain-language page per workflow, dated adoption research, authenticated-service exclusions, and mechanical claim synchronization.
+- Canonical `npm run verify` and `npm run verify:release` gates, package file/byte budgets, a repository-pinned SSH release signer, and explicit bootstrap-token versus OIDC trusted-publishing modes.
+- A pinned CodeQL and dependency-review workflow, registry signature verification, deterministic CycloneDX production SBOM generation, and durable checksum-verified GitHub Release assets.
+- A strict allowlist for production dependency licenses and explicit root `types` and `sideEffects` package metadata.
+- Independent packed-tarball SHA-512 verification and checksum coverage for the package integrity record.
+- Draft-first release publication: npm and immutable assets complete before the GitHub Release becomes public, and tagged candidates cannot ship source-only install instructions.
+- A three-business-day vulnerability acknowledgement target with explicit critical-issue triage and coordinated disclosure language.
 
 ### Changed
 
 - The primary product boundary moved from the model API proxy to the MCP tool boundary, before host truncation and provider context ingestion. Provider-wire QCV remains a secondary path for eligible API-key traffic.
 - Upstream MCP output schemas are advertised as an object union accepting either the original structured result or Pinpoint's artifact envelope.
 - Supplying a flow policy changes configured source tools from ordinary optimization semantics to mandatory fail-closed capture at every result size. Programmatic flow users inherit strict query/resource/capability defaults.
+- CI on Linux, macOS, and Windows now consumes the same canonical verification contract used by contributors and release builds.
 
 ### Safety
 

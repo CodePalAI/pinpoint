@@ -17,6 +17,7 @@ jobs:
   verify:
     name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -33,30 +34,22 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run package:manifest-check
-      - run: npm audit --audit-level=high
-      - run: npm run docs:check
+      - run: npm run verify
       - if: matrix.node == 24
         name: Install Spin model checker
         run: sudo apt-get update && sudo apt-get install -y spin
       - if: matrix.node == 24
         name: Check opaque-flow reference model
         run: npm run formal:opaque-flow
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
       - if: matrix.node == 24
         run: npm run bench:anthropic:self-test
       - if: matrix.node == 24
         run: npm run bench:qcv-quality
-      - run: node bin/cli.js --help
-      - run: node bin/cli.js demo
-      - run: npm run package:smoke
-      - run: npm pack --dry-run
 
   platform-smoke:
     name: ${{ matrix.os }} smoke
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -73,11 +66,4 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run package:manifest-check
-      - run: npm run docs:check
-      - run: npm run typecheck
-      - run: npm run build
-      - run: node bin/cli.js --help
-      - run: node bin/cli.js demo
-      - run: npm run package:smoke
-      - run: npm pack --dry-run
+      - run: npm run verify

@@ -506,6 +506,8 @@ const endUserSignals = [
   '## When Pinpoint is a bad fit',
   '## Evidence',
   '## Security boundary',
+  'npm run verify',
+  'RELEASING.md',
   'Bounded reference model',
   '## Works with your stack',
   'Subscription-compatible',
@@ -517,10 +519,6 @@ const endUserSignals = [
   'pinpoint_flow',
   'verifyMcpOpaqueFlowReceipt(receipt, initializedVerifier)',
   'Pinpoint returns the receipt through MCP but does not persist it.',
-  'PRIMARY DEMO GIF PLACEHOLDER',
-  'RECEIPT PROOF SCREENSHOT PLACEHOLDER',
-  'REAL-WORLD WORKFLOW IMAGE PLACEHOLDER',
-  'HOST SETUP GIF PLACEHOLDER',
 ];
 for (const signal of endUserSignals) {
   if (!readme.includes(signal)) fail(`README is missing end-user onboarding signal: ${signal}`);
@@ -529,7 +527,9 @@ if (/[]/.test(readme)) fail('README contains control characters');
 if (/[—–“”]/.test(readme)) fail('README contains non-ASCII dash or quote punctuation');
 
 const visibleReadme = readme.replace(/<!--[^]*?-->/g, '');
-const waitingForNpm = readme.includes('LAUNCH(npm)');
+const npmStatusMatches = [...readme.matchAll(/<!-- PINPOINT_NPM_STATUS: (unpublished|candidate|published) -->/g)];
+if (npmStatusMatches.length !== 1) fail('README must declare exactly one PINPOINT_NPM_STATUS marker');
+const waitingForNpm = npmStatusMatches[0]?.[1] === 'unpublished';
 if (waitingForNpm) {
   if (!visibleReadme.includes('git clone https://github.com/CodePalAI/pinpoint.git')) {
     fail('pre-npm README is missing the verified public clone command');

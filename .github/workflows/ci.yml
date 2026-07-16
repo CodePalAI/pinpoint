@@ -33,6 +33,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm run package:manifest-check
       - run: npm audit --audit-level=high
       - run: npm run docs:check
       - if: matrix.node == 24
@@ -72,6 +73,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm run package:manifest-check
       - run: npm run docs:check
       - run: npm run typecheck
       - run: npm run build

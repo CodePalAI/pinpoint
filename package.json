@@ -82,9 +82,6 @@
     "assets/",
     "benchmarks/REPORT.md",
     "benchmarks/REPRODUCING.md",
-    "benchmarks/results/direct-anthropic-virtual.json",
-    "benchmarks/results/evidence-gate.first-party-macos-arm64-20260715.json",
-    "benchmarks/results/agent-trace-gate.first-party-macos-arm64-20260715.json",
     "benchmarks/results/mcp-gateway-agent.first-party-macos-arm64-20260715.json",
     "benchmarks/results/mcp-gateway-cross-host.first-party-macos-arm64-20260715.json",
     "benchmarks/results/mcp-opaque-flow.first-party-macos-arm64-20260715.json",
@@ -95,7 +92,6 @@
     "benchmarks/results/hcp-comparison.first-party-macos-arm64-20260716.json",
     "benchmarks/competitors/hcp_same_workflow_adapter.mjs",
     "benchmarks/v2/hcp_comparison_gate.mjs",
-    "benchmarks/traces/agent-gate/",
     "bin/",
     "dist/",
     "examples/",
@@ -197,6 +193,7 @@
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vite": "^6.4.3",
-    "vitest": "^3.2.6"
+    "vitest": "^3.2.6",
+    "ajv": "^8.17.1"
   }
 }

@@ -4,6 +4,8 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## Unreleased
 
+## 0.2.0 - 2026-07-16
+
 ### Added
 
 - A transparent stdio MCP gateway: `pinpoint mcp gateway -- <server> [args...]` starts an unmodified upstream server without a shell and forwards bidirectional JSON-RPC traffic.

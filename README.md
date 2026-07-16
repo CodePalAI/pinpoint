@@ -111,7 +111,7 @@ You need Node.js 22 or newer. Until the npm package is publicly verified, instal
 ```bash
 git clone https://github.com/CodePalAI/pinpoint.git
 cd pinpoint
-npm install && npm link
+npm ci && npm link
 pinpoint --version
 ```
 

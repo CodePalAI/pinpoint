@@ -411,7 +411,7 @@ if (waitingForNpm) {
   if (!visibleReadme.includes('git clone https://github.com/CodePalAI/pinpoint.git')) {
     fail('pre-npm README is missing the verified public clone command');
   }
-  if (!visibleReadme.includes('npm install && npm link')) {
+  if (!visibleReadme.includes('npm ci && npm link')) {
     fail('pre-npm README is missing the verified checkout CLI setup');
   }
   if (!visibleReadme.includes('npm install /path/to/pinpoint')) {

@@ -9,14 +9,26 @@ const lockedRoot = packageLock.packages?.[''];
 
 if (!lockedRoot) throw new Error('package-lock.json is missing its root package entry');
 
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value == null || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]),
+  );
+}
+
+function equal(left, right) {
+  return JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right));
+}
+
 for (const field of ['name', 'version', 'license']) {
-  if (JSON.stringify(packageJson[field]) !== JSON.stringify(lockedRoot[field])) {
+  if (!equal(packageJson[field], lockedRoot[field])) {
     throw new Error(`package manifest mismatch for ${field}`);
   }
 }
 
 for (const field of ['bin', 'dependencies', 'devDependencies', 'engines']) {
-  if (JSON.stringify(packageJson[field] ?? {}) !== JSON.stringify(lockedRoot[field] ?? {})) {
+  if (!equal(packageJson[field] ?? {}, lockedRoot[field] ?? {})) {
     throw new Error(`package manifest mismatch for ${field}`);
   }
 }

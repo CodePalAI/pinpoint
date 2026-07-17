@@ -32,6 +32,12 @@ export interface HeadroomDashboardAdapterOptions {
 const DEFAULT_POLL_INTERVAL_MS = 250;
 const UNAVAILABLE_GRACE_MS = 1_000;
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -137,7 +143,7 @@ export class HeadroomDashboardAdapter {
   private stopping = false;
 
   constructor(private readonly options: HeadroomDashboardAdapterOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, '');
+    this.baseUrl = trimTrailingSlashes(options.baseUrl);
     this.fetchImpl = options.fetch ?? fetch;
     this.now = options.now ?? (() => new Date());
     this.intervalMs = Math.max(250, options.intervalMs ?? DEFAULT_POLL_INTERVAL_MS);

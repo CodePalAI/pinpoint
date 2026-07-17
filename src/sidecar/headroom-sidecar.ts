@@ -49,6 +49,12 @@ const MANAGED_ENV_KEYS = [
   'ComSpec',
 ] as const;
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
+
 /** Minimal environment for a keyless, process-local managed compression sidecar. */
 export function managedSidecarEnvironment(
   port: number,
@@ -113,7 +119,7 @@ export class HeadroomSidecar {
     private readonly cfg: SemanticConfig,
     private readonly log: Logger,
   ) {
-    this.baseUrl = cfg.sidecarUrl.replace(/\/+$/, '');
+    this.baseUrl = trimTrailingSlashes(cfg.sidecarUrl);
   }
 
   /** Current resolved base URL of the sidecar (may change after a spawn). */

@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { chmodSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 
 import {
   AgentRegistry,
@@ -107,33 +116,47 @@ describe('copilot preflight', () => {
   });
 });
 
-/** Create a temp dir with fake `headroom`/`copilot` execs; return paths + cleanup. */
-function fakeBin(): { dir: string; headroom: string; argsFile: string; restore: () => void } {
+/** Create native launchers backed by the current Node executable. */
+function fakeBin(): { dir: string; wrapperScript: string; argsFile: string; restore: () => void } {
   const dir = mkdtempSync(join(tmpdir(), 'pinpoint-wrap-'));
   const argsFile = join(dir, 'args.txt');
-  const headroom = join(dir, 'headroom');
-  writeFileSync(headroom, `#!/bin/sh\nprintf '%s\\n' "$*" > "${argsFile}"\nexit 0\n`);
+  const wrapperScript = join(dir, 'wrap');
+  writeFileSync(
+    wrapperScript,
+    `const fs = require('node:fs');\nfs.writeFileSync(${JSON.stringify(argsFile)}, 'wrap ' + process.argv.slice(2).join(' ') + '\\n');\n`,
+  );
+  const executableSuffix = process.platform === 'win32' ? '.exe' : '';
+  const headroom = join(dir, `headroom${executableSuffix}`);
+  const copilot = join(dir, `copilot${executableSuffix}`);
+  if (process.platform === 'win32') {
+    copyFileSync(process.execPath, headroom);
+    copyFileSync(process.execPath, copilot);
+  } else {
+    symlinkSync(process.execPath, headroom);
+    symlinkSync(process.execPath, copilot);
+  }
   chmodSync(headroom, 0o755);
-  const copilot = join(dir, 'copilot');
-  writeFileSync(copilot, '#!/bin/sh\nexit 0\n');
   chmodSync(copilot, 0o755);
 
   const saved = {
+    cwd: process.cwd(),
     PATH: process.env.PATH,
     PINPOINT_HEADROOM_BIN: process.env.PINPOINT_HEADROOM_BIN,
     GITHUB_COPILOT_TOKEN: process.env.GITHUB_COPILOT_TOKEN,
   };
-  process.env.PATH = `${dir}:${saved.PATH ?? ''}`;
+  process.chdir(dir);
+  process.env.PATH = `${dir}${delimiter}${saved.PATH ?? ''}`;
   process.env.PINPOINT_HEADROOM_BIN = headroom;
   process.env.GITHUB_COPILOT_TOKEN = 'test-token';
 
   const restore = () => {
-    for (const [k, v] of Object.entries(saved)) {
+    process.chdir(saved.cwd);
+    for (const [k, v] of Object.entries(saved).filter(([key]) => key !== 'cwd')) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
   };
-  return { dir, headroom, argsFile, restore };
+  return { dir, wrapperScript, argsFile, restore };
 }
 
 describe('wrap copilot → headroom delegation', () => {
@@ -187,10 +210,9 @@ describe('wrap copilot → headroom delegation', () => {
     const savedDashboardDir = process.env.PINPOINT_DASHBOARD_DIR;
     process.env.PINPOINT_DASHBOARD_DIR = history;
     writeFileSync(
-      fake.headroom,
-      `#!/bin/sh\nprintf '%s\\n' "$*" > "${fake.argsFile}"\nprintf '%s\\n%s\\n%s\\n' "$PINPOINT_DASHBOARD_GROUP" "$PINPOINT_DASHBOARD_DIR" "$PINPOINT_DASHBOARD_TOKEN" > "${envFile}"\nexit 0\n`,
+      fake.wrapperScript,
+      `const fs = require('node:fs');\nfs.writeFileSync(${JSON.stringify(fake.argsFile)}, 'wrap ' + process.argv.slice(2).join(' ') + '\\n');\nfs.writeFileSync(${JSON.stringify(envFile)}, [process.env.PINPOINT_DASHBOARD_GROUP ?? '', process.env.PINPOINT_DASHBOARD_DIR ?? '', process.env.PINPOINT_DASHBOARD_TOKEN ?? ''].join('\\n') + '\\n');\n`,
     );
-    chmodSync(fake.headroom, 0o755);
     try {
       const code = await runWrap({
         agent: 'copilot',
@@ -209,7 +231,9 @@ describe('wrap copilot → headroom delegation', () => {
       const files = readdirSync(groupDir);
       expect(files.some((name) => name.endsWith('.state.json'))).toBe(true);
       expect(files.some((name) => name.endsWith('.events.jsonl'))).toBe(true);
-      expect(statSync(groupDir).mode & 0o777).toBe(0o700);
+      if (process.platform !== 'win32') {
+        expect(statSync(groupDir).mode & 0o777).toBe(0o700);
+      }
     } finally {
       if (savedDashboardDir === undefined) delete process.env.PINPOINT_DASHBOARD_DIR;
       else process.env.PINPOINT_DASHBOARD_DIR = savedDashboardDir;

@@ -151,18 +151,20 @@ describe('DashboardJournal', () => {
     journal.close();
   });
 
-  it('persists only validated metadata in private producer files', () => {
+  it('persists only validated metadata with private POSIX modes', () => {
     const historyRoot = root();
     const journal = new DashboardJournal({ rootDir: historyRoot, source: 'pinpoint' });
     journal.onEvent(routeEvent());
     journal.close();
 
-    expect(statSync(historyRoot).mode & 0o777).toBe(0o700);
-    expect(statSync(journal.groupDir).mode & 0o777).toBe(0o700);
     const statePath = join(journal.groupDir, `${journal.producerId}.state.json`);
     const eventPath = join(journal.groupDir, `${journal.producerId}.events.jsonl`);
-    expect(statSync(statePath).mode & 0o777).toBe(0o600);
-    expect(statSync(eventPath).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') {
+      expect(statSync(historyRoot).mode & 0o777).toBe(0o700);
+      expect(statSync(journal.groupDir).mode & 0o777).toBe(0o700);
+      expect(statSync(statePath).mode & 0o777).toBe(0o600);
+      expect(statSync(eventPath).mode & 0o777).toBe(0o600);
+    }
 
     const result = readDashboardGroup(historyRoot, journal.groupId);
     expect(result.corruptRecords).toBe(0);

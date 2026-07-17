@@ -44,7 +44,8 @@ Dashboard-enabled sessions use one mode-0700 group directory and one mode-0600
 producer journal per process under `~/.pinpoint/dashboard`. Separate producer
 files avoid concurrent writes between a wrapped agent and child Pinpoint MCP
 gateways. History is retained for 30 days within a 64 MiB global budget; corrupt
-records are isolated rather than poisoning a session.
+records are isolated rather than poisoning a session. Windows inherits the
+user-profile ACLs rather than installing a custom ACL.
 
 The internal group id is non-authorizing metadata. A wrapped agent may inspect
 its environment. Pinpoint strips dashboard variables before spawning source and
@@ -61,4 +62,4 @@ and required for snapshot/history/event/SSE APIs.
 
 This protects against ordinary hostile web pages and DNS rebinding. It does not
 protect against another process running as the same operating-system user that
-can read process state or the mode-0600 journal files.
+can read process state or the local journal files.

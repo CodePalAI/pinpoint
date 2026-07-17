@@ -366,10 +366,23 @@ function isExecutable(p: string): boolean {
 
 function which(cmd: string): string | null {
   const path = process.env.PATH ?? '';
+  const extensions = process.platform === 'win32'
+    ? (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+      .split(';')
+      .map((extension) => extension.trim())
+      .filter(Boolean)
+    : [];
+  const hasWindowsExtension = extensions.some((extension) =>
+    cmd.toLowerCase().endsWith(extension.toLowerCase()));
+  const candidates = process.platform === 'win32' && !hasWindowsExtension
+    ? [cmd, ...extensions.map((extension) => `${cmd}${extension}`)]
+    : [cmd];
   for (const dir of path.split(delimiter)) {
     if (!dir) continue;
-    const full = join(dir, cmd);
-    if (isExecutable(full)) return full;
+    for (const candidate of candidates) {
+      const full = join(dir, candidate);
+      if (isExecutable(full)) return full;
+    }
   }
   return null;
 }

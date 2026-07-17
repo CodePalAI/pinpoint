@@ -562,8 +562,10 @@ Observable metadata includes tool names, flow names, field names, operation, cou
 
 The optional dashboard is a separate read-only loopback control plane. Its APIs
 require a random tab-local bearer token and reject cross-origin, invalid-Host,
-and mutating requests. Mode-0600 metadata journals remain readable by other
-processes running as the same operating-system user; this is not an OS sandbox.
+and mutating requests. Metadata journals use mode `0600` files under mode `0700`
+directories on POSIX; Windows relies on inherited user-profile ACLs. Processes
+running as the same operating-system user may still read them; this is not an OS
+sandbox.
 
 Read [SECURITY.md](./SECURITY.md) and the [full threat model](./planning/value_opaque_mcp_dataflow.md#threat-model) before using Pinpoint with sensitive data.
 

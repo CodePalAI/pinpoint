@@ -13,6 +13,20 @@ const npmCli = process.env.npm_execpath;
 if (!npmCli) throw new Error('package smoke must run through npm so npm_execpath is available');
 const runNpm = (args, cwd = temporary) => run(process.execPath, [npmCli, ...args], cwd);
 
+function parseTrailingJsonArray(output, label) {
+  const lines = output.split(/\r?\n/);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (lines[index].trim() !== '[') continue;
+    try {
+      const value = JSON.parse(lines.slice(index).join('\n'));
+      if (Array.isArray(value)) return value;
+    } catch {
+      // npm lifecycle output may precede the final --json document.
+    }
+  }
+  throw new Error(`${label} did not end with a JSON array`);
+}
+
 const publicEntries = [
   '@codepal/pinpoint',
   '@codepal/pinpoint/anthropic',
@@ -37,8 +51,9 @@ const packageBudget = {
 };
 
 try {
-  const packed = JSON.parse(
+  const packed = parseTrailingJsonArray(
     runNpm(['pack', '--ignore-scripts', '--json', '--pack-destination', temporary], root),
+    'npm pack',
   );
   const artifact = packed[0];
   if (!artifact || artifact.name !== '@codepal/pinpoint') {

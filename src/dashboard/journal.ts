@@ -106,6 +106,7 @@ function ensurePrivateDirectory(path: string): void {
 }
 
 function fsyncDirectory(path: string): void {
+  if (process.platform === 'win32') return;
   const descriptor = openSync(path, 'r');
   try {
     fsyncSync(descriptor);

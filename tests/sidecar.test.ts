@@ -1,8 +1,16 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../src/config.js';
@@ -12,8 +20,10 @@ import { closeTestServer } from './helpers/http.js';
 
 const directories: string[] = [];
 const originalEnvironment = { ...process.env };
+const originalWorkingDirectory = process.cwd();
 
 afterEach(() => {
+  process.chdir(originalWorkingDirectory);
   for (const key of Object.keys(process.env)) delete process.env[key];
   Object.assign(process.env, originalEnvironment);
   for (const directory of directories.splice(0)) {
@@ -33,15 +43,16 @@ describe('managed Headroom sidecar', () => {
   it('serializes startup and isolates the child from credentials and unsafe overrides', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'pinpoint-sidecar-'));
     directories.push(directory);
-    const executable = join(directory, 'headroom');
+    const executable = join(directory, `headroom${process.platform === 'win32' ? '.exe' : ''}`);
+    const proxyScript = join(directory, 'proxy');
     const recordPath = join(directory, 'record.json');
     const countPath = join(directory, 'count.txt');
     writeFileSync(
-      executable,
-      `#!/usr/bin/env node
+      proxyScript,
+      `
 const fs = require('node:fs');
 const http = require('node:http');
-const args = process.argv.slice(2);
+const args = ['proxy', ...process.argv.slice(2)];
 fs.appendFileSync(${JSON.stringify(countPath)}, 'spawn\\n');
 fs.writeFileSync(${JSON.stringify(recordPath)}, JSON.stringify({ args, env: process.env }));
 const port = Number(args[args.indexOf('--port') + 1]);
@@ -53,8 +64,11 @@ server.listen(port, '127.0.0.1');
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
 `,
     );
+    if (process.platform === 'win32') copyFileSync(process.execPath, executable);
+    else symlinkSync(process.execPath, executable);
     chmodSync(executable, 0o755);
-    process.env.PATH = `${directory}:${originalEnvironment.PATH ?? ''}`;
+    process.chdir(directory);
+    process.env.PATH = `${directory}${delimiter}${originalEnvironment.PATH ?? ''}`;
     process.env.ANTHROPIC_API_KEY = 'must-not-reach-child';
     process.env.OPENAI_API_KEY = 'must-not-reach-child';
     process.env.HEADROOM_HOST = '0.0.0.0';
@@ -73,38 +87,41 @@ process.on('SIGTERM', () => server.close(() => process.exit(0)));
     });
     const sidecar = new HeadroomSidecar(config.semantic, createLogger('silent'));
 
-    const results = await Promise.all([
-      sidecar.ensureHealthy(),
-      sidecar.ensureHealthy(),
-      sidecar.ensureHealthy(),
-    ]);
+    try {
+      const results = await Promise.all([
+        sidecar.ensureHealthy(),
+        sidecar.ensureHealthy(),
+        sidecar.ensureHealthy(),
+      ]);
 
-    expect(results).toEqual([true, true, true]);
-    expect(readFileSync(countPath, 'utf8').trim().split('\n')).toHaveLength(1);
-    const record = JSON.parse(readFileSync(recordPath, 'utf8')) as {
-      args: string[];
-      env: Record<string, string>;
-    };
-    expect(record.args).toEqual([
-      'proxy',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(port),
-    ]);
-    expect(record.env).toMatchObject({
-      HEADROOM_HOST: '127.0.0.1',
-      HEADROOM_PORT: String(port),
-      HEADROOM_WORKERS: '1',
-      HEADROOM_MODE: 'cache',
-      HEADROOM_STATELESS: 'true',
-      HEADROOM_CCR_BACKEND: 'memory',
-      HEADROOM_TELEMETRY: 'off',
-      HEADROOM_UPDATE_CHECK: 'off',
-    });
-    expect(record.env.ANTHROPIC_API_KEY).toBeUndefined();
-    expect(record.env.OPENAI_API_KEY).toBeUndefined();
-
-    await sidecar.stop();
+      expect(results).toEqual([true, true, true]);
+      expect(readFileSync(countPath, 'utf8').trim().split('\n')).toHaveLength(1);
+      const record = JSON.parse(readFileSync(recordPath, 'utf8')) as {
+        args: string[];
+        env: Record<string, string>;
+      };
+      expect(record.args).toEqual([
+        'proxy',
+        '--host',
+        '127.0.0.1',
+        '--port',
+        String(port),
+      ]);
+      expect(record.env).toMatchObject({
+        HEADROOM_HOST: '127.0.0.1',
+        HEADROOM_PORT: String(port),
+        HEADROOM_WORKERS: '1',
+        HEADROOM_MODE: 'cache',
+        HEADROOM_STATELESS: 'true',
+        HEADROOM_CCR_BACKEND: 'memory',
+        HEADROOM_TELEMETRY: 'off',
+        HEADROOM_UPDATE_CHECK: 'off',
+      });
+      expect(record.env.ANTHROPIC_API_KEY).toBeUndefined();
+      expect(record.env.OPENAI_API_KEY).toBeUndefined();
+    } finally {
+      await sidecar.stop();
+      process.chdir(originalWorkingDirectory);
+    }
   });
 });

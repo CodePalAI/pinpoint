@@ -57,8 +57,12 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TAG_COMMIT"
           git fetch --no-tags origin "$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
           git merge-base --is-ancestor "$TAG_COMMIT" "origin/$DEFAULT_BRANCH"
-          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)" = "$RELEASE_TAG"
-          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = "true"
+          RELEASE_ID=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$RELEASE_TAG\" and .draft == true) | .id" | head -1)
+          test -n "$RELEASE_ID"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq .tag_name)" = "$RELEASE_TAG"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq .draft)" = "true"
+          printf '%s\n' "$RELEASE_ID" > RELEASE_ID
       - run: npm ci --ignore-scripts
       - name: Install Spin model checker
         run: sudo apt-get update && sudo apt-get install -y spin
@@ -70,6 +74,7 @@ jobs:
       - name: Pack release artifact
         run: |
           mkdir -p release
+          mv RELEASE_ID release/RELEASE_ID
           npm pack --ignore-scripts --pack-destination release
           test "$(find release -maxdepth 1 -name '*.tgz' | wc -l)" -eq 1
       - name: Generate production SBOM
@@ -190,20 +195,29 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          RELEASE_ID=$(cat release/RELEASE_ID)
           PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
           test -n "$PACKAGE_TARBALL"
           test "$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' | wc -l)" -eq 1
           for ASSET in "$PACKAGE_TARBALL" release/sbom.cdx.json release/PACKAGE_INTEGRITY release/SHA512SUMS; do
             NAME=$(basename "$ASSET")
-            if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$NAME"; then
+            ASSET_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" \
+              --jq ".[] | select(.name == \"$NAME\") | .id" | head -1)
+            if test -n "$ASSET_ID"; then
               EXISTING=$(mktemp -d)
-              gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$NAME" --dir "$EXISTING"
+              gh api "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID" \
+                -H 'Accept: application/octet-stream' > "$EXISTING/$NAME"
               cmp "$ASSET" "$EXISTING/$NAME"
             else
-              gh release upload "$RELEASE_TAG" "$ASSET" --repo "$GITHUB_REPOSITORY"
+              gh api --method POST "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" \
+                -f "name=$NAME" -H "Content-Type: application/octet-stream" \
+                --input "$ASSET" >/dev/null
             fi
           done
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+        run: |
+          RELEASE_ID=$(cat release/RELEASE_ID)
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false >/dev/null

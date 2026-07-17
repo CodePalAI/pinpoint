@@ -4,6 +4,16 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## Unreleased
 
+## 0.2.1 - 2026-07-18
+
+### Fixed
+
+- Release automation now resolves draft releases by verified numeric release id
+	for validation, asset attachment, and publication instead of relying on
+	intermittent tag-based draft lookup.
+- The failed `v0.2.0` candidate stopped before npm publication or release-asset
+	upload. Version `0.2.1` is the first registry publication candidate.
+
 ## 0.2.0 - 2026-07-18
 
 ### Added

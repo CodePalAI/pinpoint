@@ -4,24 +4,7 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## Unreleased
 
-### Added
-
-- An opt-in local Session Recorder for provider requests, MCP exact-byte
-	virtualization/query/flow events, and delegated GitHub Copilot usage through
-	an allowlist-only Headroom adapter.
-- `pinpoint dashboard`, plus `--dashboard`, `--dashboard-port`, and `--no-open`
-	support for proxy, wrap, and MCP gateway workflows.
-- Metadata-only mode-0600 session journals, source/unit/basis provenance,
-	provider-reported Copilot quota, and shared-proxy attribution warnings.
-
-### Safety
-
-- The dashboard binds only to loopback, validates Host/Origin, requires a
-	fragment-bootstrapped bearer token for read-only APIs and SSE, serves no
-	remote assets, and structurally excludes prompts, responses, tool values,
-	credentials, capabilities, and receipt bodies.
-
-## 0.2.0 - 2026-07-16
+## 0.2.0 - 2026-07-18
 
 ### Added
 
@@ -55,6 +38,9 @@ All notable changes are documented here. This project follows semantic versionin
 - Independent packed-tarball SHA-512 verification and checksum coverage for the package integrity record.
 - Draft-first release publication: npm and immutable assets complete before the GitHub Release becomes public, and tagged candidates cannot ship source-only install instructions.
 - A three-business-day vulnerability acknowledgement target with explicit critical-issue triage and coordinated disclosure language.
+- An opt-in local Session Recorder for provider requests, MCP exact-byte virtualization/query/flow events, and delegated GitHub Copilot usage through an allowlist-only Headroom adapter.
+- `pinpoint dashboard`, plus `--dashboard`, `--dashboard-port`, and `--no-open` support for proxy, wrap, and MCP gateway workflows.
+- Metadata-only mode-0600 session journals, source/unit/basis provenance, provider-reported Copilot quota, and shared-proxy attribution warnings.
 
 ### Changed
 
@@ -70,10 +56,13 @@ All notable changes are documented here. This project follows semantic versionin
 - Gateway query and resource outputs are bounded independently, artifacts are process-scoped, and upstream commands use `shell: false`.
 - Strict flows hide direct query, resources, previews, and destination tools; scrub protected metadata/extensions and protocol errors; suppress protected stderr and unsolicited server messages; and validate configured tools against the upstream catalog before accepting calls.
 - Cross-server destination startup/catalog errors fail closed. A timeout or process loss after dispatch emits one signed unconfirmed receipt, blocks further flows, and terminates nonzero rather than claiming rollback.
+- The dashboard binds only to loopback, validates Host/Origin, requires a fragment-bootstrapped bearer token for read-only APIs and SSE, serves no remote assets, and structurally excludes prompts, responses, tool values, credentials, capabilities, and receipt bodies.
 
 ### Fixed
 
 - Generated output schemas retain root `type: "object"`, as required by Claude Code's strict MCP tool validator even when `anyOf` is present.
+- Idle Copilot startup samples render as connection state rather than completed zero-savings work, and all-zero Headroom lanes stay out of calibration.
+- Subsecond Headroom sampling captures short-lived Copilot requests; graceful teardown no longer overwrites the last healthy usage sample with a transient disconnect.
 
 ## 0.1.1 - 2026-07-15
 

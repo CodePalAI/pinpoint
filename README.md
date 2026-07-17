@@ -180,9 +180,22 @@ That is the basic integration.
 
 ## Install
 
-<!-- PINPOINT_NPM_STATUS: unpublished -->
+<!-- PINPOINT_NPM_STATUS: candidate -->
 
-You need Node.js 22 or newer. Until the npm package is publicly verified, install from the repository:
+You need Node.js 22 or newer. Install the CLI globally:
+
+```bash
+npm install -g @codepal/pinpoint
+pinpoint --version
+```
+
+Or run the offline demo without a global install:
+
+```bash
+npx @codepal/pinpoint demo
+```
+
+Source-checkout fallback:
 
 ```bash
 git clone https://github.com/CodePalAI/pinpoint.git
@@ -607,7 +620,7 @@ Pinpoint also ships provider API wrappers. These are secondary to the MCP gatewa
 
 ```bash
 cd /path/to/your-app
-npm install /path/to/pinpoint
+npm install @codepal/pinpoint
 ```
 
 ```ts

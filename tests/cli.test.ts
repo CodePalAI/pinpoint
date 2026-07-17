@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { parseMcpArgs, parseProxyArgs, runQcvDemo } from '../src/cli/main.js';
+import { parseDashboardArgs, parseMcpArgs, parseProxyArgs, runQcvDemo } from '../src/cli/main.js';
 import { parseMcpOpaqueFlowConfig } from '../src/mcp/flow.js';
 import { parseMcpOpaqueFlowDestinationConfig } from '../src/mcp/destination.js';
 
@@ -27,12 +27,38 @@ describe('parseProxyArgs', () => {
     });
   });
 
+  it('keeps the dashboard opt-in and parses its independent port', () => {
+    expect(parseProxyArgs(['--dashboard', '--dashboard-port', '8791', '--no-open'])).toEqual({
+      ok: true,
+      overrides: {},
+      dashboard: { port: 8791, open: false },
+    });
+    expect(parseProxyArgs(['--no-open'])).toEqual({
+      ok: false,
+      error: '--dashboard-port and --no-open require --dashboard',
+    });
+  });
+
   it('rejects invalid modes, ports, and unknown flags', () => {
     expect(parseProxyArgs(['--mode', 'fast'])).toMatchObject({ ok: false });
     expect(parseProxyArgs(['--port', '70000'])).toMatchObject({ ok: false });
     expect(parseProxyArgs(['--workers', '2'])).toEqual({
       ok: false,
       error: 'unknown proxy option: --workers',
+    });
+  });
+});
+
+describe('parseDashboardArgs', () => {
+  it('parses standalone launch options and rejects unknown values', () => {
+    expect(parseDashboardArgs([])).toEqual({ ok: true, options: { open: true } });
+    expect(parseDashboardArgs(['-p', '0', '--no-open'])).toEqual({
+      ok: true,
+      options: { port: 0, open: false },
+    });
+    expect(parseDashboardArgs(['--remote'])).toEqual({
+      ok: false,
+      error: 'unknown dashboard option: --remote',
     });
   });
 });
@@ -63,6 +89,10 @@ describe('parseMcpArgs', () => {
         'operator.pem',
         '--flow-authority-opening',
         'opening.json',
+        '--dashboard',
+        '--dashboard-port',
+        '8792',
+        '--no-open',
         '--',
         'npx',
         '-y',
@@ -78,6 +108,7 @@ describe('parseMcpArgs', () => {
       destinationConfigPath: 'destination.json',
       flowAuthorityKeyPath: 'operator.pem',
       flowAuthorityOpeningPath: 'opening.json',
+      dashboard: { port: 8792, open: false },
     });
     expect(parseMcpArgs(['authority', 'init', '--out', 'operator.pem'])).toEqual({
       ok: true,
@@ -95,6 +126,10 @@ describe('parseMcpArgs', () => {
     expect(parseMcpArgs(['gateway', '--shell', '--', 'server'])).toEqual({
       ok: false,
       error: 'unknown mcp gateway option: --shell',
+    });
+    expect(parseMcpArgs(['gateway', '--no-open', '--', 'server'])).toEqual({
+      ok: false,
+      error: '--dashboard-port and --no-open require --dashboard',
     });
   });
 

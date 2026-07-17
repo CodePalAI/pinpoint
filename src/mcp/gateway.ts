@@ -21,6 +21,13 @@ import {
   McpDestinationPeer,
   type McpDestinationStdioConfig,
 } from './destination.js';
+import {
+  DASHBOARD_SCHEMA_VERSION,
+  sanitizeDashboardLabel,
+  type DashboardEvent,
+  type DashboardMcpFlowEvent,
+  type DashboardObserver,
+} from '../dashboard/types.js';
 
 export const MCP_QUERY_TOOL_NAME = VIRTUAL_QUERY_TOOL_NAME;
 export const MCP_ARTIFACT_URI_PREFIX = 'pinpoint://artifact/';
@@ -72,6 +79,8 @@ export interface McpGatewayOptions extends McpResultFirewallOptions {
   readonly flowAuthoritySigningKey?: KeyObject;
   readonly onFlowAuthorityReady?: (record: McpOpaqueFlowAuthorityRecord) => void;
   readonly destination?: McpDestinationStdioConfig;
+  /** Optional content-free lifecycle/result observer. Failures never affect MCP traffic. */
+  readonly observer?: DashboardObserver;
 }
 
 export interface McpResultTransformation {
@@ -539,6 +548,7 @@ interface JsonRpcMessage {
 interface PendingRequest {
   readonly method: string;
   readonly toolName?: string;
+  readonly startedAt?: number;
   readonly firstPage?: boolean;
   readonly opaqueFlow?: {
     readonly clientId: JsonRpcMessage['id'];
@@ -722,6 +732,23 @@ export async function runMcpGateway(
   const output = options.output ?? process.stdout;
   const error = options.error ?? process.stderr;
   const flows = options.flows ?? [];
+  const observe = (event: DashboardEvent): void => {
+    if (!options.observer) return;
+    try {
+      const pending = options.observer.onEvent(event);
+      if (pending) void Promise.resolve(pending).catch(() => undefined);
+    } catch {
+      // Observability must never alter MCP behavior or disclosure boundaries.
+    }
+  };
+  const byteMetric = (value: number) => ({
+    value,
+    unit: 'bytes' as const,
+    source: 'mcp' as const,
+    basis: 'exact-bytes' as const,
+    scope: 'request' as const,
+  });
+  const occurredAt = (): string => new Date().toISOString();
   const exposeQueryTool = options.exposeQueryTool ?? flows.length === 0;
   const exposeArtifactResources = options.exposeArtifactResources ?? flows.length === 0;
   const opaqueArtifactIds = options.opaqueArtifactIds ?? flows.length > 0;
@@ -774,6 +801,8 @@ export async function runMcpGateway(
       for (const name of Object.keys(options.destination?.env ?? {})) {
         if (!shared.has(name)) delete sourceEnv[name];
       }
+      delete sourceEnv.PINPOINT_DASHBOARD_GROUP;
+      delete sourceEnv.PINPOINT_DASHBOARD_DIR;
       return sourceEnv;
     })(),
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -807,6 +836,15 @@ export async function runMcpGateway(
   let flowPoliciesValidated = flowEngine == null;
   let destinationCatalogValidated = destinationPeer == null;
   let suppressedSensitiveStderr = false;
+  observe({
+    schemaVersion: DASHBOARD_SCHEMA_VERSION,
+    type: 'mcp.lifecycle',
+    source: 'mcp',
+    occurredAt: occurredAt(),
+    state: 'started',
+    flowsConfigured: flows.length,
+    privateDestination: options.destination != null,
+  });
   const sensitiveOperationActive = (): boolean => activeOpaqueFlows + activeProtectedSources > 0;
   const resetSensitiveStderr = (): void => {
     if (!sensitiveOperationActive()) suppressedSensitiveStderr = false;
@@ -851,13 +889,29 @@ export async function runMcpGateway(
         return;
       }
       if (call?.name === MCP_QUERY_TOOL_NAME) {
+        const started = performance.now();
         const result = firewall.exposeQueryTool
           ? firewall.callTool(call.name, call.arguments)
           : errorResult(`${MCP_QUERY_TOOL_NAME} is disabled; use a configured ${MCP_FLOW_TOOL_NAME} flow`);
+        const operation = typeof call.arguments.op === 'string' &&
+          ['schema', 'json_select', 'count', 'grep', 'slice', 'json_join'].includes(call.arguments.op)
+          ? call.arguments.op as 'schema' | 'json_select' | 'count' | 'grep' | 'slice' | 'json_join'
+          : 'invalid';
+        observe({
+          schemaVersion: DASHBOARD_SCHEMA_VERSION,
+          type: 'mcp.query',
+          source: 'mcp',
+          occurredAt: occurredAt(),
+          operation,
+          outcome: firewall.exposeQueryTool ? result.isError === true ? 'failed' : 'succeeded' : 'denied',
+          resultBytes: byteMetric(Buffer.byteLength(JSON.stringify(result))),
+          durationMs: performance.now() - started,
+        });
         writeRpc(output, rpcResult(message.id, result));
         return;
       }
       if (call?.name === MCP_FLOW_TOOL_NAME && flowEngine) {
+        const started = performance.now();
         try {
           const plan = flowEngine.prepare(call.arguments);
           protectedDataHandled = true;
@@ -872,7 +926,9 @@ export async function runMcpGateway(
                 destinationQueue = queueLine(destinationQueue, () => {
                   activeOpaqueFlows = Math.max(0, activeOpaqueFlows - 1);
                   resetSensitiveStderr();
-                  writeRpc(output, rpcResult(message.id, flowEngine.complete(plan, destinationResult)));
+                  const result = flowEngine.complete(plan, destinationResult);
+                  observe(flowEvent(plan, destinationResult, result, started, options.destination?.id));
+                  writeRpc(output, rpcResult(message.id, result));
                 }, (cause) => failGateway(message.id, cause));
               },
               () => {
@@ -881,9 +937,12 @@ export async function runMcpGateway(
                 destinationQueue = queueLine(destinationQueue, () => {
                   activeOpaqueFlows = Math.max(0, activeOpaqueFlows - 1);
                   resetSensitiveStderr();
+                  const destinationResult = errorResult('destination execution status unavailable');
+                  const result = flowEngine.complete(plan, destinationResult);
+                  observe(flowEvent(plan, destinationResult, result, started, options.destination?.id));
                   writeRpc(output, rpcResult(
                     message.id,
-                    flowEngine.complete(plan, errorResult('destination execution status unavailable')),
+                    result,
                   ));
                 }, (cause) => failGateway(message.id, cause));
               },
@@ -894,6 +953,7 @@ export async function runMcpGateway(
               method: 'tools/call',
               toolName: plan.policy.destinationTool,
               opaqueFlow: { clientId: message.id, plan },
+              startedAt: started,
             });
             child.stdin.write(`${JSON.stringify({
               jsonrpc: '2.0',
@@ -909,10 +969,28 @@ export async function runMcpGateway(
           activeOpaqueFlows = Math.max(0, activeOpaqueFlows - 1);
           resetSensitiveStderr();
           writeRpc(output, rpcResult(message.id, flowEngine.error(cause)));
+          observe({
+            schemaVersion: DASHBOARD_SCHEMA_VERSION,
+            type: 'mcp.tool',
+            source: 'mcp',
+            occurredAt: occurredAt(),
+            tool: MCP_FLOW_TOOL_NAME,
+            outcome: 'denied',
+            durationMs: performance.now() - started,
+          });
         }
         return;
       }
       if (call && flowEngine?.hiddenDestinationTools.has(call.name)) {
+        observe({
+          schemaVersion: DASHBOARD_SCHEMA_VERSION,
+          type: 'mcp.tool',
+          source: 'mcp',
+          occurredAt: occurredAt(),
+          tool: sanitizeDashboardLabel(call.name) ?? 'unknown',
+          outcome: 'denied',
+          durationMs: 0,
+        });
         writeRpc(
           output,
           rpcResult(message.id, errorResult(`${call.name} is restricted to a configured ${MCP_FLOW_TOOL_NAME} flow`)),
@@ -961,6 +1039,7 @@ export async function runMcpGateway(
       pending.set(key, {
         method: message.method,
         ...(call ? { toolName: call.name } : {}),
+        ...(call ? { startedAt: performance.now() } : {}),
         ...(protectedSource ? { protectedSource: true } : {}),
         ...(['tools/list', 'resources/list', 'resources/templates/list'].includes(message.method)
           ? { firstPage: firstPage(message.params) }
@@ -1011,6 +1090,15 @@ export async function runMcpGateway(
         : asToolResult(message.result) ?? errorResult('destination returned an invalid MCP tool result');
       const result = flowEngine?.complete(request.opaqueFlow.plan, destinationResult) ??
         errorResult('opaque flow engine unavailable');
+      if (flowEngine) {
+        observe(flowEvent(
+          request.opaqueFlow.plan,
+          destinationResult,
+          result,
+          request.startedAt ?? performance.now(),
+          options.destination?.id,
+        ));
+      }
       writeRpc(output, rpcResult(request.opaqueFlow.clientId, result));
       return;
     }
@@ -1019,6 +1107,17 @@ export async function runMcpGateway(
       resetSensitiveStderr();
     }
     if (message.error != null) {
+      if (request.method === 'tools/call' && request.toolName) {
+        observe({
+          schemaVersion: DASHBOARD_SCHEMA_VERSION,
+          type: 'mcp.tool',
+          source: 'mcp',
+          occurredAt: occurredAt(),
+          tool: sanitizeDashboardLabel(request.toolName) ?? 'unknown',
+          outcome: request.protectedSource ? 'denied' : 'failed',
+          durationMs: performance.now() - (request.startedAt ?? performance.now()),
+        });
+      }
       writeRpc(
         output,
         request.protectedSource
@@ -1072,9 +1171,48 @@ export async function runMcpGateway(
       } else if (request.method === 'tools/call' && request.toolName) {
         const toolResult = asToolResult(result);
         if (toolResult) {
-          result = firewall.transformResult(request.toolName, toolResult).result;
+          const bytesBefore = Buffer.byteLength(exactPayload(toolResult) ?? JSON.stringify(toolResult));
+          const transformed = firewall.transformResult(request.toolName, toolResult);
+          result = transformed.result;
+          const outcome = request.protectedSource && !transformed.virtualized
+            ? 'denied'
+            : toolResult.isError === true
+              ? 'failed'
+              : 'succeeded';
+          observe({
+            schemaVersion: DASHBOARD_SCHEMA_VERSION,
+            type: 'mcp.result',
+            source: 'mcp',
+            occurredAt: occurredAt(),
+            tool: sanitizeDashboardLabel(request.toolName) ?? 'unknown',
+            outcome,
+            virtualized: transformed.virtualized,
+            protectedSource: request.protectedSource === true,
+            bytesBefore: byteMetric(bytesBefore),
+            bytesVisible: byteMetric(Buffer.byteLength(JSON.stringify(transformed.result))),
+            artifactKind: transformed.descriptor?.kind ?? null,
+            artifactItems: transformed.descriptor?.items ?? null,
+          });
+          observe({
+            schemaVersion: DASHBOARD_SCHEMA_VERSION,
+            type: 'mcp.tool',
+            source: 'mcp',
+            occurredAt: occurredAt(),
+            tool: sanitizeDashboardLabel(request.toolName) ?? 'unknown',
+            outcome,
+            durationMs: performance.now() - (request.startedAt ?? performance.now()),
+          });
         } else if (request.protectedSource) {
           result = errorResult('Pinpoint blocked an invalid protected source result');
+          observe({
+            schemaVersion: DASHBOARD_SCHEMA_VERSION,
+            type: 'mcp.tool',
+            source: 'mcp',
+            occurredAt: occurredAt(),
+            tool: sanitizeDashboardLabel(request.toolName) ?? 'unknown',
+            outcome: 'denied',
+            durationMs: performance.now() - (request.startedAt ?? performance.now()),
+          });
         }
       }
       writeRpc(output, rpcResult(message.id, result));
@@ -1127,5 +1265,41 @@ export async function runMcpGateway(
   clientLines.close();
   upstreamLines.close();
   await Promise.all([clientQueue, upstreamQueue, destinationQueue]);
-  return destinationPeer?.state === 'failed' ? 1 : exitCode;
+  const failed = destinationPeer?.state === 'failed';
+  observe({
+    schemaVersion: DASHBOARD_SCHEMA_VERSION,
+    type: 'mcp.lifecycle',
+    source: 'mcp',
+    occurredAt: occurredAt(),
+    state: failed || (exitCode != null && exitCode !== 0) ? 'failed' : 'stopped',
+    flowsConfigured: flows.length,
+    privateDestination: options.destination != null,
+  });
+  return failed ? 1 : exitCode;
+
+  function flowEvent(
+    plan: PreparedMcpOpaqueFlow,
+    destinationResult: McpCallToolResult,
+    emittedResult: McpCallToolResult,
+    startedAt: number,
+    destinationServer?: string,
+  ): DashboardMcpFlowEvent {
+    return {
+      schemaVersion: DASHBOARD_SCHEMA_VERSION,
+      type: 'mcp.flow',
+      source: 'mcp',
+      occurredAt: occurredAt(),
+      flow: sanitizeDashboardLabel(plan.policy.name) ?? 'unknown',
+      sourceTool: sanitizeDashboardLabel(plan.policy.sourceTool) ?? 'unknown',
+      destinationTool: sanitizeDashboardLabel(plan.policy.destinationTool) ?? 'unknown',
+      destinationServer: sanitizeDashboardLabel(destinationServer ?? null),
+      operation: plan.query.op as DashboardMcpFlowEvent['operation'],
+      outcome: destinationResult.isError === true ? 'failed' : 'succeeded',
+      items: plan.items,
+      payloadBytes: byteMetric(plan.payloadBytes),
+      destinationResultBytes: byteMetric(Buffer.byteLength(JSON.stringify(destinationResult))),
+      receiptEmitted: emittedResult.isError !== true || destinationResult.isError === true,
+      durationMs: performance.now() - startedAt,
+    };
+  }
 }

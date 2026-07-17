@@ -4,6 +4,71 @@ import { createRuntime } from '../src/pinpoint.js';
 import type { ProcessorIntegration } from '../src/kernel/types.js';
 
 describe('createRuntime', () => {
+  it('emits content-free route events and isolates observer failures', async () => {
+    const events: unknown[] = [];
+    const integration: ProcessorIntegration = {
+      id: 'example.dashboard-negative',
+      version: '1',
+      order: 1,
+      capabilities: { regions: ['current-turn'], fidelity: 'lossless', cacheImpact: 'preserve' },
+      async propose() {
+        return {
+          id: 'example.dashboard-negative:1',
+          integrationId: this.id,
+          regions: ['current-turn'],
+          fidelity: 'lossless',
+          cacheImpact: 'preserve',
+          patch: {
+            appendStages: [{
+              stage: 'virtual',
+              applied: true,
+              reason: 'applied',
+              counterfactual: {
+                tokensText: 10,
+                tokensCompressed: 15,
+                tokensSaved: -5,
+                basis: 'estimate',
+              },
+              reversible: [],
+            }],
+          },
+        };
+      },
+    };
+    const runtime = createRuntime({
+      includeBuiltinIntegrations: false,
+      integrations: [integration],
+      observer: {
+        onEvent(event) {
+          events.push(event);
+          throw new Error('observer failure must be isolated');
+        },
+      },
+      config: { semantic: { enabled: false }, optical: { enabled: false }, logLevel: 'silent' },
+    });
+
+    const secret = 'dashboard-must-not-see-this-value';
+    const routed = await runtime.route('openai', 'gpt-test\nforged', {
+      model: 'gpt-test',
+      messages: [{ role: 'user', content: secret }],
+      arbitrarySecret: secret,
+    });
+
+    expect(routed.report.tokensSavedTotal).toBe(-5);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      schemaVersion: 1,
+      type: 'provider.route',
+      source: 'pinpoint',
+      provider: 'openai',
+      model: 'gpt-test forged',
+      tokensSaved: { value: -5, unit: 'tokens', source: 'pinpoint', basis: 'estimate' },
+      stages: [{ stage: 'virtual', tokensSaved: -5, basis: 'estimate' }],
+    });
+    expect(JSON.stringify(events)).not.toContain(secret);
+    await runtime.shutdown();
+  });
+
   it('limits QCV-only request inspection to Anthropic tool results', async () => {
     const runtime = createRuntime({
       config: {

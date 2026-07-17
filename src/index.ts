@@ -8,6 +8,66 @@
 
 export { createPinpoint, createRuntime } from './pinpoint.js';
 export type { Pinpoint, RuntimeOptions, SessionStats } from './pinpoint.js';
+export {
+  DASHBOARD_SCHEMA_VERSION,
+  normalizeDashboardEvent,
+  sanitizeDashboardLabel,
+} from './dashboard/types.js';
+export type {
+  DashboardEvent,
+  DashboardByteLane,
+  DashboardHeadroomAttribution,
+  DashboardHeadroomCoverage,
+  DashboardHeadroomSampleEvent,
+  DashboardHeadroomSummary,
+  DashboardMetricBasis,
+  DashboardMetricScope,
+  DashboardMetricUnit,
+  DashboardMetricValue,
+  DashboardMcpFlowEvent,
+  DashboardMcpLifecycleEvent,
+  DashboardMcpOutcome,
+  DashboardMcpQueryEvent,
+  DashboardMcpResultEvent,
+  DashboardMcpSummary,
+  DashboardMcpToolEvent,
+  DashboardObserver,
+  DashboardProviderRouteEvent,
+  DashboardProviderQuota,
+  DashboardHistorySession,
+  DashboardSnapshot,
+  DashboardSource,
+  DashboardSourceState,
+  DashboardSourceSummary,
+  DashboardStageOutcome,
+  DashboardTokenLane,
+} from './dashboard/types.js';
+export {
+  createDashboardGroupId,
+  createDashboardProducerId,
+  buildDashboardSnapshot,
+  dashboardRootFromEnvironment,
+  DashboardJournal,
+  listDashboardHistory,
+  pruneDashboardHistory,
+  readDashboardGroup,
+} from './dashboard/journal.js';
+export type {
+  DashboardGroupReadResult,
+  DashboardJournalOptions,
+  DashboardProducerState,
+  DashboardPruneResult,
+} from './dashboard/journal.js';
+export { createDashboardServer, DEFAULT_DASHBOARD_PORT } from './dashboard/server.js';
+export type {
+  DashboardServer,
+  DashboardServerAddress,
+  DashboardServerOptions,
+} from './dashboard/server.js';
+export { dashboardOpenCommand, openDashboardInBrowser } from './dashboard/browser.js';
+export type { DashboardOpenCommand, DashboardSpawn } from './dashboard/browser.js';
+export { HeadroomDashboardAdapter } from './dashboard/headroom.js';
+export type { HeadroomDashboardAdapterOptions } from './dashboard/headroom.js';
 
 export { withPinpoint as withPinpointAnthropic } from './sdk/anthropic.js';
 export { withPinpoint as withPinpointOpenAI } from './sdk/openai.js';

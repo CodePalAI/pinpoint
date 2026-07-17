@@ -29,6 +29,13 @@ import { ContentRouter, type RouteResult } from './router/content-router.js';
 import type { ProcessorIntegration } from './kernel/types.js';
 import type { ProposalValidation } from './kernel/types.js';
 import type { AuthMode, Provider, SavingsReport } from './types.js';
+import {
+  DASHBOARD_SCHEMA_VERSION,
+  sanitizeDashboardLabel,
+  type DashboardMetricBasis,
+  type DashboardObserver,
+  type DashboardProviderRouteEvent,
+} from './dashboard/types.js';
 
 /** Running session totals for the `stats` view. */
 export interface SessionStats {
@@ -87,6 +94,8 @@ export interface RuntimeOptions {
   readonly integrations?: readonly ProcessorIntegration[];
   /** Disable pxpipe/headroom registration to build a standalone custom runtime. */
   readonly includeBuiltinIntegrations?: boolean;
+  /** Optional content-free observer for local dashboard and embedding surfaces. */
+  readonly observer?: DashboardObserver;
 }
 
 /** Generic integration-host assembly. `createPinpoint` is the built-in compatibility facade. */
@@ -206,6 +215,16 @@ export function createRuntime(options: RuntimeOptions = {}): Pinpoint {
     }
   }
 
+  function observe(event: DashboardProviderRouteEvent): void {
+    if (!options.observer) return;
+    try {
+      const pending = options.observer.onEvent(event);
+      if (pending) void Promise.resolve(pending).catch(() => undefined);
+    } catch {
+      // Observability must never change request behavior.
+    }
+  }
+
   return {
     config,
     log,
@@ -220,7 +239,7 @@ export function createRuntime(options: RuntimeOptions = {}): Pinpoint {
     requestInspection,
     policy,
     async route(provider, model, body, authMode, validate) {
-      const observed = capture.enabled || telemetry.enabled;
+      const observed = capture.enabled || telemetry.enabled || options.observer != null;
       const startedAtUnixMs = observed ? Date.now() : 0;
       const started = observed ? performance.now() : 0;
       const resolvedAuthMode = authMode ?? 'payg';
@@ -251,6 +270,36 @@ export function createRuntime(options: RuntimeOptions = {}): Pinpoint {
           transformedBody: result.body,
           report: result.report,
           pipeline: result.pipeline,
+        });
+      }
+      if (options.observer) {
+        const occurredAt = new Date(startedAtUnixMs).toISOString();
+        const metric = (value: number, basis: DashboardMetricBasis) => ({
+          value,
+          unit: 'tokens' as const,
+          source: 'pinpoint' as const,
+          basis,
+          scope: 'request' as const,
+        });
+        const bases = new Set(result.report.rows.map((row) => row.basis));
+        const aggregateBasis: DashboardMetricBasis = bases.size === 1
+          ? result.report.rows[0]!.basis
+          : 'mixed-token-bases';
+        observe({
+          schemaVersion: DASHBOARD_SCHEMA_VERSION,
+          type: 'provider.route',
+          source: 'pinpoint',
+          occurredAt,
+          provider,
+          model: sanitizeDashboardLabel(model),
+          authMode: resolvedAuthMode,
+          mode: config.mode,
+          durationMs,
+          tokensText: metric(result.report.tokensTextTotal, aggregateBasis),
+          tokensCompressed: metric(result.report.tokensCompressedTotal, aggregateBasis),
+          tokensSaved: metric(result.report.tokensSavedTotal, aggregateBasis),
+          reversibleCount: result.report.reversibleCount,
+          stages: result.report.rows.map((row) => ({ ...row })),
         });
       }
       return result;

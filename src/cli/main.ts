@@ -27,6 +27,18 @@ import { formatReport } from '../measurement/savings.js';
 import { loadConfig, type PinpointConfigOverrides } from '../config.js';
 import { replayCaptureFile } from '../capture/replay.js';
 import type { RuntimeMode } from '../kernel/types.js';
+import {
+  createDashboardGroupId,
+  dashboardRootFromEnvironment,
+  DashboardJournal,
+  listDashboardHistory,
+} from '../dashboard/journal.js';
+import {
+  createDashboardServer,
+  DEFAULT_DASHBOARD_PORT,
+  type DashboardServer,
+} from '../dashboard/server.js';
+import { openDashboardInBrowser } from '../dashboard/browser.js';
 
 function version(): string {
   try {
@@ -46,7 +58,8 @@ USAGE
 COMMANDS
   proxy [options]  Start the programmable optimization proxy. Options:
                    --mode audit|shadow|optimize|enforce, --host, --port,
-                   --no-qcv, --virtual-query-fallback.
+                   --no-qcv, --virtual-query-fallback, --dashboard,
+                   --dashboard-port, --no-open.
                    Point your agent's
                    ANTHROPIC_BASE_URL / OPENAI_BASE_URL at it.
   demo             Run an exact QCV transformation locally. No model, API key,
@@ -58,12 +71,15 @@ COMMANDS
   doctor [copilot] Check the toolchain, pxpipe, and the headroom sidecar.
                    'doctor copilot' checks GitHub Copilot readiness.
   stats            Query a running proxy's session savings (GET /stats).
+  dashboard        Open the optional local session recorder. Options:
+                   --port, --no-open.
   integration      List active optimizer integrations and their capabilities.
   agent             List agent adapters and their actual interception level.
   mcp              MCP server over stdio (tools: pinpoint_compress / _retrieve / _stats).
   mcp gateway [--min-chars N] [--flow-config FILE]
               [--destination-config FILE]
               [--flow-authority-key FILE] [--flow-authority-opening FILE]
+              [--dashboard] [--dashboard-port N] [--no-open]
               -- <command> [args...]
                    Wrap any stdio MCP server. Oversized exact results stay local;
                    hosts receive a resource handle plus pinpoint_query. A flow
@@ -98,15 +114,29 @@ COMMON ENV
   PINPOINT_OPTICAL_ON_SUBSCRIPTION    allow lossy optical on oauth/subscription (default off)
   PINPOINT_HEADROOM_BIN               headroom binary for 'wrap copilot' (else PATH / venv)
   PINPOINT_COPILOT_MODEL              default model for 'wrap copilot' (default gpt-4o)
+  PINPOINT_DASHBOARD_PORT             local dashboard port (default 8790)
+  PINPOINT_DASHBOARD_DIR              metadata history directory (default ~/.pinpoint/dashboard)
   PINPOINT_LOG                        silent|error|warn|info|debug
 `;
 
+export interface DashboardCliOptions {
+  readonly port?: number;
+  readonly open: boolean;
+}
+
 export type ProxyArgsResult =
-  | { readonly ok: true; readonly overrides: PinpointConfigOverrides }
+  | {
+      readonly ok: true;
+      readonly overrides: PinpointConfigOverrides;
+      readonly dashboard?: DashboardCliOptions;
+    }
   | { readonly ok: false; readonly error: string };
 
 export function parseProxyArgs(args: readonly string[]): ProxyArgsResult {
   const overrides: PinpointConfigOverrides = {};
+  let dashboard = false;
+  let dashboardPort: number | undefined;
+  let open = true;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
     if (arg === '--mode') {
@@ -130,11 +160,54 @@ export function parseProxyArgs(args: readonly string[]): ProxyArgsResult {
       overrides.virtualContext = { ...overrides.virtualContext, enabled: false };
     } else if (arg === '--virtual-query-fallback') {
       overrides.virtualContext = { ...overrides.virtualContext, queryFallback: true };
+    } else if (arg === '--dashboard') {
+      dashboard = true;
+    } else if (arg === '--dashboard-port') {
+      const raw = args[++index];
+      const port = raw == null ? Number.NaN : Number(raw);
+      if (!Number.isInteger(port) || port < 0 || port > 65535) {
+        return { ok: false, error: '--dashboard-port must be an integer from 0 to 65535' };
+      }
+      dashboardPort = port;
+    } else if (arg === '--no-open') {
+      open = false;
     } else {
       return { ok: false, error: `unknown proxy option: ${arg}` };
     }
   }
-  return { ok: true, overrides };
+  if (!dashboard && (dashboardPort != null || !open)) {
+    return { ok: false, error: '--dashboard-port and --no-open require --dashboard' };
+  }
+  return {
+    ok: true,
+    overrides,
+    ...(dashboard ? { dashboard: { ...(dashboardPort != null ? { port: dashboardPort } : {}), open } } : {}),
+  };
+}
+
+export type DashboardArgsResult =
+  | { readonly ok: true; readonly options: DashboardCliOptions }
+  | { readonly ok: false; readonly error: string };
+
+export function parseDashboardArgs(args: readonly string[]): DashboardArgsResult {
+  let port: number | undefined;
+  let open = true;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--port' || arg === '-p') {
+      const raw = args[++index];
+      const value = raw == null ? Number.NaN : Number(raw);
+      if (!Number.isInteger(value) || value < 0 || value > 65535) {
+        return { ok: false, error: '--port must be an integer from 0 to 65535' };
+      }
+      port = value;
+    } else if (arg === '--no-open') {
+      open = false;
+    } else {
+      return { ok: false, error: `unknown dashboard option: ${arg}` };
+    }
+  }
+  return { ok: true, options: { ...(port != null ? { port } : {}), open } };
 }
 
 export type McpArgsResult =
@@ -150,6 +223,7 @@ export type McpArgsResult =
       readonly destinationConfigPath?: string;
       readonly flowAuthorityKeyPath?: string;
       readonly flowAuthorityOpeningPath?: string;
+      readonly dashboard?: DashboardCliOptions;
     }
   | { readonly ok: false; readonly error: string };
 
@@ -190,6 +264,9 @@ export function parseMcpArgs(args: readonly string[]): McpArgsResult {
   let destinationConfigPath: string | undefined;
   let flowAuthorityKeyPath: string | undefined;
   let flowAuthorityOpeningPath: string | undefined;
+  let dashboard = false;
+  let dashboardPort: number | undefined;
+  let openDashboard = true;
   for (let index = 1; index < separator; index += 1) {
     const arg = args[index];
     if (arg === '--flow-config') {
@@ -197,6 +274,23 @@ export function parseMcpArgs(args: readonly string[]): McpArgsResult {
       if (!value) return { ok: false, error: '--flow-config requires a file path' };
       if (flowConfigPath != null) return { ok: false, error: '--flow-config may be specified only once' };
       flowConfigPath = value;
+      continue;
+    }
+    if (arg === '--dashboard') {
+      dashboard = true;
+      continue;
+    }
+    if (arg === '--dashboard-port') {
+      const raw = args[++index];
+      const value = raw == null ? Number.NaN : Number(raw);
+      if (!Number.isInteger(value) || value < 0 || value > 65535) {
+        return { ok: false, error: '--dashboard-port must be an integer from 0 to 65535' };
+      }
+      dashboardPort = value;
+      continue;
+    }
+    if (arg === '--no-open') {
+      openDashboard = false;
       continue;
     }
     if (arg === '--destination-config') {
@@ -234,6 +328,9 @@ export function parseMcpArgs(args: readonly string[]): McpArgsResult {
     }
     minChars = value;
   }
+  if (!dashboard && (dashboardPort != null || !openDashboard)) {
+    return { ok: false, error: '--dashboard-port and --no-open require --dashboard' };
+  }
 
   return {
     ok: true,
@@ -245,6 +342,9 @@ export function parseMcpArgs(args: readonly string[]): McpArgsResult {
     ...(destinationConfigPath != null ? { destinationConfigPath } : {}),
     ...(flowAuthorityKeyPath != null ? { flowAuthorityKeyPath } : {}),
     ...(flowAuthorityOpeningPath != null ? { flowAuthorityOpeningPath } : {}),
+    ...(dashboard ? {
+      dashboard: { ...(dashboardPort != null ? { port: dashboardPort } : {}), open: openDashboard },
+    } : {}),
   };
 }
 
@@ -282,15 +382,78 @@ async function cmdProxy(args: readonly string[]): Promise<void> {
     process.exitCode = 2;
     return;
   }
-  const server = createProxyServer(parsed.overrides);
-  await server.listen();
+  const rootDir = dashboardRootFromEnvironment();
+  const journal = parsed.dashboard ? new DashboardJournal({ rootDir, source: 'pinpoint' }) : undefined;
+  const dashboard = parsed.dashboard ? createDashboardServer({
+    rootDir,
+    groupId: journal!.groupId,
+    port: parsed.dashboard.port ?? dashboardPortFromEnvironment(),
+    strictPort: parsed.dashboard.port != null,
+  }) : undefined;
+  const server = createProxyServer(parsed.overrides, {
+    ...(journal ? { runtime: { observer: journal } } : {}),
+  });
+  try {
+    await server.listen();
+    if (dashboard && parsed.dashboard) await announceDashboard(dashboard, parsed.dashboard.open);
+  } catch (error) {
+    await dashboard?.close();
+    journal?.close();
+    await server.close();
+    throw error;
+  }
   const shutdown = async (sig: string) => {
     server.pinpoint.log.info(`received ${sig}, shutting down`);
     await server.close();
+    journal?.close();
+    await dashboard?.close();
     process.exit(0);
   };
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
+}
+
+function dashboardPortFromEnvironment(): number {
+  const raw = process.env.PINPOINT_DASHBOARD_PORT;
+  if (raw == null || raw.trim() === '') return DEFAULT_DASHBOARD_PORT;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 0 && value <= 65535 ? value : DEFAULT_DASHBOARD_PORT;
+}
+
+async function announceDashboard(server: DashboardServer, open: boolean): Promise<void> {
+  const address = await server.listen();
+  if (open && await openDashboardInBrowser(address.launchUrl)) {
+    console.error(`pinpoint dashboard: ${address.url}`);
+    return;
+  }
+  console.error(`pinpoint dashboard (protected URL): ${address.launchUrl}`);
+}
+
+async function cmdDashboard(args: readonly string[]): Promise<void> {
+  const parsed = parseDashboardArgs(args);
+  if (!parsed.ok) {
+    console.error(parsed.error);
+    process.exitCode = 2;
+    return;
+  }
+  const rootDir = dashboardRootFromEnvironment();
+  const groupId = listDashboardHistory(rootDir)[0]?.groupId ?? createDashboardGroupId();
+  const server = createDashboardServer({
+    rootDir,
+    groupId,
+    port: parsed.options.port ?? dashboardPortFromEnvironment(),
+    strictPort: parsed.options.port != null,
+  });
+  await announceDashboard(server, parsed.options.open);
+  await new Promise<void>((resolve) => {
+    const stop = (): void => {
+      process.off('SIGINT', stop);
+      process.off('SIGTERM', stop);
+      void server.close().then(resolve);
+    };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+  });
 }
 
 async function cmdExport(paths: string[]): Promise<void> {
@@ -548,10 +711,22 @@ async function cmdMcp(args: readonly string[]): Promise<void> {
   const stop = (): void => controller.abort();
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
+  const inheritedGroupId = process.env.PINPOINT_DASHBOARD_GROUP;
+  const rootDir = dashboardRootFromEnvironment();
+  const groupId = inheritedGroupId || parsed.dashboard ? inheritedGroupId ?? createDashboardGroupId() : undefined;
+  const journal = groupId ? new DashboardJournal({ rootDir, groupId, source: 'mcp' }) : undefined;
+  const dashboard = parsed.dashboard && groupId ? createDashboardServer({
+    rootDir,
+    groupId,
+    port: parsed.dashboard.port ?? dashboardPortFromEnvironment(),
+    strictPort: parsed.dashboard.port != null,
+  }) : undefined;
   try {
+    if (dashboard && parsed.dashboard) await announceDashboard(dashboard, parsed.dashboard.open);
     const code = await runMcpGateway(parsed.command, parsed.args, {
       minChars: parsed.minChars ?? configuredThreshold,
       signal: controller.signal,
+      ...(journal ? { observer: journal } : {}),
       ...(flowConfig ? {
         flows: flowConfig.flows,
         exposeQueryTool: flowConfig.exposeQueryTool,
@@ -572,6 +747,8 @@ async function cmdMcp(args: readonly string[]): Promise<void> {
     });
     if (!controller.signal.aborted && code !== 0) process.exitCode = code ?? 1;
   } finally {
+    journal?.close();
+    await dashboard?.close();
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
   }
@@ -645,7 +822,7 @@ function cmdDoctorCopilot(): void {
 async function cmdWrap(args: string[]): Promise<void> {
   const agent = args[0];
   if (!agent || agent === '-h' || agent === '--help') {
-    console.error('usage: pinpoint wrap <agent> [--byok] [--context-tool] [-p PORT] [-v] [-- <agent args>]');
+    console.error('usage: pinpoint wrap <agent> [--byok] [--context-tool] [-p PORT] [-v] [--dashboard] [--dashboard-port N] [--no-open] [-- <agent args>]');
     console.error(`agents: ${knownAgents().join(', ')}`);
     process.exitCode = agent ? 0 : 1;
     return;
@@ -660,16 +837,41 @@ async function cmdWrap(args: string[]): Promise<void> {
   let verbose = false;
   let contextTool = false;
   let port: number | undefined;
+  let dashboard = false;
+  let dashboardPort: number | undefined;
+  let openDashboard = true;
   const preArgs: string[] = [];
   for (let i = 0; i < head.length; i++) {
     const a = head[i]!;
     if (a === '--byok') byok = true;
     else if (a === '-v' || a === '--verbose') verbose = true;
     else if (a === '--context-tool' || a === '--rtk') contextTool = true;
+    else if (a === '--dashboard') dashboard = true;
+    else if (a === '--dashboard-port') {
+      const val = head[++i];
+      const parsed = val == null ? Number.NaN : Number(val);
+      if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
+        console.error('--dashboard-port must be an integer from 0 to 65535');
+        process.exitCode = 2;
+        return;
+      }
+      dashboardPort = parsed;
+    } else if (a === '--no-open') openDashboard = false;
     else if (a === '-p' || a === '--port') {
       const val = head[++i];
-      if (val) port = Number(val);
+      const parsed = val == null ? Number.NaN : Number(val);
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+        console.error('--port must be an integer from 1 to 65535');
+        process.exitCode = 2;
+        return;
+      }
+      port = parsed;
     } else preArgs.push(a);
+  }
+  if (!dashboard && (dashboardPort != null || !openDashboard)) {
+    console.error('--dashboard-port and --no-open require --dashboard');
+    process.exitCode = 2;
+    return;
   }
 
   const code = await runWrap({
@@ -679,6 +881,9 @@ async function cmdWrap(args: string[]): Promise<void> {
     contextTool,
     port,
     verbose,
+    ...(dashboard ? {
+      dashboard: { ...(dashboardPort != null ? { port: dashboardPort } : {}), open: openDashboard },
+    } : {}),
   });
   process.exit(code);
 }
@@ -698,6 +903,8 @@ export async function main(argv: string[]): Promise<void> {
       return cmdDoctor(rest);
     case 'stats':
       return cmdStats();
+    case 'dashboard':
+      return cmdDashboard(rest);
     case 'integration':
     case 'integrations':
       return cmdIntegration(rest);

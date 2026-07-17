@@ -28,11 +28,12 @@ const publicEntries = [
   '@codepal/pinpoint/capture',
   '@codepal/pinpoint/telemetry',
   '@codepal/pinpoint/mcp',
+  '@codepal/pinpoint/dashboard',
 ];
 const packageBudget = {
-  maxFiles: 200,
-  maxPackedBytes: 400_000,
-  maxUnpackedBytes: 1_100_000,
+  maxFiles: 210,
+  maxPackedBytes: 450_000,
+  maxUnpackedBytes: 1_250_000,
 };
 
 try {
@@ -79,6 +80,7 @@ try {
     'MAINTAINERS.md',
     'LICENSE',
     'NOTICE',
+    'THIRD_PARTY_NOTICES.md',
     'bin/cli.js',
     'bin/verify-receipt.js',
     'examples/mcp-opaque-flow.json',
@@ -110,6 +112,12 @@ try {
     'benchmarks/results/hcp-comparison.first-party-macos-arm64-20260716.json',
     'benchmarks/competitors/hcp_same_workflow_adapter.mjs',
     'benchmarks/v2/hcp_comparison_gate.mjs',
+    'dist/dashboard/index.js',
+    'dist/dashboard/index.d.ts',
+    'dist/dashboard/ui/index.html',
+    'dist/dashboard/ui/assets/dashboard.js',
+    'dist/dashboard/ui/assets/dashboard.css',
+    'dist/dashboard/ui/assets/instrument-sans-latin.woff2',
   ]) {
     if (!paths.has(required)) throw new Error(`packed artifact is missing ${required}`);
   }
@@ -141,6 +149,11 @@ try {
     "const destination = parseMcpOpaqueFlowDestinationConfig({ version: 1, id: 'smoke-domain', command: 'smoke-destination', envAllowlist: ['PATH', 'DESTINATION_TOKEN'], sharedEnvAllowlist: ['PATH'] }, { PATH: '/usr/bin', DESTINATION_TOKEN: 'destination-only', SOURCE_TOKEN: 'source-only' });",
     "if (destination.env.DESTINATION_TOKEN !== 'destination-only' || destination.env.SOURCE_TOKEN != null || destination.sharedEnvNames.join(',') !== 'PATH') throw new Error('public destination config isolation is invalid');",
     "if (verifyMcpOpaqueFlowReceipt({})) throw new Error('public receipt verifier accepted an invalid receipt');",
+    "const { createDashboardGroupId, normalizeDashboardEvent } = await import('@codepal/pinpoint/dashboard');",
+    "if (!/^dash_[a-f0-9]{32}$/.test(createDashboardGroupId())) throw new Error('public dashboard group id is invalid');",
+    "const dashboardMetric = (value) => ({ value, unit: 'tokens', source: 'pinpoint', basis: 'estimate', scope: 'request' });",
+    "const dashboardEvent = normalizeDashboardEvent({ schemaVersion: 1, type: 'provider.route', source: 'pinpoint', occurredAt: new Date(0).toISOString(), provider: 'openai', model: 'smoke', authMode: 'payg', mode: 'optimize', durationMs: 1, tokensText: dashboardMetric(10), tokensCompressed: dashboardMetric(4), tokensSaved: dashboardMetric(6), reversibleCount: 0, stages: [{ stage: 'virtual', applied: true, reason: 'applied', tokensText: 10, tokensCompressed: 4, tokensSaved: 6, basis: 'estimate' }] });",
+    "if (dashboardEvent.tokensSaved.value !== 6) throw new Error('public dashboard event contract is invalid');",
     'console.log(`imported ${entries.length} public entry points`);',
   ].join('\n');
   run(process.execPath, ['--input-type=module', '--eval', runtimeScript]);

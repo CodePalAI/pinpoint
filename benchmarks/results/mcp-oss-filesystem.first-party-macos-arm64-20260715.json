@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "evidenceLevel": "oss-protocol-integration",
   "kind": "mcp-result-firewall-oss-filesystem-gate",
-  "date": "2026-07-16",
+  "date": "2026-07-17",
   "passed": true,
   "environment": {
     "platform": "darwin",
@@ -35,7 +35,7 @@
   },
   "source": {
     "fingerprints": {
-      "src/mcp/gateway.ts": "eed74b121fe36ea471399704147bd1656df65c12792a9d2258735ae57a8581ab",
+      "src/mcp/gateway.ts": "ac3faaccee257d57f48c7dbea7fceffa78445039ea608198388a39d0c1787d4e",
       "src/virtual-context/store.ts": "7b0bbc2de4e400b7cb85a23d926bf5ec2c898c7242df57b220026bf3cbc36783",
       "benchmarks/v2/mcp_oss_filesystem_gate.mjs": "0307361df7978e8dc47242dea2c248a5cf4e7d9f66298bdd8a29d3a338c86590"
     }

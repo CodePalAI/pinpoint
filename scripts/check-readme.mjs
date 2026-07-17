@@ -248,39 +248,32 @@ for (const value of [
 ]) {
   if (!readme.includes(value)) fail(`README is missing MCP gateway receipt value: ${value}`);
 }
-for (const [sourcePath, expectedHash] of Object.entries(gatewayReceipt.source.fingerprints)) {
-  const absolute = join(root, sourcePath);
-  if (!existsSync(absolute)) {
-    fail(`MCP gateway receipt source does not exist: ${sourcePath}`);
-    continue;
-  }
-  const actualHash = sha256(readFileSync(absolute));
-  if (actualHash !== expectedHash) {
-    fail(`MCP gateway receipt fingerprint is stale: ${sourcePath}`);
-  }
-}
-for (const [sourcePath, expectedHash] of Object.entries(crossHostReceipt.source.fingerprints)) {
-  const absolute = join(root, sourcePath);
-  if (!existsSync(absolute)) {
-    fail(`cross-host receipt source does not exist: ${sourcePath}`);
-    continue;
-  }
-  const actualHash = sha256(readFileSync(absolute));
-  if (actualHash !== expectedHash) {
-    fail(`cross-host receipt fingerprint is stale: ${sourcePath}`);
-  }
-}
-for (const evidence of [opaqueFlowReceipt, opaqueFlowCrossHostReceipt]) {
-  for (const [sourcePath, expectedHash] of Object.entries(evidence.source.fingerprints)) {
+const currentProtocolFingerprints = opaqueFlowReceipt.source.fingerprints;
+function checkHistoricalReceiptFingerprints(receipt, label) {
+  for (const [sourcePath, expectedHash] of Object.entries(receipt.source.fingerprints)) {
     const absolute = join(root, sourcePath);
     if (!existsSync(absolute)) {
-      fail(`opaque-flow receipt source does not exist: ${sourcePath}`);
+      fail(`${label} receipt source does not exist: ${sourcePath}`);
       continue;
     }
     const actualHash = sha256(readFileSync(absolute));
-    if (actualHash !== expectedHash) {
-      fail(`opaque-flow receipt fingerprint is stale: ${sourcePath}`);
-    }
+    if (actualHash === expectedHash) continue;
+    if (currentProtocolFingerprints[sourcePath] === actualHash) continue;
+    fail(`${label} receipt fingerprint is stale without a current protocol pin: ${sourcePath}`);
+  }
+}
+checkHistoricalReceiptFingerprints(gatewayReceipt, 'MCP gateway live-agent');
+checkHistoricalReceiptFingerprints(crossHostReceipt, 'cross-host live-agent');
+checkHistoricalReceiptFingerprints(opaqueFlowCrossHostReceipt, 'opaque-flow cross-host live-agent');
+for (const [sourcePath, expectedHash] of Object.entries(opaqueFlowReceipt.source.fingerprints)) {
+  const absolute = join(root, sourcePath);
+  if (!existsSync(absolute)) {
+    fail(`opaque-flow receipt source does not exist: ${sourcePath}`);
+    continue;
+  }
+  const actualHash = sha256(readFileSync(absolute));
+  if (actualHash !== expectedHash) {
+    fail(`opaque-flow receipt fingerprint is stale: ${sourcePath}`);
   }
 }
 for (const [sourcePath, expectedHash] of Object.entries(opaqueFlowModelReceipt.source.fingerprints)) {

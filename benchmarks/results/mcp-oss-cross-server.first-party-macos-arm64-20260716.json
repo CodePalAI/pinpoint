@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "evidenceLevel": "oss-cross-server-integration",
   "kind": "mcp-value-opaque-oss-cross-server-gate",
-  "date": "2026-07-16",
+  "date": "2026-07-17",
   "passed": true,
   "environment": {
     "platform": "darwin",
@@ -45,7 +45,7 @@
     "persistedEntities": 40,
     "privateCanariesScanned": 600,
     "privateCanariesLeaked": 0,
-    "elapsedMs": 3248.799833
+    "elapsedMs": 5542.093791
   },
   "security": {
     "separateProcesses": true,
@@ -55,15 +55,15 @@
     "operatorAuthorityBindingValid": true,
     "exactPolicyOpeningValid": true,
     "destinationServerBoundInReceipt": true,
-    "operatorKeyId": "fc15b61bb630cb82a815f672a971761c2e5b60915c1ce23db58d4f2e22174975",
-    "policyCommitment": "sha256:1821d466e936110436b4579121d8fabaa930f539085bac8738950bd76d3bf542",
-    "receiptHash": "4bc10853163938a7cea8a1b7ce50767e1442468958d826f14d9169835c23e92a"
+    "operatorKeyId": "8623a2601c3fb1c0feaa39616732c53710157cfde0c72d9eb36184fb275dea2a",
+    "policyCommitment": "sha256:05b0df0ad9907fb536626a5c47c1064b4d190430df2aca7c5c19724ee09ee383",
+    "receiptHash": "56e60fa24ba333256a43faaf0280c58ff03d7463cb8e6d6bbc21c4f472150ed6"
   },
   "source": {
     "fingerprints": {
       "src/mcp/destination.ts": "57daf663580ec8258f522e3e96e3178de74adbf209eedffb6c8aa067b84c5372",
       "src/mcp/flow.ts": "1584a45e7bb99ae947d70bdddb0dfa426eec6f6db7517bd71e44745c95cd2e14",
-      "src/mcp/gateway.ts": "eed74b121fe36ea471399704147bd1656df65c12792a9d2258735ae57a8581ab",
+      "src/mcp/gateway.ts": "ac3faaccee257d57f48c7dbea7fceffa78445039ea608198388a39d0c1787d4e",
       "src/virtual-context/store.ts": "7b0bbc2de4e400b7cb85a23d926bf5ec2c898c7242df57b220026bf3cbc36783",
       "benchmarks/v2/mcp_oss_cross_server_gate.mjs": "adf8f23c8c30ebfc156d209e416da463fff8d9859abf9383cae52d5f0997b88f"
     }

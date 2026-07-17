@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -176,6 +176,43 @@ describe('wrap copilot → headroom delegation', () => {
       expect(recorded).not.toContain('--subscription');
       expect(recorded).toContain('-- --model claude-sonnet-4-20250514');
     } finally {
+      fake.restore();
+    }
+  });
+
+  it('propagates only non-authorizing dashboard metadata to delegated Copilot', async () => {
+    const fake = fakeBin();
+    const history = join(fake.dir, 'dashboard-history');
+    const envFile = join(fake.dir, 'dashboard-env.txt');
+    const savedDashboardDir = process.env.PINPOINT_DASHBOARD_DIR;
+    process.env.PINPOINT_DASHBOARD_DIR = history;
+    writeFileSync(
+      fake.headroom,
+      `#!/bin/sh\nprintf '%s\\n' "$*" > "${fake.argsFile}"\nprintf '%s\\n%s\\n%s\\n' "$PINPOINT_DASHBOARD_GROUP" "$PINPOINT_DASHBOARD_DIR" "$PINPOINT_DASHBOARD_TOKEN" > "${envFile}"\nexit 0\n`,
+    );
+    chmodSync(fake.headroom, 0o755);
+    try {
+      const code = await runWrap({
+        agent: 'copilot',
+        passthrough: [],
+        dashboard: { port: 0, open: false },
+      });
+      expect(code).toBe(0);
+      const [groupId, dashboardDir, browserToken] = readFileSync(envFile, 'utf8').split(/\r?\n/);
+      expect(groupId).toMatch(/^dash_[a-f0-9]{32}$/);
+      expect(dashboardDir).toBe(history);
+      expect(browserToken).toBe('');
+      const recordedArgs = readFileSync(fake.argsFile, 'utf8');
+      expect(recordedArgs).toContain('wrap copilot --subscription');
+      expect(recordedArgs).toContain('--port 8787');
+      const groupDir = join(history, groupId!);
+      const files = readdirSync(groupDir);
+      expect(files.some((name) => name.endsWith('.state.json'))).toBe(true);
+      expect(files.some((name) => name.endsWith('.events.jsonl'))).toBe(true);
+      expect(statSync(groupDir).mode & 0o777).toBe(0o700);
+    } finally {
+      if (savedDashboardDir === undefined) delete process.env.PINPOINT_DASHBOARD_DIR;
+      else process.env.PINPOINT_DASHBOARD_DIR = savedDashboardDir;
       fake.restore();
     }
   });

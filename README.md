@@ -226,6 +226,27 @@ Look for these fields in the final JSON:
 
 The exact gate is `benchmarks/v2/mcp_oss_cross_server_gate.mjs`; the [reproduction guide](./benchmarks/REPRODUCING.md) explains the command. Its retained result is the [cross-server receipt](./benchmarks/results/mcp-oss-cross-server.first-party-macos-arm64-20260716.json).
 
+### Optional local session recorder
+
+Add `--dashboard` when you want a local, read-only view of the current session:
+
+```bash
+pinpoint wrap copilot --dashboard
+pinpoint mcp gateway --dashboard -- npx -y your-mcp-server
+pinpoint proxy --dashboard
+```
+
+Pinpoint opens one protected loopback tab. Use `--no-open` to print the URL
+instead, or run `pinpoint dashboard` later to inspect local metadata history.
+The recorder keeps provider-token lanes, Headroom-reported Copilot usage, MCP
+exact bytes, provider quota, and estimated cost on separate labeled bases.
+Shared Headroom proxies are marked as partial attribution; cost remains
+unavailable when there is no defensible per-agent basis.
+
+Dashboard history is metadata-only. It never stores prompts, responses, tool
+arguments or results, credentials, artifact capabilities, or receipt bodies.
+See [the dashboard architecture and threat boundary](./planning/dashboard.md).
+
 ## Pick your mode
 
 Pinpoint has two MCP modes. Start with the one that matches your problem.
@@ -446,7 +467,7 @@ The tests use synthetic data. They preserve failures and remove raw model event 
 | Published OSS cross-server flow | **40/40 entities; 4/4 denials; 0/600 canaries** | Filesystem `2026.7.10` to memory `2026.7.4`; exact JSONL side effect |
 | Matched HCP comparison | **Pinpoint exact; HCP 30/30 exact; both 4/4 denials and 0/600 canaries** | Byte-identical fixture and native authority comparison; No scalar winner |
 | Constructed visible traffic | **31,013 -> 3,414 bytes, 89.0% lower** | Same synthetic source/destination payload with authority receipt |
-| Local flow latency | **0.84 ms p95** | 30 local protocol samples, not a production load test |
+| Local flow latency | **0.58 ms p95** | 30 local protocol samples, not a production load test |
 
 <details>
 <summary><strong>Detailed receipt measurements</strong></summary>
@@ -502,6 +523,13 @@ Microsoft Fides Gateway was inspected but not scored. Its public gateway can eva
 
 These are first-party synthetic tests. They are not customer production traces, a formal proof over the TypeScript runtime, a prevalence estimate, or a compliance certification.
 
+The Claude Code and GitHub Copilot receipts are immutable historical live-host
+runs. After adding the metadata-only dashboard observers, Pinpoint reran the
+no-model protocol, published-filesystem, published cross-server, and ten-workflow
+gates against the current gateway source. The checker accepts a changed live-run
+source path only when that exact current path is pinned by the passing protocol
+receipt; it does not relabel the earlier paid or authenticated run as current.
+
 The project will not call itself independently proven while [clean-machine reproduction #14](https://github.com/CodePalAI/pinpoint/issues/14) and [unaffiliated security review #15](https://github.com/CodePalAI/pinpoint/issues/15) remain open. The [breakthrough scorecard](./planning/breakthrough_scorecard.md) lists every blocking gate.
 
 ## Security boundary
@@ -518,6 +546,11 @@ Pinpoint controls the client-facing MCP path. It is not a complete security plat
 | Failure receipts after unconfirmed destination calls | Rollback or exactly-once side effects |
 
 Observable metadata includes tool names, flow names, field names, operation, counts, sizes, limits, timing, success status, receipt sequence, and policy shape.
+
+The optional dashboard is a separate read-only loopback control plane. Its APIs
+require a random tab-local bearer token and reject cross-origin, invalid-Host,
+and mutating requests. Mode-0600 metadata journals remain readable by other
+processes running as the same operating-system user; this is not an OS sandbox.
 
 Read [SECURITY.md](./SECURITY.md) and the [full threat model](./planning/value_opaque_mcp_dataflow.md#threat-model) before using Pinpoint with sensitive data.
 
@@ -558,6 +591,8 @@ Not yet supported: multiple destinations, remote HTTP/OAuth brokering, OS sandbo
 | `PINPOINT_CAPTURE_BODIES` | Include sensitive bodies for replay | `off` |
 | `PINPOINT_OTLP_ENDPOINT` | OTLP/HTTP trace collector | unset |
 | `PINPOINT_LOG` | `silent`, `error`, `warn`, `info`, or `debug` | `info` |
+| `PINPOINT_DASHBOARD_PORT` | Optional local dashboard port | `8790` |
+| `PINPOINT_DASHBOARD_DIR` | Metadata-only dashboard history directory | `~/.pinpoint/dashboard` |
 
 Run `pinpoint help` for the complete CLI reference.
 

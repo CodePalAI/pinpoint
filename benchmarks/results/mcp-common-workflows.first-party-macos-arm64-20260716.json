@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "evidenceLevel": "paired-oss-protocol-integration",
   "kind": "mcp-common-workflows-gate",
-  "date": "2026-07-16",
+  "date": "2026-07-17",
   "passed": true,
   "environment": {
     "platform": "darwin",
@@ -347,7 +347,7 @@
   },
   "source": {
     "fingerprints": {
-      "src/mcp/gateway.ts": "eed74b121fe36ea471399704147bd1656df65c12792a9d2258735ae57a8581ab",
+      "src/mcp/gateway.ts": "ac3faaccee257d57f48c7dbea7fceffa78445039ea608198388a39d0c1787d4e",
       "src/virtual-context/store.ts": "7b0bbc2de4e400b7cb85a23d926bf5ec2c898c7242df57b220026bf3cbc36783",
       "benchmarks/v2/mcp_common_workflows_gate.mjs": "c63a16a1f58b88fb4b519c707966ac6204c380b475bb1604ca3ac67af2457aaf"
     }

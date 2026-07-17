@@ -13,11 +13,23 @@
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { accessSync, constants } from 'node:fs';
+import { createServer as createNetServer } from 'node:net';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 
 import type { LogLevel } from '../config.js';
 import { createProxyServer, type ProxyServer } from '../proxy/server.js';
+import { openDashboardInBrowser } from '../dashboard/browser.js';
+import { HeadroomDashboardAdapter } from '../dashboard/headroom.js';
+import {
+  dashboardRootFromEnvironment,
+  DashboardJournal,
+} from '../dashboard/journal.js';
+import {
+  createDashboardServer,
+  DEFAULT_DASHBOARD_PORT,
+  type DashboardServer,
+} from '../dashboard/server.js';
 import {
   BUILTIN_AGENT_REGISTRY,
   knownAgents,
@@ -36,6 +48,10 @@ export interface WrapOptions {
   readonly contextTool?: boolean;
   readonly port?: number;
   readonly verbose?: boolean;
+  readonly dashboard?: {
+    readonly port?: number;
+    readonly open: boolean;
+  };
   /** Custom adapter registry for embedders; built-ins by default. */
   readonly registry?: AgentRegistry;
 }
@@ -67,29 +83,45 @@ function proxyOverrides(opts: WrapOptions): { port?: number; logLevel?: LogLevel
 }
 
 async function runLaunch(spec: LaunchAgent, opts: WrapOptions): Promise<number> {
-  const server = createProxyServer(proxyOverrides(opts));
-  const { host, port } = await server.listen();
-  const baseUrl = `http://${host}:${port}`;
-  const agentEnv = spec.env(baseUrl);
-  server.pinpoint.log.info(`wrapping '${opts.agent}': ${Object.keys(agentEnv).join(', ')} → ${baseUrl}`);
+  const dashboard = opts.dashboard ? await startDashboard('pinpoint', opts.dashboard) : undefined;
+  const server = createProxyServer(proxyOverrides(opts), {
+    ...(dashboard ? { runtime: { observer: dashboard.journal } } : {}),
+  });
   try {
-    return await spawnAndWait(spec.command, opts.passthrough, { ...process.env, ...agentEnv });
+    const { host, port } = await server.listen();
+    const baseUrl = `http://${host}:${port}`;
+    const agentEnv = spec.env(baseUrl);
+    server.pinpoint.log.info(`wrapping '${opts.agent}': ${Object.keys(agentEnv).join(', ')} → ${baseUrl}`);
+    return await spawnAndWait(spec.command, opts.passthrough, {
+      ...process.env,
+      ...agentEnv,
+      ...dashboardEnvironment(dashboard),
+    });
   } catch (err) {
     console.error(`failed to launch ${spec.command}: ${err instanceof Error ? err.message : String(err)}`);
     return 127;
   } finally {
     await server.close();
+    await stopDashboard(dashboard);
   }
 }
 
 async function runPrint(spec: PrintAgent, opts: WrapOptions): Promise<number> {
-  const server = createProxyServer(proxyOverrides(opts));
-  const { host, port } = await server.listen();
-  const baseUrl = `http://${host}:${port}`;
-  console.log(`\npinpoint proxy is running for ${spec.displayName} at ${baseUrl}\n`);
-  console.log(spec.instructions(baseUrl));
-  console.log('\nLeave this running; press Ctrl-C to stop.\n');
-  return waitForSignal(server);
+  const dashboard = opts.dashboard ? await startDashboard('pinpoint', opts.dashboard) : undefined;
+  const server = createProxyServer(proxyOverrides(opts), {
+    ...(dashboard ? { runtime: { observer: dashboard.journal } } : {}),
+  });
+  try {
+    const { host, port } = await server.listen();
+    const baseUrl = `http://${host}:${port}`;
+    console.log(`\npinpoint proxy is running for ${spec.displayName} at ${baseUrl}\n`);
+    console.log(spec.instructions(baseUrl));
+    console.log('\nLeave this running; press Ctrl-C to stop.\n');
+    return await waitForSignal(server);
+  } finally {
+    await server.close();
+    await stopDashboard(dashboard);
+  }
 }
 
 // ── Copilot delegation ─────────────────────────────────────────────────────
@@ -132,13 +164,24 @@ async function runDelegateCopilot(opts: WrapOptions): Promise<number> {
     return 1;
   }
 
+  const resolvedHeadroom = opts.dashboard
+    ? await resolveHeadroomPort(opts.port ?? 8787)
+    : { port: opts.port, attribution: 'shared' as const };
+  const dashboard = opts.dashboard ? await startDashboard('headroom', opts.dashboard) : undefined;
+  const adapter = dashboard && resolvedHeadroom.port != null
+    ? new HeadroomDashboardAdapter({
+        baseUrl: `http://127.0.0.1:${resolvedHeadroom.port}`,
+        attribution: resolvedHeadroom.attribution,
+        observer: dashboard.journal,
+      })
+    : undefined;
   const passthrough = ensureModel(opts.passthrough, pf.model);
   const args = ['wrap', 'copilot'];
   if (!opts.byok) args.push('--subscription');
   // Ephemeral by default: don't let headroom's RTK context tool write repo files
   // (.github/copilot-instructions.md). Opt in with `--context-tool`.
   if (!opts.contextTool) args.push('--no-context-tool');
-  if (opts.port) args.push('--port', String(opts.port));
+  if (resolvedHeadroom.port) args.push('--port', String(resolvedHeadroom.port));
   if (opts.verbose) args.push('-v');
   args.push('--', ...passthrough);
 
@@ -147,15 +190,125 @@ async function runDelegateCopilot(opts: WrapOptions): Promise<number> {
     `pinpoint wrap copilot → delegating to headroom (${mode}); model=${modelOf(passthrough)}; headroom=${pf.headroomBin}`,
   );
   console.error(
-    "  Copilot compression runs via headroom's semantic engine; savings appear in headroom's dashboard.",
+    opts.dashboard
+      ? `  Copilot compression is Headroom-owned; Pinpoint reports ${resolvedHeadroom.attribution} attribution.`
+      : "  Copilot compression runs via headroom's semantic engine; savings appear in headroom's dashboard.",
   );
 
   try {
-    return await spawnAndWait(pf.headroomBin, args, process.env);
+    await adapter?.start();
+    return await spawnAndWait(pf.headroomBin, args, {
+      ...process.env,
+      ...dashboardEnvironment(dashboard),
+    });
   } catch (err) {
     console.error(`failed to launch headroom: ${err instanceof Error ? err.message : String(err)}`);
     return 127;
+  } finally {
+    await adapter?.stop();
+    await stopDashboard(dashboard);
   }
+}
+
+interface RunningDashboard {
+  readonly journal: DashboardJournal;
+  readonly server: DashboardServer;
+  readonly rootDir: string;
+}
+
+async function startDashboard(
+  source: 'pinpoint' | 'headroom',
+  options: NonNullable<WrapOptions['dashboard']>,
+): Promise<RunningDashboard> {
+  const rootDir = dashboardRootFromEnvironment();
+  const journal = new DashboardJournal({ rootDir, source });
+  const server = createDashboardServer({
+    rootDir,
+    groupId: journal.groupId,
+    port: options.port ?? dashboardPortFromEnvironment(),
+    strictPort: options.port != null,
+  });
+  try {
+    const address = await server.listen();
+    if (options.open && await openDashboardInBrowser(address.launchUrl)) {
+      console.error(`pinpoint dashboard: ${address.url}`);
+    } else {
+      console.error(`pinpoint dashboard (protected URL): ${address.launchUrl}`);
+    }
+    return { journal, server, rootDir };
+  } catch (error) {
+    journal.close();
+    await server.close();
+    throw error;
+  }
+}
+
+async function stopDashboard(dashboard: RunningDashboard | undefined): Promise<void> {
+  if (!dashboard) return;
+  dashboard.journal.close();
+  await dashboard.server.close();
+}
+
+function dashboardEnvironment(dashboard: RunningDashboard | undefined): NodeJS.ProcessEnv {
+  return dashboard ? {
+    PINPOINT_DASHBOARD_GROUP: dashboard.journal.groupId,
+    PINPOINT_DASHBOARD_DIR: dashboard.rootDir,
+  } : {};
+}
+
+function dashboardPortFromEnvironment(): number {
+  const value = Number(process.env.PINPOINT_DASHBOARD_PORT ?? DEFAULT_DASHBOARD_PORT);
+  return Number.isInteger(value) && value >= 0 && value <= 65535 ? value : DEFAULT_DASHBOARD_PORT;
+}
+
+async function resolveHeadroomPort(preferredPort: number): Promise<{
+  readonly port: number;
+  readonly attribution: 'dedicated' | 'shared';
+}> {
+  if (await isHeadroomProxy(preferredPort)) return { port: preferredPort, attribution: 'shared' };
+  if (await canBind(preferredPort)) return { port: preferredPort, attribution: 'dedicated' };
+  return { port: await availableLoopbackPort(), attribution: 'dedicated' };
+}
+
+async function isHeadroomProxy(port: number): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 500);
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/health`, { signal: controller.signal });
+    if (!response.ok) return false;
+    const payload = await response.json() as { service?: unknown };
+    return payload.service === 'headroom-proxy';
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function bindTest(port: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createNetServer();
+    server.unref();
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', () => {
+      const address = server.address();
+      const boundPort = typeof address === 'object' && address != null ? address.port : port;
+      server.close((error) => error ? reject(error) : resolve(boundPort));
+    });
+  });
+}
+
+async function canBind(port: number): Promise<boolean> {
+  try {
+    await bindTest(port);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function availableLoopbackPort(): Promise<number> {
+  return bindTest(0);
 }
 
 // ── process helpers ─────────────────────────────────────────────────────────

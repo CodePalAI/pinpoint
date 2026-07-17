@@ -27,3 +27,7 @@ headroom (PyPI: headroom-ai)
 
 The MIT License of pxpipe is compatible with, and may be combined under, the
 Apache License, Version 2.0 under which pinpoint is distributed.
+
+The optional local dashboard bundles compiled assets from Lucide Icons (ISC,
+with some Feather-derived MIT icons) and Instrument Sans (SIL Open Font License
+1.1). See THIRD_PARTY_NOTICES.md for copyright and license terms.

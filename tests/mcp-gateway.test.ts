@@ -10,6 +10,7 @@ import {
   runMcpGateway,
 } from '../src/mcp/gateway.js';
 import { verifyMcpOpaqueFlowReceipt } from '../src/mcp/flow.js';
+import type { DashboardEvent } from '../src/dashboard/types.js';
 
 function send(stream: PassThrough, message: unknown): void {
   stream.write(`${JSON.stringify(message)}\n`);
@@ -315,11 +316,13 @@ describe('McpResultFirewall', () => {
     const output = new PassThrough();
     const error = new PassThrough();
     const next = responses(output);
+    const observed: DashboardEvent[] = [];
     const running = runMcpGateway(process.execPath, ['--input-type=module', '--eval', upstream], {
       input,
       output,
       error,
       minChars: 500,
+      observer: { onEvent: (event) => { observed.push(event); } },
     });
 
     send(input, { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
@@ -392,6 +395,34 @@ describe('McpResultFirewall', () => {
 
     input.end();
     expect(await running).toBe(0);
+    expect(observed.map(({ type }) => type)).toEqual([
+      'mcp.lifecycle',
+      'mcp.result',
+      'mcp.tool',
+      'mcp.query',
+      'mcp.lifecycle',
+    ]);
+    expect(observed).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'mcp.result',
+        tool: 'accounts_list',
+        outcome: 'succeeded',
+        virtualized: true,
+        bytesBefore: expect.objectContaining({ unit: 'bytes', source: 'mcp', basis: 'exact-bytes' }),
+        bytesVisible: expect.objectContaining({ unit: 'bytes', source: 'mcp', basis: 'exact-bytes' }),
+        artifactKind: 'json-array',
+        artifactItems: 200,
+      }),
+      expect.objectContaining({
+        type: 'mcp.query',
+        operation: 'json_select',
+        outcome: 'succeeded',
+      }),
+    ]));
+    const serializedObserved = JSON.stringify(observed);
+    expect(serializedObserved).not.toContain('user73@example.com');
+    expect(serializedObserved).not.toContain(String(artifactId));
+    expect(serializedObserved).not.toContain('accountId');
   });
 
   it('terminates the wrapped server when the gateway is aborted', async () => {
@@ -431,6 +462,54 @@ describe('McpResultFirewall', () => {
     controller.abort();
 
     expect(await running).toBeNull();
+  });
+
+  it('observes upstream tool failures without copying JSON-RPC error details', async () => {
+    const secret = 'upstream-error-private-canary';
+    const upstream = String.raw`
+      import { createInterface } from 'node:readline';
+      const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+      for await (const line of lines) {
+        const message = JSON.parse(line);
+        if (message.method === 'initialize') {
+          process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: {
+            protocolVersion: '2024-11-05', capabilities: { tools: {} },
+            serverInfo: { name: 'failure-fixture', version: '1.0.0' },
+          } }) + '\n');
+        } else if (message.method === 'tools/call') {
+          process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: message.id, error: {
+            code: -32001, message: '${secret}', data: { private: '${secret}' },
+          } }) + '\n');
+        }
+      }
+    `;
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const next = responses(output);
+    const observed: DashboardEvent[] = [];
+    const running = runMcpGateway(process.execPath, ['--input-type=module', '--eval', upstream], {
+      input,
+      output,
+      error: new PassThrough(),
+      observer: { onEvent: (event) => { observed.push(event); } },
+    });
+
+    send(input, { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+    await next();
+    send(input, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'failing_tool', arguments: { private: secret } },
+    });
+    expect(await next()).toMatchObject({ id: 2, error: { code: -32001, message: secret } });
+    input.end();
+    expect(await running).toBe(0);
+
+    expect(observed).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'mcp.tool', tool: 'failing_tool', outcome: 'failed' }),
+    ]));
+    expect(JSON.stringify(observed)).not.toContain(secret);
   });
 
   it('blocks malformed and unsolicited protocol paths around protected sources', async () => {

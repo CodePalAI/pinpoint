@@ -4,6 +4,23 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## Unreleased
 
+### Added
+
+- An opt-in local Session Recorder for provider requests, MCP exact-byte
+	virtualization/query/flow events, and delegated GitHub Copilot usage through
+	an allowlist-only Headroom adapter.
+- `pinpoint dashboard`, plus `--dashboard`, `--dashboard-port`, and `--no-open`
+	support for proxy, wrap, and MCP gateway workflows.
+- Metadata-only mode-0600 session journals, source/unit/basis provenance,
+	provider-reported Copilot quota, and shared-proxy attribution warnings.
+
+### Safety
+
+- The dashboard binds only to loopback, validates Host/Origin, requires a
+	fragment-bootstrapped bearer token for read-only APIs and SSE, serves no
+	remote assets, and structurally excludes prompts, responses, tool values,
+	credentials, capabilities, and receipt bodies.
+
 ## 0.2.0 - 2026-07-16
 
 ### Added

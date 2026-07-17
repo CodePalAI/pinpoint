@@ -119,6 +119,24 @@ describe('dashboard server', () => {
       tokenLanes: [{ source: 'pinpoint', basis: 'estimate', tokensSaved: 75 }],
       privacy: { metadataOnly: true },
     });
+    const history = await request(address.port, '/api/v1/history', { token: server.token });
+    expect(JSON.parse(history.body)).toMatchObject({
+      sessions: [{
+        groupId: journal.groupId,
+        requests: 1,
+        durationMs: expect.any(Number),
+        tokenLanes: [{ source: 'pinpoint', tokensSaved: 75 }],
+      }],
+    });
+    expect(JSON.parse(history.body).sessions[0].durationMs).toBeGreaterThanOrEqual(0);
+    const historical = await request(
+      address.port,
+      `/api/v1/history?group=${journal.groupId}`,
+      { token: server.token },
+    );
+    expect(JSON.parse(historical.body)).toMatchObject({
+      session: { groupId: journal.groupId, requests: 1, recentEvents: [{ type: 'provider.route' }] },
+    });
     journal.close();
   });
 
@@ -138,6 +156,9 @@ describe('dashboard server', () => {
       method: 'POST',
     })).status).toBe(405);
     expect((await request(port, '/%2e%2e/package.json')).status).toBe(404);
+    expect((await request(port, '/api/v1/history?group=../../etc', {
+      token: server.token,
+    })).status).toBe(400);
     journal.close();
   });
 });

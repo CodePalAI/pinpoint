@@ -196,6 +196,18 @@ export function createDashboardServer(options: DashboardServerOptions): Dashboar
         return sendJson(response, 200, { events: snapshot(eventLimit(url)).recentEvents });
       }
       if (url.pathname === '/api/v1/history') {
+        const groupId = url.searchParams.get('group');
+        if (groupId != null) {
+          try {
+            const group = readDashboardGroup(rootDir, groupId);
+            if (group.producers.length === 0 && group.events.length === 0) {
+              return sendJson(response, 404, { error: 'session_not_found' });
+            }
+            return sendJson(response, 200, { session: buildDashboardSnapshot(group, now(), MAX_RECENT_EVENTS) });
+          } catch {
+            return sendJson(response, 400, { error: 'invalid_session' });
+          }
+        }
         return sendJson(response, 200, { sessions: listDashboardHistory(rootDir) });
       }
       if (url.pathname === '/api/v1/stream') {

@@ -1,17 +1,27 @@
 import {
   Activity,
   Archive,
+  ArrowDownToLine,
+  BadgeCheck,
+  Braces,
   Cable,
+  CheckCircle2,
+  ChevronDown,
   Database,
+  EyeOff,
   Gauge,
   History,
   LockKeyhole,
   Radio,
   RefreshCw,
   Route,
+  Search,
+  Send,
   ServerCog,
   ShieldCheck,
+  ShieldAlert,
   TerminalSquare,
+  TriangleAlert,
 } from 'lucide';
 
 import type {
@@ -26,6 +36,8 @@ import './styles.css';
 type IconNode = readonly (readonly [string, Readonly<Record<string, string | number | undefined>>])[];
 type ViewName = 'live' | 'requests' | 'mcp' | 'history' | 'system';
 type ConnectionState = 'connecting' | 'live' | 'reconnecting' | 'unauthorized';
+type RequestProviderFilter = 'all' | 'openai' | 'anthropic';
+type RequestOutcomeFilter = 'all' | 'applied' | 'passthrough' | 'negative';
 
 interface AppState {
   token: string | null;
@@ -37,6 +49,13 @@ interface AppState {
   retryMs: number;
   retryTimer: number | null;
   streamController: AbortController | null;
+  requestQuery: string;
+  requestProvider: RequestProviderFilter;
+  requestOutcome: RequestOutcomeFilter;
+  selectedRequest: string | null;
+  selectedHistoryGroup: string | null;
+  historySnapshot: DashboardSnapshot | null;
+  historyLoading: boolean;
 }
 
 const app = document.querySelector<HTMLDivElement>('#app') ?? (() => {
@@ -61,6 +80,13 @@ const state: AppState = {
   retryMs: 1_000,
   retryTimer: null,
   streamController: null,
+  requestQuery: '',
+  requestProvider: 'all',
+  requestOutcome: 'all',
+  selectedRequest: null,
+  selectedHistoryGroup: null,
+  historySnapshot: null,
+  historyLoading: false,
 };
 
 function readToken(): string | null {
@@ -109,6 +135,22 @@ function formatCurrency(value: number): string {
     .format(value);
 }
 
+function formatBytes(value: number): string {
+  if (value < 1_000) return `${formatNumber(value)} B`;
+  if (value < 1_000_000) return `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)} KB`;
+  return `${(value / 1_000_000).toFixed(value < 10_000_000 ? 1 : 0)} MB`;
+}
+
+function formatDuration(value: number | null): string {
+  if (value == null) return 'Unknown duration';
+  if (value < 1_000) return `${Math.round(value)} ms`;
+  const seconds = Math.round(value / 1_000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return remainder === 0 ? `${minutes}m` : `${minutes}m ${remainder}s`;
+}
+
 function formatTime(value: string | null): string {
   if (!value) return 'No activity';
   return new Intl.DateTimeFormat('en-US', {
@@ -132,6 +174,132 @@ function sourceLabel(source: string): string {
   if (source === 'headroom') return 'Copilot / Headroom';
   if (source === 'mcp') return 'MCP firewall';
   return 'Pinpoint runtime';
+}
+
+function eventKey(event: DashboardEvent): string {
+  return `${event.type}:${event.occurredAt}`;
+}
+
+function activeSourceCount(snapshot: DashboardSnapshot): number {
+  return snapshot.sources.filter(({ state }) => state === 'active').length;
+}
+
+function attentionCount(snapshot: DashboardSnapshot): number {
+  const degraded = snapshot.sources.filter(({ state }) => state === 'degraded').length;
+  const negative = snapshot.recentEvents.filter(
+    (event) => event.type === 'provider.route' && event.tokensSaved.value < 0,
+  ).length;
+  return degraded + snapshot.corruptRecords + snapshot.mcp.failed + negative;
+}
+
+function sessionVerdict(snapshot: DashboardSnapshot): {
+  readonly tone: 'clear' | 'attention' | 'ended';
+  readonly title: string;
+  readonly detail: string;
+} {
+  const attention = attentionCount(snapshot);
+  if (snapshot.state === 'ended') {
+    return {
+      tone: 'ended',
+      title: 'Session closed with evidence intact',
+      detail: `${snapshot.requests} provider requests and ${snapshot.recentEvents.length} metadata events remain available locally.`,
+    };
+  }
+  if (attention > 0) {
+    return {
+      tone: 'attention',
+      title: `${attention} signal${attention === 1 ? '' : 's'} need review`,
+      detail: 'Open the evidence tape to locate degraded sources, failed operations, or negative-savings routes.',
+    };
+  }
+  return {
+    tone: 'clear',
+    title: 'All observed paths are clear',
+    detail: `${activeSourceCount(snapshot)} sources reporting. No failed MCP operation, corrupt record, or negative-savings route observed.`,
+  };
+}
+
+interface TapeEntry {
+  readonly title: string;
+  readonly detail: string;
+  readonly measure: string;
+  readonly basis: string;
+  readonly tone: 'clear' | 'info' | 'attention' | 'muted';
+  readonly icon: IconNode;
+}
+
+function describeEvent(event: DashboardEvent): TapeEntry {
+  if (event.type === 'provider.route') {
+    const applied = event.stages.filter(({ applied }) => applied).map(({ stage }) => stage);
+    const negative = event.tokensSaved.value < 0;
+    return {
+      title: `${event.provider === 'openai' ? 'OpenAI' : 'Anthropic'} route ${applied.length > 0 ? 'optimized' : 'passed through'}`,
+      detail: `${event.model ?? 'Unknown model'} · ${applied.join(' + ') || event.stages.map(({ reason }) => reason).join(' + ') || 'no transform'}`,
+      measure: `${formatNumber(event.tokensText.value)} → ${formatNumber(event.tokensCompressed.value)} tokens`,
+      basis: event.tokensSaved.basis,
+      tone: negative ? 'attention' : applied.length > 0 ? 'clear' : 'muted',
+      icon: applied.length > 0 ? ArrowDownToLine : Route,
+    };
+  }
+  if (event.type === 'mcp.result') {
+    const retained = event.bytesBefore.value - event.bytesVisible.value;
+    return {
+      title: event.virtualized ? `${event.tool} held outside context` : `${event.tool} passed through`,
+      detail: `${event.artifactKind ?? 'result'}${event.artifactItems == null ? '' : ` · ${formatNumber(event.artifactItems)} items`}`,
+      measure: event.virtualized ? `${formatBytes(retained)} retained` : formatBytes(event.bytesVisible.value),
+      basis: 'exact bytes',
+      tone: event.outcome === 'succeeded' ? 'clear' : 'attention',
+      icon: EyeOff,
+    };
+  }
+  if (event.type === 'mcp.query') {
+    return {
+      title: `${event.operation} answered locally`,
+      detail: 'Bounded exact artifact query',
+      measure: formatBytes(event.resultBytes.value),
+      basis: `${event.durationMs.toFixed(1)} ms`,
+      tone: event.outcome === 'succeeded' ? 'info' : 'attention',
+      icon: Search,
+    };
+  }
+  if (event.type === 'mcp.flow') {
+    return {
+      title: `${event.flow} dispatched under policy`,
+      detail: `${event.sourceTool} → ${event.destinationTool}${event.receiptEmitted ? ' · signed receipt emitted' : ''}`,
+      measure: `${formatNumber(event.items)} items`,
+      basis: formatBytes(event.payloadBytes.value),
+      tone: event.outcome === 'succeeded' ? 'clear' : 'attention',
+      icon: Send,
+    };
+  }
+  if (event.type === 'mcp.tool') {
+    return {
+      title: `${event.tool} ${event.outcome}`,
+      detail: 'Tool arguments excluded from recorder',
+      measure: `${event.durationMs.toFixed(1)} ms`,
+      basis: 'measured',
+      tone: event.outcome === 'succeeded' ? 'info' : 'attention',
+      icon: Cable,
+    };
+  }
+  if (event.type === 'mcp.lifecycle') {
+    return {
+      title: `MCP gateway ${event.state}`,
+      detail: `${event.flowsConfigured} configured flow${event.flowsConfigured === 1 ? '' : 's'}${event.privateDestination ? ' · private destination' : ''}`,
+      measure: 'Gateway',
+      basis: 'lifecycle',
+      tone: event.state === 'failed' ? 'attention' : 'muted',
+      icon: Cable,
+    };
+  }
+  return {
+    title: event.healthy ? 'Copilot telemetry attached' : 'Copilot telemetry unavailable',
+    detail: `${event.model ?? 'Unknown model'} · ${event.attribution === 'shared' ? 'shared proxy attribution' : 'dedicated session'}`,
+    measure: `${formatNumber(event.tokensSaved.value)} tokens saved`,
+    basis: event.tokensSaved.basis,
+    tone: event.healthy ? 'info' : 'attention',
+    icon: TerminalSquare,
+  };
 }
 
 function statusLabel(): string {
@@ -222,99 +390,142 @@ function renderView(snapshot: DashboardSnapshot): string {
 }
 
 function renderLive(snapshot: DashboardSnapshot): string {
-  const singleLane = snapshot.tokenLanes.length === 1 ? snapshot.tokenLanes[0] : null;
-  const providerEvents = snapshot.recentEvents
-    .filter((event) => event.type === 'provider.route')
-    .slice(-12)
-    .reverse();
+  const verdict = sessionVerdict(snapshot);
   const mcpRetained = snapshot.byteLanes.reduce((total, lane) => total + lane.bytesRetained, 0);
+  const tape = snapshot.recentEvents.slice(-14).reverse();
+  const latestActivity = snapshot.sources.reduce<string | null>(
+    (latest, source) => latest == null || (source.lastActivityAt ?? '') > latest
+      ? source.lastActivityAt
+      : latest,
+    null,
+  );
   return `
-    <section class="live-layout" aria-labelledby="live-title">
-      <div class="trace-panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">LIVE CONTEXT TRACE</p>
-            <h2 id="live-title">What entered. What crossed.</h2>
+    <section class="live-console" aria-labelledby="live-title">
+      <header class="operator-brief" data-tone="${verdict.tone}">
+        <div class="verdict-mark" aria-hidden="true">
+          ${icon(verdict.tone === 'attention' ? ShieldAlert : verdict.tone === 'ended' ? Archive : BadgeCheck)}
+        </div>
+        <div class="verdict-copy">
+          <span>Session verdict</span>
+          <h2 id="live-title">${escapeHtml(verdict.title)}</h2>
+          <p>${escapeHtml(verdict.detail)}</p>
+        </div>
+        <dl class="brief-facts">
+          <div><dt>Exact bytes held out</dt><dd>${formatBytes(mcpRetained)}</dd></div>
+          <div><dt>Observed requests</dt><dd>${formatNumber(snapshot.requests)}</dd></div>
+          <div><dt>Last evidence</dt><dd>${escapeHtml(formatTime(latestActivity))}</dd></div>
+        </dl>
+      </header>
+
+      <div class="live-workbench">
+        <section class="tape-panel" aria-labelledby="tape-title">
+          <div class="panel-heading">
+            <div>
+              <h3 id="tape-title">Evidence tape</h3>
+              <p>One chronological record across provider, MCP, and Copilot paths.</p>
+            </div>
+            <span>${tape.length} retained events</span>
           </div>
-          <span class="basis-note">Lanes stay separate by counting basis</span>
-        </div>
-        <div class="trace-total">
-          <div><span>${singleLane ? 'Observed before' : 'Measurement lanes'}</span><strong>${singleLane ? formatNumber(singleLane.tokensText) : formatNumber(snapshot.tokenLanes.length)}</strong><small>${singleLane ? 'tokens' : 'source-qualified'}</small></div>
-          <div class="trace-direction" aria-hidden="true"><span></span>${icon(Route)}<span></span></div>
-          <div><span>${singleLane ? 'Sent onward' : 'Aggregation'}</span><strong>${singleLane ? formatNumber(singleLane.tokensSent) : 'Separated'}</strong><small>${singleLane ? 'tokens' : 'by source + basis'}</small></div>
-        </div>
-        <div class="lane-stack">
-          ${snapshot.tokenLanes.length > 0
-            ? snapshot.tokenLanes.map(renderLane).join('')
-            : '<div class="inline-empty">No token-bearing route events yet.</div>'}
-        </div>
+          ${renderEvidenceTape(tape)}
+        </section>
+
+        <aside class="calibration-panel" aria-labelledby="calibration-title">
+          <div class="panel-heading compact">
+            <div>
+              <h3 id="calibration-title">Calibration</h3>
+              <p>Never summed across counting bases.</p>
+            </div>
+          </div>
+          <div class="calibration-lanes">
+            ${snapshot.tokenLanes.length > 0
+              ? snapshot.tokenLanes.map(renderCalibrationLane).join('')
+              : '<div class="inline-empty">No token-bearing route events yet.</div>'}
+          </div>
+          ${snapshot.byteLanes.map(renderByteCalibration).join('')}
+          ${renderSourceRegister(snapshot)}
+        </aside>
       </div>
-      <aside class="evidence-strip" aria-label="Verified session totals">
-        <p class="eyebrow">SESSION EVIDENCE</p>
-        ${renderEvidenceValue('Requests', snapshot.requests, 'observed')}
-        ${renderEvidenceValue('Token lanes', snapshot.tokenLanes.length, 'never merged across bases')}
-        ${renderEvidenceValue('MCP bytes retained', formatNumber(mcpRetained), 'exact-byte basis')}
-        ${renderEvidenceValue('Reversible handles', snapshot.reversibleCount, 'count only')}
-        <div class="source-register">
-          <span>Sources</span>
-          ${snapshot.sources.length > 0 ? snapshot.sources.map((source) => `
-            <div class="source-row"><i data-state="${source.state}"></i><strong>${escapeHtml(sourceLabel(source.source))}</strong><small>${source.producers} producer${source.producers === 1 ? '' : 's'}</small></div>
-          `).join('') : '<small>No active sources</small>'}
-        </div>
-      </aside>
-      ${snapshot.headroom ? renderCopilotPanel(snapshot) : ''}
-      <div class="ledger-panel">
-        ${renderLedgerHeading('Provider request ledger', providerEvents.length)}
-        ${renderEventTable(providerEvents)}
-      </div>
+
+      ${snapshot.headroom ? renderCopilotNotice(snapshot) : ''}
     </section>
   `;
 }
 
-function renderCopilotPanel(snapshot: DashboardSnapshot): string {
+function renderEvidenceTape(events: readonly DashboardEvent[]): string {
+  if (events.length === 0) {
+    return '<div class="domain-empty compact-empty"><h3>No evidence yet</h3><p>The tape begins with the first provider route or MCP operation.</p></div>';
+  }
+  return `
+    <ol class="evidence-tape">
+      ${events.map((event, index) => {
+        const described = describeEvent(event);
+        return `<li class="tape-entry" data-tone="${described.tone}">
+          <div class="tape-time"><time datetime="${escapeHtml(event.occurredAt)}">${escapeHtml(formatTime(event.occurredAt))}</time><span>${index === 0 ? 'latest' : ''}</span></div>
+          <div class="tape-node" aria-hidden="true">${icon(described.icon)}</div>
+          <div class="tape-copy"><strong>${escapeHtml(described.title)}</strong><span>${escapeHtml(described.detail)}</span></div>
+          <div class="tape-measure"><strong>${escapeHtml(described.measure)}</strong><span>${escapeHtml(described.basis)}</span></div>
+        </li>`;
+      }).join('')}
+    </ol>
+  `;
+}
+
+function renderCalibrationLane(lane: DashboardTokenLane): string {
+  const sentPercent = lane.tokensText > 0
+    ? Math.max(0, Math.min(100, lane.tokensSent / lane.tokensText * 100))
+    : 0;
+  const savedPercent = lane.tokensText > 0 ? lane.tokensSaved / lane.tokensText * 100 : 0;
+  return `
+    <article class="calibration-lane">
+      <div><strong>${escapeHtml(sourceLabel(lane.source))}</strong><span>${escapeHtml(lane.basis)}</span></div>
+      <div class="calibration-values"><span>${formatNumber(lane.tokensText)}</span><i>→</i><span>${formatNumber(lane.tokensSent)}</span></div>
+      <progress value="${sentPercent.toFixed(2)}" max="100" aria-label="${escapeHtml(sourceLabel(lane.source))}: ${formatNumber(lane.tokensSent)} of ${formatNumber(lane.tokensText)} tokens sent"></progress>
+      <p><strong>${lane.tokensSaved >= 0 ? '+' : ''}${formatNumber(lane.tokensSaved)}</strong><span>${formatPercent(savedPercent)} retained</span></p>
+    </article>
+  `;
+}
+
+function renderByteCalibration(lane: DashboardSnapshot['byteLanes'][number]): string {
+  const visiblePercent = lane.bytesBefore > 0
+    ? Math.max(0, Math.min(100, lane.bytesVisible / lane.bytesBefore * 100))
+    : 0;
+  return `
+    <article class="calibration-lane byte-lane">
+      <div><strong>MCP result boundary</strong><span>${escapeHtml(lane.basis)}</span></div>
+      <div class="calibration-values"><span>${formatBytes(lane.bytesBefore)}</span><i>→</i><span>${formatBytes(lane.bytesVisible)}</span></div>
+      <progress value="${visiblePercent.toFixed(2)}" max="100" aria-label="${formatBytes(lane.bytesVisible)} of ${formatBytes(lane.bytesBefore)} visible to the host"></progress>
+      <p><strong>${formatBytes(lane.bytesRetained)}</strong><span>held outside context</span></p>
+    </article>
+  `;
+}
+
+function renderSourceRegister(snapshot: DashboardSnapshot): string {
+  return `
+    <div class="source-register compact-register">
+      <div class="register-heading"><strong>Source register</strong><span>${snapshot.sources.length} attached</span></div>
+      ${snapshot.sources.map((source) => `
+        <div class="source-row"><i data-state="${source.state}"></i><strong>${escapeHtml(sourceLabel(source.source))}</strong><small>${escapeHtml(source.state)}</small></div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderCopilotNotice(snapshot: DashboardSnapshot): string {
   const headroom = snapshot.headroom;
   if (!headroom) return '';
   const quota = headroom.quota.find((item) => item.category === 'premium_interactions') ?? headroom.quota[0];
-  const costValue = headroom.costSaved?.value;
   return `
-    <section class="copilot-panel" aria-labelledby="copilot-title">
-      <div class="copilot-heading">
-        <div>${icon(TerminalSquare)}<div><p class="eyebrow">COPILOT / HEADROOM SOURCE</p><h2 id="copilot-title">${escapeHtml(headroom.model ?? 'GitHub Copilot')}</h2></div></div>
-        <span class="attribution-badge" data-attribution="${headroom.attribution}">${headroom.attribution === 'shared' ? 'Partial attribution / shared proxy' : 'Dedicated proxy / session delta'}</span>
-      </div>
-      <div class="copilot-register">
-        ${renderEvidenceValue('Headroom status', headroom.healthy ? 'Healthy' : 'Unavailable', headroom.version ? `v${headroom.version}` : 'version unavailable')}
-        ${renderEvidenceValue('Output usage', formatNumber(headroom.outputTokens), 'provider-reported tokens')}
-        ${renderEvidenceValue('Estimated savings', costValue == null ? 'Unavailable' : formatCurrency(costValue), costValue == null ? 'no defensible per-agent cost basis' : 'Headroom list-price estimate')}
-        ${renderEvidenceValue('Coverage', headroom.coverage.replaceAll('-', ' '), headroom.attribution === 'shared' ? 'Copilot-class traffic since attach' : 'fresh proxy counters')}
-        ${quota
-          ? renderEvidenceValue(
-              quota.category.replaceAll('_', ' '),
-              quota.unlimited ? 'Unlimited' : quota.remaining == null ? 'Reported' : `${formatNumber(quota.remaining)} remaining`,
-              quota.usedPercent == null ? 'provider quota' : `${formatPercent(quota.usedPercent)} used`,
-            )
-          : renderEvidenceValue('Provider quota', 'Unavailable', 'not reported by Headroom')}
-      </div>
-    </section>
-  `;
-}
-
-function renderLane(lane: DashboardTokenLane): string {
-  const ratio = lane.tokensText > 0 ? Math.max(0, Math.min(100, lane.tokensSent / lane.tokensText * 100)) : 0;
-  const saved = lane.tokensText > 0 ? lane.tokensSaved / lane.tokensText * 100 : 0;
-  return `
-    <article class="trace-lane">
-      <div class="lane-label">
-        <span>${escapeHtml(sourceLabel(lane.source))}</span>
-        <small>${escapeHtml(lane.basis)}</small>
-      </div>
-      <progress class="lane-rail" value="${ratio.toFixed(2)}" max="100" aria-label="${escapeHtml(sourceLabel(lane.source))}: ${formatNumber(lane.tokensText)} before, ${formatNumber(lane.tokensSent)} sent"></progress>
-      <div class="lane-values">
-        <strong>${formatNumber(lane.tokensText)}</strong>
-        <span>${formatNumber(lane.tokensSent)} sent</span>
-        <em>${lane.tokensSaved >= 0 ? '+' : ''}${formatNumber(lane.tokensSaved)} / ${formatPercent(saved)}</em>
-      </div>
-    </article>
+    <aside class="copilot-notice" data-attribution="${headroom.attribution}">
+      <div>${icon(TerminalSquare)}<span>Copilot / Headroom</span><strong>${escapeHtml(headroom.model ?? 'Unknown model')}</strong></div>
+      <p>${headroom.attribution === 'shared'
+        ? 'Shared proxy attribution: Copilot-class traffic since attach, not process-exact billing.'
+        : 'Dedicated proxy attribution: counters are scoped to this wrapped session.'}</p>
+      <dl>
+        <div><dt>Output</dt><dd>${formatNumber(headroom.outputTokens)} tokens</dd></div>
+        <div><dt>Cost basis</dt><dd>${headroom.costSaved == null ? 'Unavailable' : formatCurrency(headroom.costSaved.value)}</dd></div>
+        <div><dt>Premium quota</dt><dd>${quota?.unlimited ? 'Unlimited' : quota?.remaining == null ? 'Not reported' : `${formatNumber(quota.remaining)} remaining`}</dd></div>
+      </dl>
+    </aside>
   `;
 }
 
@@ -326,34 +537,85 @@ function renderLedgerHeading(title: string, count: number): string {
   return `<div class="section-heading compact"><div><p class="eyebrow">CHRONOLOGICAL / CONTENT-FREE</p><h2>${escapeHtml(title)}</h2></div><span class="count-label">${count} event${count === 1 ? '' : 's'}</span></div>`;
 }
 
-function renderEventTable(events: readonly DashboardEvent[]): string {
-  if (events.length === 0) return '<div class="table-empty">No matching evidence events.</div>';
+function renderRequests(snapshot: DashboardSnapshot): string {
+  const allEvents = snapshot.recentEvents
+    .filter((event): event is Extract<DashboardEvent, { type: 'provider.route' }> => event.type === 'provider.route')
+    .slice()
+    .reverse();
+  const query = state.requestQuery.trim().toLowerCase();
+  const filtered = allEvents.filter((event) => {
+    if (state.requestProvider !== 'all' && event.provider !== state.requestProvider) return false;
+    const applied = event.stages.some(({ applied }) => applied);
+    if (state.requestOutcome === 'applied' && !applied) return false;
+    if (state.requestOutcome === 'passthrough' && applied) return false;
+    if (state.requestOutcome === 'negative' && event.tokensSaved.value >= 0) return false;
+    if (!query) return true;
+    return [event.provider, event.model ?? '', ...event.stages.flatMap(({ stage, reason }) => [stage, reason])]
+      .some((value) => value.toLowerCase().includes(query));
+  });
+  const appliedCount = allEvents.filter((event) => event.stages.some(({ applied }) => applied)).length;
+  const negativeCount = allEvents.filter((event) => event.tokensSaved.value < 0).length;
+  const selected = filtered.find((event) => eventKey(event) === state.selectedRequest) ?? null;
   return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th scope="col">Time</th><th scope="col">Source</th><th scope="col">Route</th><th scope="col">Before</th><th scope="col">Sent</th><th scope="col">Saved</th><th scope="col">Basis</th><th scope="col">Result</th></tr></thead>
-        <tbody>${events.map((event) => {
-          if (event.type !== 'provider.route') return '';
-          const applied = event.stages.filter((stage) => stage.applied).map((stage) => stage.stage);
-          return `<tr>
-            <td><time datetime="${escapeHtml(event.occurredAt)}">${escapeHtml(formatTime(event.occurredAt))}</time></td>
-            <td><span class="source-code">${escapeHtml(event.source)}</span></td>
-            <td><strong title="${escapeHtml(event.model ?? 'Unknown model')}">${escapeHtml(event.provider)}</strong><small>${escapeHtml(event.model ?? 'Unknown model')}</small></td>
-            <td class="numeric">${formatNumber(event.tokensText.value)}</td>
-            <td class="numeric">${formatNumber(event.tokensCompressed.value)}</td>
-            <td class="numeric ${event.tokensSaved.value < 0 ? 'negative' : 'positive'}">${event.tokensSaved.value >= 0 ? '+' : ''}${formatNumber(event.tokensSaved.value)}</td>
-            <td><span class="basis-chip">${escapeHtml(event.tokensSaved.basis)}</span></td>
-            <td>${applied.length > 0 ? escapeHtml(applied.join(' + ')) : 'Pass-through'}</td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
-    </div>
+    <section class="request-explorer" aria-labelledby="requests-title">
+      <header class="page-heading">
+        <div><h2 id="requests-title">Provider routes</h2><p>Inspect decisions without opening prompt or response content.</p></div>
+        <dl class="page-facts"><div><dt>Observed</dt><dd>${allEvents.length}</dd></div><div><dt>Transformed</dt><dd>${appliedCount}</dd></div><div data-tone="${negativeCount > 0 ? 'attention' : 'clear'}"><dt>Negative savings</dt><dd>${negativeCount}</dd></div></dl>
+      </header>
+      <div class="request-toolbar" role="search">
+        <label class="search-field">${icon(Search)}<span class="sr-only">Search requests</span><input type="search" data-request-search value="${escapeHtml(state.requestQuery)}" placeholder="Search model, provider, or stage"></label>
+        <div class="filter-group" aria-label="Provider filter">
+          ${(['all', 'openai', 'anthropic'] as const).map((value) => `<button type="button" data-provider-filter="${value}" aria-pressed="${state.requestProvider === value}">${value === 'all' ? 'All providers' : value === 'openai' ? 'OpenAI' : 'Anthropic'}</button>`).join('')}
+        </div>
+        <label class="select-field"><span>Outcome</span><select data-outcome-filter><option value="all"${state.requestOutcome === 'all' ? ' selected' : ''}>All outcomes</option><option value="applied"${state.requestOutcome === 'applied' ? ' selected' : ''}>Transformed</option><option value="passthrough"${state.requestOutcome === 'passthrough' ? ' selected' : ''}>Pass-through</option><option value="negative"${state.requestOutcome === 'negative' ? ' selected' : ''}>Negative savings</option></select>${icon(ChevronDown)}</label>
+        <span class="filter-result">${filtered.length} of ${allEvents.length}</span>
+      </div>
+      <div class="request-workbench">
+        <div class="request-list" role="list">
+          ${filtered.length > 0 ? filtered.map(renderRequestRow).join('') : '<div class="domain-empty compact-empty"><h3>No matching routes</h3><p>Adjust the provider, outcome, or search filters.</p></div>'}
+        </div>
+        <aside class="request-detail" aria-live="polite">
+          ${selected ? renderRequestDetail(selected) : renderRequestPrompt(filtered[0] ?? null)}
+        </aside>
+      </div>
+    </section>
   `;
 }
 
-function renderRequests(snapshot: DashboardSnapshot): string {
-  const events = snapshot.recentEvents.filter((event) => event.type === 'provider.route').slice().reverse();
-  return `<section class="full-panel">${renderLedgerHeading('Provider requests', events.length)}${renderEventTable(events)}</section>`;
+function renderRequestRow(event: Extract<DashboardEvent, { type: 'provider.route' }>): string {
+  const applied = event.stages.filter(({ applied }) => applied);
+  const selected = eventKey(event) === state.selectedRequest;
+  const ratio = event.tokensText.value > 0
+    ? event.tokensSaved.value / event.tokensText.value * 100
+    : 0;
+  return `<button type="button" class="request-row${selected ? ' is-selected' : ''}" data-request-key="${escapeHtml(eventKey(event))}" role="listitem" aria-pressed="${selected}">
+    <time datetime="${escapeHtml(event.occurredAt)}">${escapeHtml(formatTime(event.occurredAt))}</time>
+    <span class="provider-glyph" data-provider="${event.provider}">${event.provider === 'openai' ? 'O' : 'A'}</span>
+    <span class="request-route"><strong>${escapeHtml(event.model ?? 'Unknown model')}</strong><small>${escapeHtml(event.provider)} · ${escapeHtml(applied.map(({ stage }) => stage).join(' + ') || 'pass-through')}</small></span>
+    <span class="request-volume"><strong>${formatNumber(event.tokensText.value)} → ${formatNumber(event.tokensCompressed.value)}</strong><small>${escapeHtml(event.tokensSaved.basis)}</small></span>
+    <span class="request-saving" data-tone="${event.tokensSaved.value < 0 ? 'attention' : applied.length > 0 ? 'clear' : 'muted'}"><strong>${event.tokensSaved.value >= 0 ? '+' : ''}${formatNumber(event.tokensSaved.value)}</strong><small>${formatPercent(ratio)}</small></span>
+    ${icon(ChevronDown)}
+  </button>`;
+}
+
+function renderRequestPrompt(event: Extract<DashboardEvent, { type: 'provider.route' }> | null): string {
+  if (!event) return '<div class="detail-empty">No route available for inspection.</div>';
+  return `<div class="detail-empty">${icon(Route)}<h3>Select a route</h3><p>Review stage decisions, timing, basis, and reversibility for ${escapeHtml(event.model ?? event.provider)}.</p></div>`;
+}
+
+function renderRequestDetail(event: Extract<DashboardEvent, { type: 'provider.route' }>): string {
+  return `
+    <div class="detail-heading"><div class="provider-glyph" data-provider="${event.provider}">${event.provider === 'openai' ? 'O' : 'A'}</div><div><span>${escapeHtml(event.provider)}</span><h3>${escapeHtml(event.model ?? 'Unknown model')}</h3></div><time>${escapeHtml(formatTime(event.occurredAt))}</time></div>
+    <dl class="detail-facts">
+      <div><dt>Mode</dt><dd>${escapeHtml(event.mode)}</dd></div>
+      <div><dt>Auth</dt><dd>${escapeHtml(event.authMode)}</dd></div>
+      <div><dt>Duration</dt><dd>${event.durationMs.toFixed(1)} ms</dd></div>
+      <div><dt>Reversible</dt><dd>${event.reversibleCount}</dd></div>
+    </dl>
+    <div class="route-equation"><span>${formatNumber(event.tokensText.value)}<small>before</small></span><i>→</i><span>${formatNumber(event.tokensCompressed.value)}<small>sent</small></span><strong data-tone="${event.tokensSaved.value < 0 ? 'attention' : 'clear'}">${event.tokensSaved.value >= 0 ? '+' : ''}${formatNumber(event.tokensSaved.value)}<small>saved</small></strong></div>
+    <div class="stage-ledger"><h4>Stage evidence</h4>${event.stages.map((stage) => `<div data-outcome="${stage.applied ? 'applied' : stage.reason}"><span>${icon(stage.applied ? CheckCircle2 : Braces)}<strong>${escapeHtml(stage.stage)}</strong></span><span>${stage.applied ? `${formatNumber(stage.tokensText)} → ${formatNumber(stage.tokensCompressed)}` : escapeHtml(stage.reason)}</span><small>${escapeHtml(stage.basis)}</small></div>`).join('')}</div>
+    <p class="detail-privacy">${icon(LockKeyhole)} Request and response content were never written to this recorder.</p>
+  `;
 }
 
 function renderMcp(snapshot: DashboardSnapshot): string {
@@ -423,19 +685,45 @@ function renderMcpEventTable(events: readonly DashboardEvent[]): string {
 }
 
 function renderHistory(): string {
+  const selectedSummary = state.history.find(({ groupId }) => groupId === state.selectedHistoryGroup) ?? state.history[0] ?? null;
+  const detail = state.historySnapshot;
   return `
-    <section class="history-layout">
-      <div class="section-heading"><div><p class="eyebrow">LOCAL METADATA HISTORY</p><h2>Recorded sessions</h2></div><span class="basis-note">30-day bounded retention</span></div>
-      ${state.history.length > 0 ? `<div class="history-list">${state.history.map((session) => `
-        <article class="history-row">
-          <div class="history-status" data-state="${session.state}"></div>
-          <div><strong>${escapeHtml(formatDateTime(session.startedAt))}</strong><span>${escapeHtml(session.sources.map(sourceLabel).join(' + ') || 'No source')}</span></div>
-          <div><strong>${formatNumber(session.requests)}</strong><span>requests</span></div>
-          <div><strong>${escapeHtml(formatDateTime(session.lastActivityAt))}</strong><span>last activity</span></div>
-          <div class="history-id">${escapeHtml(session.groupId.slice(0, 17))}</div>
-        </article>
-      `).join('')}</div>` : '<div class="domain-empty">' + icon(Archive) + '<h3>No durable history yet</h3><p>Dashboard-enabled sessions appear here after their first metadata event.</p></div>'}
+    <section class="history-atlas" aria-labelledby="history-title">
+      <header class="page-heading"><div><h2 id="history-title">Session atlas</h2><p>Compare source-qualified evidence across the local retention window.</p></div><span class="retention-note">30 days · 64 MiB bounded</span></header>
+      ${state.history.length > 0 ? `<div class="history-workbench">
+        <nav class="session-index" aria-label="Recorded sessions">
+          ${state.history.map((session) => renderHistoryButton(session, session.groupId === selectedSummary?.groupId)).join('')}
+        </nav>
+        <section class="history-detail" aria-live="polite">
+          ${state.historyLoading ? '<div class="history-loading"><span></span><span></span><span></span></div>' : detail ? renderHistoricalSnapshot(detail, selectedSummary) : '<div class="detail-empty">Select a recorded session.</div>'}
+        </section>
+      </div>` : '<div class="domain-empty">' + icon(Archive) + '<h3>No durable history yet</h3><p>Dashboard-enabled sessions appear here after their first metadata event.</p></div>'}
     </section>
+  `;
+}
+
+function renderHistoryButton(session: DashboardHistorySession, selected: boolean): string {
+  const bytes = session.byteLanes.reduce((total, lane) => total + lane.bytesRetained, 0);
+  return `<button type="button" class="session-button${selected ? ' is-selected' : ''}" data-history-group="${escapeHtml(session.groupId)}" aria-current="${selected ? 'true' : 'false'}">
+    <span class="history-status" data-state="${session.state}"></span>
+    <span><strong>${escapeHtml(formatDateTime(session.startedAt))}</strong><small>${escapeHtml(session.sources.map(sourceLabel).join(' + ') || 'No sources')}</small></span>
+    <span><strong>${formatNumber(session.requests)}</strong><small>requests</small></span>
+    <span><strong>${formatBytes(bytes)}</strong><small>held out</small></span>
+    <span><strong>${formatDuration(session.durationMs)}</strong><small>duration</small></span>
+    ${icon(ChevronDown)}
+  </button>`;
+}
+
+function renderHistoricalSnapshot(snapshot: DashboardSnapshot, summary: DashboardHistorySession | null): string {
+  const verdict = sessionVerdict(snapshot);
+  return `
+    <div class="historical-header" data-tone="${verdict.tone}"><div>${icon(verdict.tone === 'attention' ? TriangleAlert : BadgeCheck)}<span>${escapeHtml(verdict.title)}</span></div><code>${escapeHtml(snapshot.groupId.slice(0, 22))}</code></div>
+    <div class="history-calibration">
+      ${snapshot.tokenLanes.map(renderCalibrationLane).join('') || '<p>No token lanes recorded.</p>'}
+      ${snapshot.byteLanes.map(renderByteCalibration).join('')}
+    </div>
+    <dl class="history-facts"><div><dt>Started</dt><dd>${escapeHtml(formatDateTime(summary?.startedAt ?? null))}</dd></div><div><dt>Duration</dt><dd>${formatDuration(summary?.durationMs ?? null)}</dd></div><div><dt>Events</dt><dd>${snapshot.recentEvents.length}</dd></div><div><dt>MCP receipts</dt><dd>${snapshot.mcp.receiptsEmitted}</dd></div></dl>
+    <div class="history-tape"><h3>Session evidence</h3>${renderEvidenceTape(snapshot.recentEvents.slice(-8).reverse())}</div>
   `;
 }
 
@@ -469,6 +757,36 @@ function bindInteractions(): void {
     state.retryMs = 1_000;
     void connect();
   });
+  document.querySelector<HTMLInputElement>('[data-request-search]')?.addEventListener('input', (event) => {
+    state.requestQuery = (event.currentTarget as HTMLInputElement).value;
+    render();
+    document.querySelector<HTMLInputElement>('[data-request-search]')?.focus();
+  });
+  for (const element of document.querySelectorAll<HTMLButtonElement>('[data-provider-filter]')) {
+    element.addEventListener('click', () => {
+      state.requestProvider = element.dataset.providerFilter as RequestProviderFilter;
+      state.selectedRequest = null;
+      render();
+    });
+  }
+  document.querySelector<HTMLSelectElement>('[data-outcome-filter]')?.addEventListener('change', (event) => {
+    state.requestOutcome = (event.currentTarget as HTMLSelectElement).value as RequestOutcomeFilter;
+    state.selectedRequest = null;
+    render();
+  });
+  for (const element of document.querySelectorAll<HTMLButtonElement>('[data-request-key]')) {
+    element.addEventListener('click', () => {
+      const key = element.dataset.requestKey ?? null;
+      state.selectedRequest = state.selectedRequest === key ? null : key;
+      render();
+    });
+  }
+  for (const element of document.querySelectorAll<HTMLButtonElement>('[data-history-group]')) {
+    element.addEventListener('click', () => {
+      const groupId = element.dataset.historyGroup;
+      if (groupId) void selectHistory(groupId);
+    });
+  }
 }
 
 function setView(view: ViewName): void {
@@ -478,7 +796,7 @@ function setView(view: ViewName): void {
   else url.searchParams.set('view', view);
   history.replaceState(null, '', `${url.pathname}${url.search}`);
   render();
-  if (view === 'history') void loadHistory();
+  if (view === 'history') void loadHistory(true);
 }
 
 async function api<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -493,13 +811,51 @@ async function api<T>(path: string, signal?: AbortSignal): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function loadHistory(): Promise<void> {
+async function loadHistory(selectLatest = false): Promise<void> {
   try {
     const payload = await api<{ sessions: DashboardHistorySession[] }>('/api/v1/history');
     state.history = payload.sessions;
+    const selectedStillExists = state.selectedHistoryGroup != null &&
+      payload.sessions.some(({ groupId }) => groupId === state.selectedHistoryGroup);
+    if (selectLatest || !selectedStillExists) {
+      const next = payload.sessions[0]?.groupId ?? null;
+      if (next && next !== state.selectedHistoryGroup) {
+        state.selectedHistoryGroup = next;
+        state.historySnapshot = null;
+        if (state.view === 'history') render();
+        await loadHistoricalSnapshot(next);
+        return;
+      }
+    }
     if (state.view === 'history') render();
   } catch {
     // The live recorder stays useful if history is temporarily unavailable.
+  }
+}
+
+async function selectHistory(groupId: string): Promise<void> {
+  if (state.selectedHistoryGroup === groupId && state.historySnapshot) return;
+  state.selectedHistoryGroup = groupId;
+  state.historySnapshot = null;
+  state.historyLoading = true;
+  render();
+  await loadHistoricalSnapshot(groupId);
+}
+
+async function loadHistoricalSnapshot(groupId: string): Promise<void> {
+  try {
+    const payload = await api<{ session: DashboardSnapshot }>(
+      `/api/v1/history?group=${encodeURIComponent(groupId)}`,
+    );
+    if (state.selectedHistoryGroup !== groupId) return;
+    state.historySnapshot = payload.session;
+  } catch {
+    if (state.selectedHistoryGroup === groupId) state.historySnapshot = null;
+  } finally {
+    if (state.selectedHistoryGroup === groupId) {
+      state.historyLoading = false;
+      if (state.view === 'history') render();
+    }
   }
 }
 
@@ -597,6 +953,30 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('popstate', () => {
   state.view = readView();
   render();
+});
+
+document.addEventListener('keydown', (event) => {
+  const target = event.target as HTMLElement | null;
+  const editing = target?.matches('input, select, textarea, [contenteditable="true"]') === true;
+  if (!editing && /^[1-5]$/.test(event.key)) {
+    const view = views[Number(event.key) - 1]?.id;
+    if (view) {
+      event.preventDefault();
+      setView(view);
+    }
+    return;
+  }
+  if (!editing && event.key === '/') {
+    event.preventDefault();
+    if (state.view !== 'requests') setView('requests');
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-request-search]')?.focus());
+    return;
+  }
+  if (event.key === 'Escape') {
+    state.selectedRequest = null;
+    if (editing) (target as HTMLElement).blur();
+    if (state.view === 'requests') render();
+  }
 });
 
 render();

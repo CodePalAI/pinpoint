@@ -126,6 +126,7 @@ export class HeadroomDashboardAdapter {
   private readonly intervalMs: number;
   private readonly timeoutMs: number;
   private baseline: HeadroomCounters | null;
+  private lastFingerprint: string | undefined;
   private timer: NodeJS.Timeout | undefined;
   private polling = false;
 
@@ -238,6 +239,9 @@ export class HeadroomDashboardAdapter {
   }
 
   private emit(event: DashboardHeadroomSampleEvent): void {
+    const fingerprint = JSON.stringify({ ...event, occurredAt: '' });
+    if (fingerprint === this.lastFingerprint) return;
+    this.lastFingerprint = fingerprint;
     try {
       const pending = this.options.observer.onEvent(event);
       if (pending) void Promise.resolve(pending).catch(() => undefined);

@@ -524,8 +524,15 @@ export function listDashboardHistory(rootDir = DEFAULT_DASHBOARD_ROOT): Dashboar
       state: snapshot.state,
       startedAt,
       lastActivityAt,
+      durationMs: startedAt && lastActivityAt
+        ? Math.max(0, Date.parse(lastActivityAt) - Date.parse(startedAt))
+        : null,
       requests: snapshot.requests,
       sources: snapshot.sources.map(({ source }) => source),
+      tokenLanes: snapshot.tokenLanes,
+      byteLanes: snapshot.byteLanes,
+      mcp: snapshot.mcp,
+      headroom: snapshot.headroom,
       corruptRecords: snapshot.corruptRecords,
     });
   }

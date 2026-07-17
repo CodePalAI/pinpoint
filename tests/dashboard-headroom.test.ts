@@ -87,10 +87,12 @@ describe('HeadroomDashboardAdapter', () => {
       fetch: queuedFetch([
         stats({ requests: 40, before: 40_000, after: 25_000, output: 2_000, saved: 15_000, cost: 2 }),
         stats({ requests: 43, before: 44_000, after: 27_500, output: 2_500, saved: 16_500, cost: 3 }),
+        stats({ requests: 43, before: 44_000, after: 27_500, output: 2_500, saved: 16_500, cost: 3 }),
       ]),
       now: () => new Date('2026-07-17T10:00:00Z'),
     });
 
+    await adapter.poll();
     await adapter.poll();
     await adapter.poll();
 

@@ -230,8 +230,13 @@ export interface DashboardHistorySession {
   readonly state: DashboardSnapshot['state'];
   readonly startedAt: string | null;
   readonly lastActivityAt: string | null;
+  readonly durationMs: number | null;
   readonly requests: number;
   readonly sources: readonly DashboardSource[];
+  readonly tokenLanes: readonly DashboardTokenLane[];
+  readonly byteLanes: readonly DashboardByteLane[];
+  readonly mcp: DashboardMcpSummary;
+  readonly headroom: DashboardHeadroomSummary | null;
   readonly corruptRecords: number;
 }
 

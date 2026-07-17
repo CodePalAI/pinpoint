@@ -4,6 +4,16 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## Unreleased
 
+## 0.2.2 - 2026-07-18
+
+### Fixed
+
+- Draft-release resolution now runs only inside the reviewer-protected publish
+	job, whose scoped `contents: write` token can read drafts. The build job
+	remains unprivileged with `contents: read`.
+- The failed `v0.2.1` candidate stopped before protected-environment approval,
+	npm publication, or release-asset upload. Version `0.2.2` supersedes it.
+
 ## 0.2.1 - 2026-07-18
 
 ### Fixed

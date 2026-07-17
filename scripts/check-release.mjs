@@ -65,6 +65,8 @@ for (const required of [
   'releases/$RELEASE_ID" \\',
   '-F draft=false',
   'contents: write',
+  'Resolve protected draft release',
+  'printf \'%s\\n\' "$RELEASE_ID" > release/RELEASE_ID',
   'test "$(find release -maxdepth 1 -name \'codepal-pinpoint-*.tgz\' | wc -l)" -eq 1',
   'NPM_AUTH_MODE',
   "environment: release",

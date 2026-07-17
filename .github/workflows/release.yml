@@ -57,12 +57,6 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TAG_COMMIT"
           git fetch --no-tags origin "$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
           git merge-base --is-ancestor "$TAG_COMMIT" "origin/$DEFAULT_BRANCH"
-          RELEASE_ID=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            --jq ".[] | select(.tag_name == \"$RELEASE_TAG\" and .draft == true) | .id" | head -1)
-          test -n "$RELEASE_ID"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq .tag_name)" = "$RELEASE_TAG"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq .draft)" = "true"
-          printf '%s\n' "$RELEASE_ID" > RELEASE_ID
       - run: npm ci --ignore-scripts
       - name: Install Spin model checker
         run: sudo apt-get update && sudo apt-get install -y spin
@@ -74,7 +68,6 @@ jobs:
       - name: Pack release artifact
         run: |
           mkdir -p release
-          mv RELEASE_ID release/RELEASE_ID
           npm pack --ignore-scripts --pack-destination release
           test "$(find release -maxdepth 1 -name '*.tgz' | wc -l)" -eq 1
       - name: Generate production SBOM
@@ -136,6 +129,16 @@ jobs:
             if (sbom.metadata?.component?.version !== version) throw new Error("invalid SBOM version");
             if (sbom.metadata?.component?.purl !== `pkg:npm/%40codepal/pinpoint@${version}`) throw new Error("invalid SBOM purl");
           ' "$PACKAGE_VERSION"
+      - name: Resolve protected draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_ID=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$RELEASE_TAG\" and .draft == true) | .id" | head -1)
+          test -n "$RELEASE_ID"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq .tag_name)" = "$RELEASE_TAG"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq .draft)" = "true"
+          printf '%s\n' "$RELEASE_ID" > release/RELEASE_ID
       - name: Resolve npm authentication mode
         id: auth
         run: |

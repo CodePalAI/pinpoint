@@ -1,6 +1,6 @@
 {
   "name": "@codepal/pinpoint",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Policy-controlled MCP dataflow for AI agents, with exact local projections and signed receipts.",
   "type": "module",
   "types": "./dist/index.d.ts",

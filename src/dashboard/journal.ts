@@ -449,10 +449,20 @@ export function buildDashboardSnapshot(
   let reversibleCount = 0;
   let negativeSavingsRoutes = 0;
   let latestHeadroom: Extract<DashboardEvent, { type: 'headroom.sample' }> | undefined;
+  let latestHeadroomUsage: Extract<DashboardEvent, { type: 'headroom.sample' }> | undefined;
   let latestMcpLifecycle: Extract<DashboardEvent, { type: 'mcp.lifecycle' }> | undefined;
   for (const event of group.events) {
     if (event.type === 'headroom.sample') {
       if (!latestHeadroom || event.occurredAt >= latestHeadroom.occurredAt) latestHeadroom = event;
+      const hasUsage = event.requests.value !== 0 ||
+        event.tokensText.value !== 0 ||
+        event.tokensSent.value !== 0 ||
+        event.outputTokens.value !== 0 ||
+        event.tokensSaved.value !== 0 ||
+        (event.costSaved?.value ?? 0) !== 0;
+      if (hasUsage && (!latestHeadroomUsage || event.occurredAt >= latestHeadroomUsage.occurredAt)) {
+        latestHeadroomUsage = event;
+      }
       continue;
     }
     if (event.type === 'provider.route') {
@@ -491,21 +501,14 @@ export function buildDashboardSnapshot(
     }
     if ('outcome' in event) mcp[event.outcome] += 1;
   }
-  if (latestHeadroom && (
-    latestHeadroom.requests.value !== 0 ||
-    latestHeadroom.tokensText.value !== 0 ||
-    latestHeadroom.tokensSent.value !== 0 ||
-    latestHeadroom.outputTokens.value !== 0 ||
-    latestHeadroom.tokensSaved.value !== 0 ||
-    (latestHeadroom.costSaved?.value ?? 0) !== 0
-  )) {
+  if (latestHeadroomUsage) {
     lanes.set('headroom:provider-reported', {
       source: 'headroom',
       basis: 'provider-reported',
-      tokensText: latestHeadroom.tokensText.value,
-      tokensSent: latestHeadroom.tokensSent.value,
-      tokensSaved: latestHeadroom.tokensSaved.value,
-      appliedStages: latestHeadroom.tokensSaved.value > 0 ? 1 : 0,
+      tokensText: latestHeadroomUsage.tokensText.value,
+      tokensSent: latestHeadroomUsage.tokensSent.value,
+      tokensSaved: latestHeadroomUsage.tokensSaved.value,
+      appliedStages: latestHeadroomUsage.tokensSaved.value > 0 ? 1 : 0,
     });
   }
   const sourceMap = new Map<DashboardSource, DashboardSnapshot['sources'][number]>();
@@ -545,7 +548,7 @@ export function buildDashboardSnapshot(
     groupId: group.groupId,
     state,
     requests: group.events.filter((event) => event.type === 'provider.route').length +
-      (latestHeadroom?.requests.value ?? 0),
+      (latestHeadroomUsage?.requests.value ?? latestHeadroom?.requests.value ?? 0),
     eventCount: group.events.length,
     negativeSavingsRoutes,
     reversibleCount,
@@ -565,10 +568,12 @@ export function buildDashboardSnapshot(
       version: latestHeadroom.version,
       attribution: latestHeadroom.attribution,
       coverage: latestHeadroom.coverage,
-      model: latestHeadroom.model,
-      outputTokens: latestHeadroom.outputTokens.value,
-      costSaved: latestHeadroom.costSaved,
-      quota: latestHeadroom.quota,
+      model: latestHeadroom.model ?? latestHeadroomUsage?.model ?? null,
+      outputTokens: latestHeadroomUsage?.outputTokens.value ?? latestHeadroom.outputTokens.value,
+      costSaved: latestHeadroomUsage?.costSaved ?? latestHeadroom.costSaved,
+      quota: latestHeadroom.quota.length > 0
+        ? latestHeadroom.quota
+        : latestHeadroomUsage?.quota ?? [],
     } : null,
     sources: sourceStates.sort((left, right) => left.source.localeCompare(right.source)),
     recentEvents: group.events.slice(-Math.max(0, recentEventLimit)),

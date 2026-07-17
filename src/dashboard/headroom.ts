@@ -29,6 +29,9 @@ export interface HeadroomDashboardAdapterOptions {
   readonly timeoutMs?: number;
 }
 
+const DEFAULT_POLL_INTERVAL_MS = 250;
+const UNAVAILABLE_GRACE_MS = 1_000;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -128,27 +131,34 @@ export class HeadroomDashboardAdapter {
   private baseline: HeadroomCounters | null;
   private lastFingerprint: string | undefined;
   private timer: NodeJS.Timeout | undefined;
+  private unavailableTimer: NodeJS.Timeout | undefined;
   private polling = false;
+  private healthySeen = false;
+  private stopping = false;
 
   constructor(private readonly options: HeadroomDashboardAdapterOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.fetchImpl = options.fetch ?? fetch;
     this.now = options.now ?? (() => new Date());
-    this.intervalMs = Math.max(250, options.intervalMs ?? 5_000);
+    this.intervalMs = Math.max(250, options.intervalMs ?? DEFAULT_POLL_INTERVAL_MS);
     this.timeoutMs = Math.max(100, options.timeoutMs ?? 2_000);
     this.baseline = options.attribution === 'dedicated' ? emptyCounters() : null;
   }
 
   async start(): Promise<void> {
     if (this.timer) return;
+    this.stopping = false;
     await this.poll();
     this.timer = setInterval(() => void this.poll(), this.intervalMs);
     this.timer.unref();
   }
 
   async stop(): Promise<void> {
+    this.stopping = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
+    if (this.unavailableTimer) clearTimeout(this.unavailableTimer);
+    this.unavailableTimer = undefined;
     while (this.polling) await new Promise<void>((resolve) => setImmediate(resolve));
   }
 
@@ -173,6 +183,11 @@ export class HeadroomDashboardAdapter {
           ? null
           : counterDelta(current.costSavedUsd, baseline.costSavedUsd);
         const healthRecord = isRecord(health) ? health : {};
+        if (healthRecord.status === 'healthy') {
+          this.healthySeen = true;
+          if (this.unavailableTimer) clearTimeout(this.unavailableTimer);
+          this.unavailableTimer = undefined;
+        }
         this.emit({
           schemaVersion: DASHBOARD_SCHEMA_VERSION,
           type: 'headroom.sample',
@@ -201,7 +216,7 @@ export class HeadroomDashboardAdapter {
         clearTimeout(timeout);
       }
     } catch {
-      this.emitUnavailable();
+      this.handleUnavailable();
     } finally {
       this.polling = false;
     }
@@ -236,6 +251,20 @@ export class HeadroomDashboardAdapter {
       costSaved: null,
       quota: [],
     });
+  }
+
+  private handleUnavailable(): void {
+    if (this.stopping) return;
+    if (!this.healthySeen) {
+      this.emitUnavailable();
+      return;
+    }
+    if (this.unavailableTimer) return;
+    this.unavailableTimer = setTimeout(() => {
+      this.unavailableTimer = undefined;
+      if (!this.stopping) this.emitUnavailable();
+    }, UNAVAILABLE_GRACE_MS);
+    this.unavailableTimer.unref();
   }
 
   private emit(event: DashboardHeadroomSampleEvent): void {

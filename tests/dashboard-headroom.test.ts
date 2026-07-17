@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { HeadroomDashboardAdapter } from '../src/dashboard/headroom.js';
 import type { DashboardEvent } from '../src/dashboard/types.js';
@@ -77,7 +77,80 @@ function queuedFetch(payloads: unknown[]): typeof fetch {
   }) as typeof fetch;
 }
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('HeadroomDashboardAdapter', () => {
+  it('samples fast enough to observe short-lived wrapped requests', async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn(queuedFetch([
+      stats({ requests: 0, before: 0, after: 0, output: 0, saved: 0 }),
+      stats({ requests: 1, before: 1_000, after: 800, output: 50, saved: 200 }),
+    ]));
+    const adapter = new HeadroomDashboardAdapter({
+      baseUrl: 'http://127.0.0.1:8787',
+      attribution: 'dedicated',
+      observer: { onEvent: () => undefined },
+      fetch: fetchImpl,
+    });
+
+    await adapter.start();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    await adapter.stop();
+  });
+
+  it('does not replace final usage with an unavailable sample during shutdown', async () => {
+    const events: DashboardEvent[] = [];
+    let rejectFetch: ((reason?: unknown) => void) | undefined;
+    const pending = new Promise<Response>((_resolve, reject) => {
+      rejectFetch = reject;
+    });
+    const adapter = new HeadroomDashboardAdapter({
+      baseUrl: 'http://127.0.0.1:8787',
+      attribution: 'dedicated',
+      observer: { onEvent: (event) => { events.push(event); } },
+      fetch: (() => pending) as typeof fetch,
+    });
+
+    const poll = adapter.poll();
+    await Promise.resolve();
+    const stop = adapter.stop();
+    rejectFetch?.(new Error('proxy stopped'));
+    await Promise.all([poll, stop]);
+
+    expect(events).toEqual([]);
+  });
+
+  it('cancels a deferred disconnect when a healthy adapter stops', async () => {
+    vi.useFakeTimers();
+    const events: DashboardEvent[] = [];
+    let available = true;
+    const fetchImpl = (async (input: string | URL | Request) => {
+      if (!available) throw new Error('proxy stopped');
+      return String(input).endsWith('/health')
+        ? response({ status: 'healthy', version: '1.2.3' })
+        : response(stats({ requests: 1, before: 1_000, after: 800, output: 50, saved: 200 }));
+    }) as typeof fetch;
+    const adapter = new HeadroomDashboardAdapter({
+      baseUrl: 'http://127.0.0.1:8787',
+      attribution: 'dedicated',
+      observer: { onEvent: (event) => { events.push(event); } },
+      fetch: fetchImpl,
+    });
+
+    await adapter.start();
+    available = false;
+    await adapter.poll();
+    await adapter.stop();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ healthy: true, requests: { value: 1 } });
+  });
+
   it('baselines a shared proxy and emits only Copilot-class deltas without cost attribution', async () => {
     const events: DashboardEvent[] = [];
     const adapter = new HeadroomDashboardAdapter({

@@ -112,6 +112,45 @@ describe('DashboardJournal', () => {
     journal.close();
   });
 
+  it('preserves observed Headroom usage across a later unavailable sample', () => {
+    const historyRoot = root();
+    const journal = new DashboardJournal({ rootDir: historyRoot, source: 'headroom' });
+    const usage = idleHeadroomEvent();
+    journal.onEvent({
+      ...usage,
+      occurredAt: '2026-07-17T10:00:01.000Z',
+      model: 'gpt-4o',
+      requests: { ...usage.requests, value: 1 },
+      tokensText: { ...usage.tokensText, value: 1_000 },
+      tokensSent: { ...usage.tokensSent, value: 800 },
+      outputTokens: { ...usage.outputTokens, value: 50 },
+      tokensSaved: { ...usage.tokensSaved, value: 200 },
+    });
+    journal.onEvent({
+      ...idleHeadroomEvent(),
+      occurredAt: '2026-07-17T10:00:02.000Z',
+      healthy: false,
+      coverage: 'unavailable',
+      version: null,
+    });
+
+    const snapshot = buildDashboardSnapshot(readDashboardGroup(historyRoot, journal.groupId));
+    expect(snapshot.state).toBe('degraded');
+    expect(snapshot.requests).toBe(1);
+    expect(snapshot.tokenLanes).toContainEqual(expect.objectContaining({
+      source: 'headroom',
+      tokensText: 1_000,
+      tokensSent: 800,
+      tokensSaved: 200,
+    }));
+    expect(snapshot.headroom).toMatchObject({
+      healthy: false,
+      model: 'gpt-4o',
+      outputTokens: 50,
+    });
+    journal.close();
+  });
+
   it('persists only validated metadata in private producer files', () => {
     const historyRoot = root();
     const journal = new DashboardJournal({ rootDir: historyRoot, source: 'pinpoint' });

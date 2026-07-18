@@ -184,14 +184,14 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
-          PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
+          PACKAGE_TARBALL=$(find "$PWD/release" -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
           test -n "$PACKAGE_TARBALL"
           node "$NPM_CLI" publish "$PACKAGE_TARBALL" --access public --provenance --ignore-scripts
       - name: Publish with npm trusted publishing
         if: steps.registry.outputs.published == 'false' && steps.auth.outputs.mode == 'oidc'
         run: |
           NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
-          PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
+          PACKAGE_TARBALL=$(find "$PWD/release" -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
           test -n "$PACKAGE_TARBALL"
           node "$NPM_CLI" publish "$PACKAGE_TARBALL" --access public --ignore-scripts
       - name: Attach verified release assets
@@ -199,6 +199,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           RELEASE_ID=$(cat release/RELEASE_ID)
+          UPLOAD_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            --jq '.upload_url | sub("\\{\\?name,label\\}$"; "")')
+          test -n "$UPLOAD_URL"
           PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
           test -n "$PACKAGE_TARBALL"
           test "$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' | wc -l)" -eq 1
@@ -212,9 +215,12 @@ jobs:
                 -H 'Accept: application/octet-stream' > "$EXISTING/$NAME"
               cmp "$ASSET" "$EXISTING/$NAME"
             else
-              gh api --method POST "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" \
-                -f "name=$NAME" -H "Content-Type: application/octet-stream" \
-                --input "$ASSET" >/dev/null
+              curl --fail --silent --show-error --request POST \
+                --header "Authorization: Bearer $GH_TOKEN" \
+                --header 'Accept: application/vnd.github+json' \
+                --header 'X-GitHub-Api-Version: 2022-11-28' \
+                --header 'Content-Type: application/octet-stream' \
+                --data-binary "@$ASSET" "$UPLOAD_URL?name=$NAME" >/dev/null
             fi
           done
       - name: Publish GitHub Release

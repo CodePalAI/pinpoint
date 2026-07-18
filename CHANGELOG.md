@@ -4,6 +4,18 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## Unreleased
 
+## 0.2.3 - 2026-07-18
+
+### Fixed
+
+- npm 12 publication now receives an absolute tarball path, avoiding ambiguous
+	shorthand parsing of `release/codepal-...tgz` as a disabled Git dependency.
+- Release assets upload through each verified draft's `uploads.github.com` URL;
+	upload, download, byte comparison, and cleanup were rehearsed against the
+	unpublished `v0.2.2` draft.
+- The failed `v0.2.2` candidate published neither npm content nor release
+	assets. Version `0.2.3` supersedes it.
+
 ## 0.2.2 - 2026-07-18
 
 ### Fixed

@@ -1,8 +1,9 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { createHash, createPublicKey, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
 import {
+  canonicalJson,
   McpOpaqueFlowEngine,
   parseMcpOpaqueFlowConfig,
   verifyMcpOpaqueFlowAuthorityBinding,
@@ -230,6 +231,46 @@ describe('opaque-flow safety properties', () => {
     expect(verifyMcpOpaqueFlowReceipt(value, engine.receiptVerifier)).toBe(true);
     expect(verifyMcpOpaqueFlowReceipt({ ...value, items: value.items + 1 }, engine.receiptVerifier)).toBe(false);
     expect(verifyMcpOpaqueFlowReceipt(value, { ...engine.receiptVerifier, signingKeyId: '0'.repeat(64) })).toBe(false);
+  });
+
+  it('pins authority presence to the verifier captured at initialization', () => {
+    const { descriptor, engine } = harness();
+    const value = receipt(engine.complete(
+      prepare(engine, descriptor.id),
+      { content: [{ type: 'text', text: 'accepted' }] },
+    ));
+    const operator = generateKeyPairSync('ed25519');
+    const operatorPublicKey = createPublicKey(operator.privateKey).export({ type: 'spki', format: 'der' });
+    const policySignature = randomBytes(64);
+    const attestation = {
+      authorityVersion: 1,
+      domain: 'pinpoint.mcp.opaque-flow.session',
+      operatorKeyId: createHash('sha256').update(operatorPublicKey).digest('hex'),
+      sessionSigningKeyId: engine.receiptVerifier.signingKeyId,
+      sessionPublicKey: engine.receiptVerifier.publicKey,
+      policyNonce: randomBytes(32).toString('base64url'),
+      policyCommitmentAlgorithm: 'Ed25519-SHA256',
+      policyCommitment: `sha256:${createHash('sha256').update(policySignature).digest('hex')}`,
+    } as const;
+    const authority = {
+      ...attestation,
+      verifier: { algorithm: 'Ed25519' as const, publicKey: operatorPublicKey.toString('base64url') },
+      signature: sign(null, Buffer.from(canonicalJson(attestation)), operator.privateKey).toString('base64url'),
+    };
+
+    expect(verifyMcpOpaqueFlowReceipt({
+      ...value,
+      verifier: { ...value.verifier, authority },
+    }, engine.receiptVerifier)).toBe(false);
+  });
+
+  it('defines magic destination payload names as own JSON properties', () => {
+    const { descriptor, engine } = harness({ ...basePolicy, destinationArgument: '__proto__' });
+    const plan = prepare(engine, descriptor.id);
+
+    expect(Object.hasOwn(plan.destinationArguments, '__proto__')).toBe(true);
+    expect(plan.destinationArguments.__proto__).toEqual(plan.payload);
+    expect(JSON.parse(JSON.stringify(plan.destinationArguments)).__proto__).toEqual(plan.payload);
   });
 
   it('advances and links fifty receipt sequences exactly once', () => {

@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { createInterface } from 'node:readline';
 
 import type { McpCallToolResult } from './gateway.js';
+import { readBoundedNdjson } from './ndjson.js';
 import { isValidMcpCallToolResult } from './tool-result.js';
 
 export interface McpDestinationStdioConfig {
@@ -244,8 +244,10 @@ export class McpDestinationPeer {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
     });
-    this.lines = createInterface({ input: this.child.stdout, crlfDelay: Infinity });
-    this.lines.on('line', (line) => this.handleLine(line));
+    this.lines = readBoundedNdjson(this.child.stdout, {
+      onLine: (line) => this.handleLine(line),
+      onOverflow: () => this.fail('destination output exceeded the JSON-RPC frame limit'),
+    });
     this.child.stderr.on('data', () => this.diagnostic('destination stderr suppressed'));
     this.child.stdin.on('error', () => this.fail('destination input failed'));
     this.child.once('error', () => this.fail('destination process failed'));
@@ -300,6 +302,7 @@ export class McpDestinationPeer {
   }
 
   private handleLine(line: string): void {
+    if (this.currentState === 'failed' || this.currentState === 'closed') return;
     const message = parseRpc(line.trim());
     if (!message) {
       this.diagnostic('suppressed invalid destination output');

@@ -1,7 +1,17 @@
 #!/usr/bin/env node
 
 import { createHash, createPublicKey, verify } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, openSync, readSync } from 'node:fs';
+
+import {
+  createMcpOpaqueFlowAuthorityPolicy,
+  parseMcpOpaqueFlowConfig,
+} from '../dist/mcp/flow.js';
+import { parseMcpOpaqueFlowDestinationConfig } from '../dist/mcp/destination.js';
+
+const MAX_RECEIPT_BYTES = 4 * 1024 * 1024;
+const MAX_POLICY_BYTES = 1024 * 1024;
+const MAX_OPENING_BYTES = 4 * 1024 * 1024;
 
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -16,6 +26,33 @@ function canonicalJson(value) {
 function argument(name) {
   const index = process.argv.indexOf(name);
   return index >= 0 ? process.argv[index + 1] : undefined;
+}
+
+function readJsonFile(path, limit, label) {
+  if (typeof path !== 'string' || path.length === 0) throw new Error(`${label} path is required`);
+  const nonblock = typeof constants.O_NONBLOCK === 'number' ? constants.O_NONBLOCK : 0;
+  const nofollow = process.platform === 'win32' || typeof constants.O_NOFOLLOW !== 'number'
+    ? 0
+    : constants.O_NOFOLLOW;
+  const descriptor = openSync(path, constants.O_RDONLY | nonblock | nofollow);
+  try {
+    const metadata = fstatSync(descriptor);
+    if (!metadata.isFile()) throw new Error(`${label} must be a regular file`);
+    if (metadata.size > limit) throw new Error(`${label} exceeds ${limit} bytes`);
+    const chunks = [];
+    let bytes = 0;
+    while (bytes <= limit) {
+      const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, limit + 1 - bytes));
+      const count = readSync(descriptor, chunk, 0, chunk.length, null);
+      if (count === 0) break;
+      chunks.push(chunk.subarray(0, count));
+      bytes += count;
+    }
+    if (bytes > limit) throw new Error(`${label} exceeds ${limit} bytes`);
+    return JSON.parse(Buffer.concat(chunks, bytes).toString('utf8'));
+  } finally {
+    closeSync(descriptor);
+  }
 }
 
 function verifyAuthority(binding, receiptPublicKey, receiptKeyId, expectedOperatorKeyId) {
@@ -46,14 +83,13 @@ function verifyAuthority(binding, receiptPublicKey, receiptKeyId, expectedOperat
   return verify(null, Buffer.from(canonicalJson(attestation)), operatorPublicKey, Buffer.from(signature, 'base64url'));
 }
 
-function verifyPolicyOpening(authority, policyPath, openingPath) {
-  if (policyPath == null && openingPath == null) return true;
-  if (policyPath == null || openingPath == null || authority == null) return false;
-  const policy = JSON.parse(readFileSync(policyPath, 'utf8'));
-  const record = JSON.parse(readFileSync(openingPath, 'utf8'));
+function verifyPolicyOpening(authority, policyPath, openingPath, destinationPath) {
+  if (policyPath == null && openingPath == null && destinationPath == null) return true;
+  if (openingPath == null || authority == null || (destinationPath != null && policyPath == null)) return false;
+  const record = readJsonFile(openingPath, MAX_OPENING_BYTES, 'authority opening');
   if (canonicalJson(record.authority) !== canonicalJson(authority)) return false;
   const signature = record.opening?.policyAuthorizationSignature;
-  if (typeof signature !== 'string') return false;
+  if (typeof signature !== 'string' || record.policy == null) return false;
   const signatureBytes = Buffer.from(signature, 'base64url');
   if (`sha256:${createHash('sha256').update(signatureBytes).digest('hex')}` !== authority.policyCommitment) return false;
   const publicKeyBytes = Buffer.from(authority.verifier.publicKey, 'base64url');
@@ -61,19 +97,38 @@ function verifyPolicyOpening(authority, policyPath, openingPath) {
   const message = canonicalJson({
     domain: 'pinpoint.mcp.opaque-flow.policy',
     policyNonce: authority.policyNonce,
-    policy,
+    policy: record.policy,
   });
-  return verify(null, Buffer.from(message), publicKey, signatureBytes);
+  if (!verify(null, Buffer.from(message), publicKey, signatureBytes)) return false;
+  if (policyPath == null) return true;
+  const config = parseMcpOpaqueFlowConfig(readJsonFile(policyPath, MAX_POLICY_BYTES, 'flow policy'));
+  const destination = destinationPath == null
+    ? undefined
+    : parseMcpOpaqueFlowDestinationConfig(
+        readJsonFile(destinationPath, MAX_POLICY_BYTES, 'destination config'),
+        {},
+      );
+  if (record.policy.destination != null && destination == null) return false;
+  if (record.policy.destination == null && destination != null) return false;
+  const expectedPolicy = createMcpOpaqueFlowAuthorityPolicy(config, destination == null ? undefined : {
+    id: destination.id,
+    command: destination.command,
+    args: destination.args,
+    cwd: destination.cwd,
+    envNames: destination.declaredEnvNames,
+    sharedEnvNames: destination.sharedEnvNames,
+  });
+  return canonicalJson(record.policy) === canonicalJson(expectedPolicy);
 }
 
 const file = process.argv[2];
 if (!file || file.startsWith('--')) {
-  console.error('usage: pinpoint-verify-receipt <receipt.json> [--path firstReceipt] [--signing-key-id HEX] [--operator-key-id HEX] [--policy FILE --authority-opening FILE]');
+  console.error('usage: pinpoint-verify-receipt <receipt.json> [--path firstReceipt] [--signing-key-id HEX] [--operator-key-id HEX] [--policy FILE --authority-opening FILE [--destination-config FILE]]');
   process.exit(2);
 }
 
 try {
-  let receipt = JSON.parse(readFileSync(file, 'utf8'));
+  let receipt = readJsonFile(file, MAX_RECEIPT_BYTES, 'receipt');
   const path = argument('--path');
   if (path) {
     for (const segment of path.split('.').filter(Boolean)) receipt = receipt?.[segment];
@@ -116,6 +171,7 @@ try {
     authority,
     argument('--policy'),
     argument('--authority-opening'),
+    argument('--destination-config'),
   );
   const valid =
     keyId === receipt.signingKeyId &&

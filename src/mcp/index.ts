@@ -23,6 +23,7 @@ export type {
   McpOpaqueFlowPolicy,
 } from './gateway.js';
 export {
+  createMcpOpaqueFlowAuthorityPolicy,
   parseMcpOpaqueFlowConfig,
   verifyMcpOpaqueFlowAuthorityBinding,
   verifyMcpOpaqueFlowPolicyOpening,
@@ -30,6 +31,7 @@ export {
 } from './flow.js';
 export type {
   McpOpaqueFlowAuthorityBinding,
+  McpOpaqueFlowAuthorityDestinationIdentity,
   McpOpaqueFlowAuthorityRecord,
   McpOpaqueFlowAuthorityVerifier,
   McpOpaqueFlowConfig,

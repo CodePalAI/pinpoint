@@ -11,10 +11,19 @@
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import {
+  closeSync,
+  constants as fileConstants,
   existsSync,
+  fchmodSync,
+  fstatSync,
+  fsyncSync,
+  lstatSync,
+  openSync,
   readFileSync,
-  statSync,
+  readSync,
+  unlinkSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
 import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -445,13 +454,117 @@ function authorityKeyId(key: KeyObject): string {
   return createHash('sha256').update(publicDer).digest('hex');
 }
 
-export function initializeMcpAuthority(outputPath: string): void {
+const MAX_AUTHORITY_KEY_BYTES = 64 * 1024;
+
+function sameFile(
+  left: { dev: number | bigint; ino: number | bigint },
+  right: { dev: number | bigint; ino: number | bigint },
+): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function verifyMacAcl(path: string, opened: ReturnType<typeof fstatSync>): void {
+  if (process.platform !== 'darwin') return;
+  const before = lstatSync(path);
+  if (before.isSymbolicLink() || !sameFile(before, opened)) {
+    throw new Error('authority private-key path changed during validation');
+  }
+  const listing = execFileSync('/bin/ls', ['-lde', path], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const after = lstatSync(path);
+  if (after.isSymbolicLink() || !sameFile(after, opened)) {
+    throw new Error('authority private-key path changed during validation');
+  }
+  if (listing.split(/\r?\n/).slice(1).some((line) => /^\s*\d+:/.test(line))) {
+    throw new Error('authority private-key file must not contain macOS ACL entries');
+  }
+}
+
+function writePrivateFileExclusive(path: string, value: string | Uint8Array): void {
   if (process.platform === 'win32') {
     throw new Error('persistent authority keys are unsupported on Windows until restrictive file ACLs can be enforced');
   }
+  const nofollow = typeof fileConstants.O_NOFOLLOW === 'number' ? fileConstants.O_NOFOLLOW : 0;
+  let descriptor: number | undefined;
+  let created = false;
+  try {
+    descriptor = openSync(
+      path,
+      fileConstants.O_WRONLY | fileConstants.O_CREAT | fileConstants.O_EXCL | nofollow,
+      0o600,
+    );
+    created = true;
+    fchmodSync(descriptor, 0o600);
+    if (process.platform === 'darwin') {
+      execFileSync('/bin/chmod', ['-N', '/dev/fd/3'], {
+        stdio: ['ignore', 'pipe', 'pipe', descriptor],
+      });
+    }
+    const bytes = Buffer.from(value);
+    let offset = 0;
+    while (offset < bytes.length) offset += writeSync(descriptor, bytes, offset);
+    fsyncSync(descriptor);
+    const metadata = fstatSync(descriptor);
+    if (!metadata.isFile() || (metadata.mode & 0o777) !== 0o600) {
+      throw new Error('authority file permissions could not be secured');
+    }
+    verifyMacAcl(path, metadata);
+  } catch (cause) {
+    if (descriptor != null) closeSync(descriptor);
+    descriptor = undefined;
+    if (created) {
+      try { unlinkSync(path); } catch { /* best-effort cleanup of this exclusive create */ }
+    }
+    throw cause;
+  } finally {
+    if (descriptor != null) closeSync(descriptor);
+  }
+}
+
+function readPrivateAuthorityKey(path: string): Buffer {
+  if (process.platform === 'win32') {
+    throw new Error('persistent authority keys are unsupported on Windows until restrictive file ACLs can be enforced');
+  }
+  const nonblock = typeof fileConstants.O_NONBLOCK === 'number' ? fileConstants.O_NONBLOCK : 0;
+  const nofollow = typeof fileConstants.O_NOFOLLOW === 'number' ? fileConstants.O_NOFOLLOW : 0;
+  const descriptor = openSync(path, fileConstants.O_RDONLY | nonblock | nofollow);
+  try {
+    const metadata = fstatSync(descriptor);
+    if (!metadata.isFile()) throw new Error('authority private-key path must be a regular file');
+    if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) {
+      throw new Error('authority private-key file must be owned by the current user');
+    }
+    if ((metadata.mode & 0o077) !== 0) {
+      throw new Error('authority private-key file must not be accessible by group or other users (chmod 600)');
+    }
+    if (metadata.size > MAX_AUTHORITY_KEY_BYTES) {
+      throw new Error(`authority private-key file exceeds ${MAX_AUTHORITY_KEY_BYTES} bytes`);
+    }
+    verifyMacAcl(path, metadata);
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    while (bytes <= MAX_AUTHORITY_KEY_BYTES) {
+      const chunk = Buffer.allocUnsafe(Math.min(16 * 1024, MAX_AUTHORITY_KEY_BYTES + 1 - bytes));
+      const count = readSync(descriptor, chunk, 0, chunk.length, null);
+      if (count === 0) break;
+      chunks.push(chunk.subarray(0, count));
+      bytes += count;
+    }
+    if (bytes > MAX_AUTHORITY_KEY_BYTES) {
+      throw new Error(`authority private-key file exceeds ${MAX_AUTHORITY_KEY_BYTES} bytes`);
+    }
+    return Buffer.concat(chunks, bytes);
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+export function initializeMcpAuthority(outputPath: string): void {
   const pair = generateKeyPairSync('ed25519');
   const privateKey = pair.privateKey.export({ type: 'pkcs8', format: 'pem' });
-  writeFileSync(outputPath, privateKey, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  writePrivateFileExclusive(outputPath, privateKey);
   console.log(JSON.stringify({
     algorithm: 'Ed25519',
     operatorKeyId: authorityKeyId(pair.privateKey),
@@ -460,13 +573,7 @@ export function initializeMcpAuthority(outputPath: string): void {
 }
 
 export function loadMcpAuthorityKey(keyPath: string): KeyObject {
-  if (process.platform === 'win32') {
-    throw new Error('persistent authority keys are unsupported on Windows until restrictive file ACLs can be enforced');
-  }
-  if ((statSync(keyPath).mode & 0o077) !== 0) {
-    throw new Error('authority private-key file must not be accessible by group or other users (chmod 600)');
-  }
-  const key = createPrivateKey(readFileSync(keyPath));
+  const key = createPrivateKey(readPrivateAuthorityKey(keyPath));
   if (key.type !== 'private' || key.asymmetricKeyType !== 'ed25519') {
     throw new Error('authority key must be an Ed25519 private key');
   }
@@ -911,10 +1018,9 @@ async function cmdMcp(args: readonly string[]): Promise<void> {
       ...(flowAuthoritySigningKey ? {
         flowAuthoritySigningKey,
         ...(flowAuthorityOpeningPath ? {
-          onFlowAuthorityReady: (record) => writeFileSync(
+          onFlowAuthorityReady: (record) => writePrivateFileExclusive(
             flowAuthorityOpeningPath,
             `${JSON.stringify(record, null, 2)}\n`,
-            { encoding: 'utf8', mode: 0o600, flag: 'wx' },
           ),
         } : {}),
       } : {}),

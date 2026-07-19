@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID, type KeyObject } from 'node:crypto';
-import { createInterface } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
 
 import {
@@ -13,15 +12,18 @@ import {
 import {
   MCP_FLOW_TOOL_NAME,
   McpOpaqueFlowEngine,
+  createMcpOpaqueFlowAuthorityPolicy,
   type McpOpaqueFlowAuthorityRecord,
   type McpOpaqueFlowPolicy,
   type PreparedMcpOpaqueFlow,
 } from './flow.js';
 import {
   McpDestinationPeer,
+  withoutDestinationOnlyEnvironment,
   type McpDestinationStdioConfig,
 } from './destination.js';
 import { isValidMcpCallToolResult } from './tool-result.js';
+import { readBoundedNdjson } from './ndjson.js';
 import {
   DASHBOARD_SCHEMA_VERSION,
   sanitizeDashboardLabel,
@@ -766,25 +768,20 @@ export async function runMcpGateway(
     ...(options.destination ? { destinationServerId: options.destination.id } : {}),
     ...(options.flowAuthoritySigningKey ? {
       authoritySigningKey: options.flowAuthoritySigningKey,
-      authorityPolicy: {
+      authorityPolicy: createMcpOpaqueFlowAuthorityPolicy({
         version: 1,
         exposeQueryTool,
         exposeArtifactResources,
         opaqueArtifactIds,
         flows,
-        ...(options.destination ? {
-          destination: {
-            id: options.destination.id,
-            command: options.destination.command,
-            args: [...(options.destination.args ?? [])],
-            cwd: options.destination.cwd ?? null,
-            envNames: [...(
-              options.destination.declaredEnvNames ?? Object.keys(options.destination.env ?? {})
-            )].sort(),
-            sharedEnvNames: [...(options.destination.sharedEnvNames ?? [])].sort(),
-          },
-        } : {}),
-      },
+      }, options.destination ? {
+        id: options.destination.id,
+        command: options.destination.command,
+        args: options.destination.args,
+        cwd: options.destination.cwd,
+        envNames: options.destination.declaredEnvNames ?? Object.keys(options.destination.env ?? {}),
+        sharedEnvNames: options.destination.sharedEnvNames,
+      } : undefined),
     } : {}),
   }) : undefined;
   if (options.flowAuthoritySigningKey && !flowEngine) {
@@ -798,11 +795,11 @@ export async function runMcpGateway(
   const child = spawn(command, [...args], {
     cwd: options.cwd,
     env: (() => {
-      const sourceEnv = { ...(options.env ?? process.env) };
-      const shared = new Set(options.destination?.sharedEnvNames ?? []);
-      for (const name of Object.keys(options.destination?.env ?? {})) {
-        if (!shared.has(name)) delete sourceEnv[name];
-      }
+      const sourceEnv = withoutDestinationOnlyEnvironment(
+        options.env ?? process.env,
+        options.destination?.declaredEnvNames ?? Object.keys(options.destination?.env ?? {}),
+        options.destination?.sharedEnvNames ?? [],
+      );
       delete sourceEnv.PINPOINT_DASHBOARD_GROUP;
       delete sourceEnv.PINPOINT_DASHBOARD_DIR;
       return sourceEnv;
@@ -1238,25 +1235,39 @@ export async function runMcpGateway(
     }
   };
 
-  const clientLines = createInterface({ input, crlfDelay: Infinity });
-  const upstreamLines = createInterface({ input: child.stdout, crlfDelay: Infinity });
-  clientLines.on('line', (line) => {
-    clientQueue = queueLine(clientQueue, () => handleClient(line), (cause) => failGateway(null, cause));
+  let upstreamFrameOverflow = false;
+  const clientLines = readBoundedNdjson(input, {
+    onLine: (line) => {
+      clientQueue = queueLine(clientQueue, () => handleClient(line), (cause) => failGateway(null, cause));
+    },
+    onOverflow: () => failGateway(null, new Error('JSON-RPC request exceeded the frame limit')),
+    onEnd: () => {
+      child.stdin.end();
+      void destinationPeer?.close();
+    },
   });
-  upstreamLines.on('line', (line) => {
-    upstreamQueue = queueLine(
-      upstreamQueue,
-      () => handleUpstream(line),
-      (cause) => error.write(
+  const upstreamLines = readBoundedNdjson(child.stdout, {
+    onLine: (line) => {
+      if (upstreamFrameOverflow) return;
+      upstreamQueue = queueLine(
+        upstreamQueue,
+        () => handleUpstream(line),
+        (cause) => error.write(
+          protectedDataHandled
+            ? '[pinpoint mcp gateway] suppressed upstream processing error after protected dataflow\n'
+            : `[pinpoint mcp gateway] ${cause instanceof Error ? cause.message : String(cause)}\n`,
+        ),
+      );
+    },
+    onOverflow: () => {
+      upstreamFrameOverflow = true;
+      error.write(
         protectedDataHandled
-          ? '[pinpoint mcp gateway] suppressed upstream processing error after protected dataflow\n'
-          : `[pinpoint mcp gateway] ${cause instanceof Error ? cause.message : String(cause)}\n`,
-      ),
-    );
-  });
-  clientLines.once('close', () => {
-    child.stdin.end();
-    void destinationPeer?.close();
+          ? '[pinpoint mcp gateway] suppressed oversized upstream output after protected dataflow\n'
+          : '[pinpoint mcp gateway] upstream output exceeded the JSON-RPC frame limit\n',
+      );
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+    },
   });
 
   const abort = (): void => {

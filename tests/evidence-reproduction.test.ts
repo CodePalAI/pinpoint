@@ -59,6 +59,7 @@ describe('packaged opaque-flow reproduction bundle', () => {
     expect(bundle.receipts).toHaveLength(30);
     expect(bundle.runtime?.files.length).toBeGreaterThan(9);
     expect(bundle.runtime?.files.map(({ path }) => path)).toEqual(expect.arrayContaining([
+      'bin/internal-evidence-reader.js',
       'src/cli/main.ts',
       'src/dashboard/types.ts',
       'src/policy/content-normalization.ts',
@@ -172,6 +173,7 @@ describe('packaged opaque-flow reproduction bundle', () => {
 
     const verification = verifyMcpReproduction(tampered);
     expect(verification.valid).toBe(false);
+    expect(verification.checks.schema).toBe(false);
     expect(verification.errors).toContain('receipt 1 has invalid payloadBytes');
   });
 

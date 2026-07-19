@@ -14,7 +14,10 @@ import {
   runQcvDemo,
 } from '../src/cli/main.js';
 import { parseMcpOpaqueFlowConfig } from '../src/mcp/flow.js';
-import { parseMcpOpaqueFlowDestinationConfig } from '../src/mcp/destination.js';
+import {
+  parseMcpOpaqueFlowDestinationConfig,
+  withoutDestinationOnlyEnvironment,
+} from '../src/mcp/destination.js';
 
 describe('parseProxyArgs', () => {
   it('parses mode, host, and port', () => {
@@ -283,6 +286,37 @@ describe('parseMcpArgs', () => {
       envAllowlist: ['CRM_TOKEN'],
       sharedEnvAllowlist: ['PATH'],
     })).toThrow('sharedEnvAllowlist must be a unique subset of envAllowlist');
+  });
+
+  it('treats Windows environment names as case-insensitive across both process domains', () => {
+    const destination = parseMcpOpaqueFlowDestinationConfig({
+      version: 1,
+      id: 'crm-domain',
+      command: 'crm-mcp.exe',
+      envAllowlist: ['CRM_TOKEN', 'Path'],
+      sharedEnvAllowlist: ['PATH'],
+    }, {
+      Crm_Token: 'destination-secret',
+      PATH: 'C:\\Windows',
+      SOURCE_TOKEN: 'source-secret',
+    }, 'win32');
+
+    expect(destination.env).toEqual({
+      CRM_TOKEN: 'destination-secret',
+      Path: 'C:\\Windows',
+    });
+    expect(withoutDestinationOnlyEnvironment(
+      { Crm_Token: 'destination-secret', PATH: 'C:\\Windows', SOURCE_TOKEN: 'source-secret' },
+      destination.declaredEnvNames ?? [],
+      destination.sharedEnvNames ?? [],
+      'win32',
+    )).toEqual({ PATH: 'C:\\Windows', SOURCE_TOKEN: 'source-secret' });
+    expect(() => parseMcpOpaqueFlowDestinationConfig({
+      version: 1,
+      id: 'crm-domain',
+      command: 'crm-mcp.exe',
+      envAllowlist: ['CRM_TOKEN', 'crm_token'],
+    }, {}, 'win32')).toThrow('envAllowlist must contain at most 64 unique environment names');
   });
 
   it('parses the shipped private-destination example', () => {

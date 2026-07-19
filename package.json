@@ -6,10 +6,7 @@
   "types": "./dist/index.d.ts",
   "sideEffects": false,
   "license": "Apache-2.0",
-  "author": {
-    "name": "CodePal",
-    "url": "https://codepal.ai"
-  },
+  "author": "CodePal (https://codepal.ai)",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/CodePalAI/pinpoint.git"
@@ -228,5 +225,10 @@
     "typescript": "^5.7.0",
     "vite": "^6.4.3",
     "vitest": "^3.2.6"
+  },
+  "main": "index.js",
+  "directories": {
+    "example": "examples",
+    "test": "tests"
   }
 }

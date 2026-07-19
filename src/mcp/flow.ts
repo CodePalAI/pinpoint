@@ -140,6 +140,16 @@ export interface McpOpaqueFlowPolicyOpening {
 export interface McpOpaqueFlowAuthorityRecord {
   readonly authority: McpOpaqueFlowAuthorityBinding;
   readonly opening: McpOpaqueFlowPolicyOpening;
+  readonly policy: unknown;
+}
+
+export interface McpOpaqueFlowAuthorityDestinationIdentity {
+  readonly id: string;
+  readonly command: string;
+  readonly args?: readonly string[];
+  readonly cwd?: string;
+  readonly envNames?: readonly string[];
+  readonly sharedEnvNames?: readonly string[];
 }
 
 export interface McpOpaqueFlowEngineOptions {
@@ -340,10 +350,8 @@ export function verifyMcpOpaqueFlowReceipt(
         expectedVerifier.algorithm !== 'Ed25519' ||
         expectedVerifier.publicKey !== receipt.verifier.publicKey ||
         expectedVerifier.signingKeyId !== receipt.signingKeyId ||
-        (
-          expectedVerifier.authority != null &&
-          canonicalJson(expectedVerifier.authority) !== canonicalJson(receipt.verifier.authority)
-        )
+        (expectedVerifier.authority == null) !== (receipt.verifier.authority == null) ||
+        canonicalJson(expectedVerifier.authority) !== canonicalJson(receipt.verifier.authority)
       )
     ) {
       return false;
@@ -565,6 +573,26 @@ export function parseMcpOpaqueFlowConfig(value: unknown): McpOpaqueFlowConfig {
   };
 }
 
+export function createMcpOpaqueFlowAuthorityPolicy(
+  config: McpOpaqueFlowConfig,
+  destination?: McpOpaqueFlowAuthorityDestinationIdentity,
+): Record<string, unknown> {
+  const normalized = parseMcpOpaqueFlowConfig(config);
+  return {
+    ...normalized,
+    ...(destination ? {
+      destination: {
+        id: destination.id,
+        command: destination.command,
+        args: [...(destination.args ?? [])],
+        cwd: destination.cwd ?? null,
+        envNames: [...(destination.envNames ?? [])].sort(),
+        sharedEnvNames: [...(destination.sharedEnvNames ?? [])].sort(),
+      },
+    } : {}),
+  };
+}
+
 function ensureSubset(requested: readonly string[], allowed: readonly string[] | undefined, field: string): void {
   if (allowed == null) return;
   const allow = new Set(allowed);
@@ -606,6 +634,7 @@ export class McpOpaqueFlowEngine {
   private readonly signingKeyId: string;
   private readonly authorityBinding?: McpOpaqueFlowAuthorityBinding;
   private readonly policyOpening?: McpOpaqueFlowPolicyOpening;
+  private readonly authorityPolicy?: unknown;
   private readonly destinationServerId?: string;
   private sequence = 0;
   private previousReceiptHash = '0'.repeat(64);
@@ -641,7 +670,10 @@ export class McpOpaqueFlowEngine {
       const authorityPublicKeyBytes = authorityPublicKey.export({ type: 'spki', format: 'der' });
       const operatorPublicKey = authorityPublicKeyBytes.toString('base64url');
       const operatorKeyId = createHash('sha256').update(authorityPublicKeyBytes).digest('hex');
-      const authorityPolicy = options.authorityPolicy ?? { flows: [...this.policies.values()] };
+      const authorityPolicy = JSON.parse(canonicalJson(
+        options.authorityPolicy ?? { flows: [...this.policies.values()] },
+      )) as unknown;
+      this.authorityPolicy = authorityPolicy;
       const policyNonce = randomBytes(32).toString('base64url');
       const policyAuthorizationSignature = signValue(
         null,
@@ -707,8 +739,12 @@ export class McpOpaqueFlowEngine {
   }
 
   get authorityRecord(): McpOpaqueFlowAuthorityRecord | undefined {
-    return this.authorityBinding && this.policyOpening
-      ? { authority: this.authorityBinding, opening: this.policyOpening }
+    return this.authorityBinding && this.policyOpening && this.authorityPolicy
+      ? {
+          authority: this.authorityBinding,
+          opening: this.policyOpening,
+          policy: this.authorityPolicy,
+        }
       : undefined;
   }
 
@@ -911,7 +947,12 @@ export class McpOpaqueFlowEngine {
     if (Buffer.byteLength(destinationText) > (policy.maxDestinationArgumentBytes ?? 16 * 1024)) {
       throw new TypeError('destinationArguments exceed the configured byte limit');
     }
-    destinationArguments[policy.destinationArgument] = payload;
+    Object.defineProperty(destinationArguments, policy.destinationArgument, {
+      value: payload,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     const queryProof = {
       id,
       op,

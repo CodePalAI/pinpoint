@@ -6,7 +6,11 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { McpOpaqueFlowEngine, parseMcpOpaqueFlowConfig } from '../src/mcp/flow.js';
+import {
+  createMcpOpaqueFlowAuthorityPolicy,
+  McpOpaqueFlowEngine,
+  parseMcpOpaqueFlowConfig,
+} from '../src/mcp/flow.js';
 import { VirtualContextStore, type VirtualContextQuery } from '../src/virtual-context/store.js';
 
 const receiptPath = join(
@@ -68,7 +72,7 @@ describe('standalone opaque-flow receipt verifier', () => {
   it('pins a durable operator root and opens the exact fixed policy', () => {
     const temporary = mkdtempSync(join(tmpdir(), 'pinpoint-authority-verifier-'));
     try {
-      const policy = parseMcpOpaqueFlowConfig({
+      const rawPolicy = {
         version: 1,
         flows: [{
           name: 'deliver_active',
@@ -80,7 +84,8 @@ describe('standalone opaque-flow receipt verifier', () => {
           fixedWhere: { active: true },
           allowedFields: ['email'],
         }],
-      });
+      };
+      const policy = parseMcpOpaqueFlowConfig(rawPolicy);
       const rows = [{ active: true, email: 'authority-test@example.invalid' }];
       const store = new VirtualContextStore(32_000, 8, 1024 * 1024);
       const descriptor = store.put(JSON.stringify(rows));
@@ -110,7 +115,7 @@ describe('standalone opaque-flow receipt verifier', () => {
       const changedPolicyFile = join(temporary, 'changed-policy.json');
       const openingFile = join(temporary, 'opening.json');
       writeFileSync(receiptFile, JSON.stringify(receipt));
-      writeFileSync(policyFile, JSON.stringify(policy));
+      writeFileSync(policyFile, JSON.stringify(rawPolicy));
       writeFileSync(changedPolicyFile, JSON.stringify({
         ...policy,
         flows: [{ ...policy.flows[0], fixedWhere: { active: false } }],
@@ -152,6 +157,113 @@ describe('standalone opaque-flow receipt verifier', () => {
       expect(JSON.parse(changedPolicy.stdout)).toMatchObject({ valid: false });
       expect(JSON.stringify(receipt)).not.toContain('authority-test@example.invalid');
       expect(JSON.stringify(receipt)).not.toContain('"active":true');
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+
+  it('opens the exact private-destination deployment identity', () => {
+    const temporary = mkdtempSync(join(tmpdir(), 'pinpoint-destination-authority-verifier-'));
+    try {
+      const rawPolicy = {
+        version: 1,
+        flows: [{
+          name: 'deliver_active',
+          sourceTool: 'accounts_list',
+          destinationTool: 'campaign_deliver',
+          destinationArgument: 'recipients',
+          allowedOps: ['json_select' as const],
+          allowedFields: ['email'],
+        }],
+      };
+      const policy = parseMcpOpaqueFlowConfig(rawPolicy);
+      const destination = {
+        version: 1 as const,
+        id: 'crm-domain',
+        command: '/usr/local/bin/crm-mcp',
+        args: ['--stdio'],
+        envAllowlist: ['PATH', 'CRM_TOKEN'],
+        sharedEnvAllowlist: ['PATH'],
+      };
+      const authorityPolicy = createMcpOpaqueFlowAuthorityPolicy(policy, {
+        id: destination.id,
+        command: destination.command,
+        args: destination.args,
+        envNames: destination.envAllowlist,
+        sharedEnvNames: destination.sharedEnvAllowlist,
+      });
+      const store = new VirtualContextStore(32_000, 8, 1024 * 1024);
+      const descriptor = store.put(JSON.stringify([{ email: 'authority-test@example.invalid' }]));
+      const artifacts = {
+        artifactInfo(id: string) {
+          return id === descriptor.id ? { descriptor, sourceTool: 'accounts_list' } : undefined;
+        },
+        queryArtifact(query: VirtualContextQuery) {
+          return store.query(query);
+        },
+      };
+      const operator = generateKeyPairSync('ed25519');
+      const engine = new McpOpaqueFlowEngine(artifacts, policy.flows, {
+        authoritySigningKey: operator.privateKey,
+        authorityPolicy,
+        destinationServerId: destination.id,
+      });
+      const completed = engine.complete(engine.prepare({
+        flow: 'deliver_active',
+        id: descriptor.id,
+        op: 'json_select',
+        fields: ['email'],
+      }), { content: [{ type: 'text', text: 'accepted' }] });
+      const receiptFile = join(temporary, 'receipt.json');
+      const policyFile = join(temporary, 'policy.json');
+      const destinationFile = join(temporary, 'destination.json');
+      const changedDestinationFile = join(temporary, 'changed-destination.json');
+      const openingFile = join(temporary, 'opening.json');
+      writeFileSync(receiptFile, completed.content[0]?.text ?? '{}');
+      writeFileSync(policyFile, JSON.stringify(rawPolicy));
+      writeFileSync(destinationFile, JSON.stringify(destination));
+      writeFileSync(changedDestinationFile, JSON.stringify({ ...destination, command: '/other/crm-mcp' }));
+      writeFileSync(openingFile, JSON.stringify(engine.authorityRecord));
+      const base = [
+        verifier,
+        receiptFile,
+        '--path',
+        'pinpointFlow',
+        '--policy',
+        policyFile,
+        '--authority-opening',
+        openingFile,
+      ];
+
+      expect(JSON.parse(execFileSync(process.execPath, [
+        ...base,
+        '--destination-config',
+        destinationFile,
+      ], { encoding: 'utf8' }))).toMatchObject({ valid: true });
+      expect(spawnSync(process.execPath, base, { encoding: 'utf8' }).status).toBe(1);
+      expect(spawnSync(process.execPath, [
+        ...base,
+        '--destination-config',
+        changedDestinationFile,
+      ], { encoding: 'utf8' }).status).toBe(1);
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects a receipt FIFO without blocking', () => {
+    const temporary = mkdtempSync(join(tmpdir(), 'pinpoint-receipt-fifo-'));
+    try {
+      const fifo = join(temporary, 'receipt.fifo');
+      execFileSync('/usr/bin/mkfifo', [fifo]);
+      const run = spawnSync(process.execPath, [verifier, fifo], {
+        encoding: 'utf8',
+        timeout: 2_000,
+        killSignal: 'SIGKILL',
+      });
+      expect(run.signal).toBeNull();
+      expect(run.status).toBe(1);
+      expect(JSON.parse(run.stdout)).toMatchObject({ valid: false });
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }

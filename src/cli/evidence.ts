@@ -182,6 +182,7 @@ function runtimeManifest(): ReproductionRuntimeManifest {
   const paths = [
     ...runtimeFiles(root, compiled ? 'dist' : 'src', compiled ? '.js' : '.ts'),
     'bin/cli.js',
+    'bin/internal-evidence-reader.js',
     'package.json',
   ];
   const files = paths.map((path) => {
@@ -477,6 +478,7 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
   let repeatedFlowCalls: number | null = null;
   let bypassesDenied: number | null = null;
   let privateValuesVisible: number | null = null;
+  let schemaValid = false;
   const result = (): ReproductionVerification => ({
     valid: checks.schema &&
       checks.checksum &&
@@ -638,7 +640,7 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
         !hash(bundle.integrity.checksum)
       ) errors.push('invalid integrity block');
     }
-    checks.schema = errors.length === schemaErrors;
+    schemaValid = errors.length === schemaErrors;
 
     const { integrity, ...unsigned } = bundle;
     checks.checksum = isRecord(integrity) &&
@@ -658,9 +660,11 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
     if (passedBundle) {
       if (receipts.length !== 30) {
         errors.push('expected exactly 30 receipts before cryptographic verification');
+        schemaValid = false;
       } else {
         const shapeErrors = errors.length;
         const shaped = receipts.every((receipt, index) => validReceiptShape(receipt, index, errors));
+        if (!shaped || errors.length !== shapeErrors) schemaValid = false;
         if (shaped && errors.length === shapeErrors && isRecord(bundle.receiptVerifier)) {
           const verifier = bundle.receiptVerifier as McpOpaqueFlowReceiptVerifier;
           let previousReceiptHash = '0'.repeat(64);
@@ -689,6 +693,7 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
         bundle.security.commitmentsDistinctAcrossRepetitions === true;
       if (!checks.reportedResults) errors.push('reported reproduction checks do not pass');
     }
+    checks.schema = schemaValid;
     return result();
   } catch {
     errors.push('bundle validation raised an internal error');

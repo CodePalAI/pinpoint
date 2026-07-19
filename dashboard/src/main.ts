@@ -646,16 +646,19 @@ function renderCopilotNotice(snapshot: DashboardSnapshot): string {
   const hasUsage = selectVisibleTokenLanes(snapshot.tokenLanes).some((lane) => lane.source === 'headroom');
   const quota = headroom.quota.find((item) => item.category === 'premium_interactions') ?? headroom.quota[0];
   if (!hasUsage) {
+    const ended = snapshot.sources.some((source) => source.source === 'headroom' && source.state === 'ended');
     return `
       <aside class="copilot-notice" data-attribution="${headroom.attribution}">
-        <div>${icon(TerminalSquare)}<span>Copilot / Headroom</span><strong>Awaiting first request</strong></div>
-        <p>${headroom.healthy
+        <div>${icon(TerminalSquare)}<span>Copilot / Headroom</span><strong>${ended ? 'No requests recorded' : 'Awaiting first request'}</strong></div>
+        <p>${ended
+          ? 'The wrapped session ended before Copilot completed a model request.'
+          : headroom.healthy
           ? 'The proxy is connected. Usage appears after Copilot completes its first model request.'
           : 'The proxy is still starting. Usage will appear after Headroom connects and Copilot completes a request.'}</p>
         <dl>
-          <div><dt>Connection</dt><dd>${headroom.healthy ? 'Ready' : 'Starting'}</dd></div>
+          <div><dt>Connection</dt><dd>${ended ? 'Ended' : headroom.healthy ? 'Ready' : 'Starting'}</dd></div>
           <div><dt>Attribution</dt><dd>${headroom.attribution === 'shared' ? 'Shared proxy' : 'Dedicated session'}</dd></div>
-          <div><dt>Coverage</dt><dd>Waiting for usage</dd></div>
+          <div><dt>Coverage</dt><dd>${ended ? 'No usage recorded' : 'Waiting for usage'}</dd></div>
         </dl>
       </aside>
     `;

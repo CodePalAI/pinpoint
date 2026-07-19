@@ -526,7 +526,7 @@ export function buildDashboardSnapshot(
     });
   }
   const headroomSource = sourceMap.get('headroom');
-  if (headroomSource && latestHeadroom && !latestHeadroom.healthy) {
+  if (headroomSource?.state === 'active' && latestHeadroom && !latestHeadroom.healthy) {
     sourceMap.set('headroom', { ...headroomSource, state: 'degraded' });
   }
   const mcpSource = sourceMap.get('mcp');

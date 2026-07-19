@@ -96,6 +96,27 @@ function idleHeadroomEvent(): DashboardHeadroomSampleEvent {
 }
 
 describe('DashboardJournal', () => {
+  it('keeps a cleanly ended Headroom producer ended after a final unavailable sample', () => {
+    const historyRoot = root();
+    const journal = new DashboardJournal({ rootDir: historyRoot, source: 'headroom' });
+    journal.onEvent(idleHeadroomEvent());
+    journal.onEvent({
+      ...idleHeadroomEvent(),
+      occurredAt: '2026-07-17T10:00:01.000Z',
+      healthy: false,
+      coverage: 'unavailable',
+      version: null,
+    });
+    journal.close();
+
+    const snapshot = buildDashboardSnapshot(readDashboardGroup(historyRoot, journal.groupId));
+    expect(snapshot.sources).toContainEqual(expect.objectContaining({
+      source: 'headroom',
+      state: 'ended',
+    }));
+    expect(snapshot.state).toBe('ended');
+  });
+
   it('keeps idle Headroom attachment out of token calibration', () => {
     const historyRoot = root();
     const journal = new DashboardJournal({ rootDir: historyRoot, source: 'headroom' });

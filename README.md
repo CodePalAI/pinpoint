@@ -251,6 +251,9 @@ pinpoint proxy --dashboard
 
 Pinpoint opens one protected loopback tab. Use `--no-open` to print the URL
 instead, or run `pinpoint dashboard` later to inspect local metadata history.
+The live server follows the wrapped command's lifetime. When the command exits,
+the journal remains on disk; run `pinpoint dashboard` to reopen and refresh the
+ended session safely.
 The recorder keeps provider-token lanes, Headroom-reported Copilot usage, MCP
 exact bytes, provider quota, and estimated cost on separate labeled bases.
 Shared Headroom proxies are marked as partial attribution; cost remains

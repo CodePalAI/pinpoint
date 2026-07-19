@@ -20,6 +20,12 @@ protected URL instead. The default dashboard address is `127.0.0.1:8790`; an
 explicitly requested busy port fails, while the default may move to an available
 loopback port.
 
+An embedded dashboard server follows the wrapped command's lifetime. The
+metadata journal does not: after the command exits, `pinpoint dashboard` starts
+a new protected loopback server over the retained history. An already-rendered
+page keeps its last evidence during a disconnect, but a hard refresh requires a
+running local server.
+
 ## Data model
 
 Every event is rebuilt from an exact runtime allowlist before persistence.

@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
@@ -165,15 +166,19 @@ describe('wrap copilot → headroom delegation', () => {
     const directory = mkdtempSync(join(tmpdir(), 'pinpoint-wrap-termination-'));
     const script = join(directory, 'ignore-termination.cjs');
     writeFileSync(script, `process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);\n`);
-    const child = spawn(process.execPath, [script], {
-      stdio: 'ignore',
-      detached: process.platform !== 'win32',
-    });
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    try {
+      const child = spawn(process.execPath, [script], {
+        stdio: 'ignore',
+        detached: process.platform !== 'win32',
+      });
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
-    await terminateChildProcessTree(child, 'SIGTERM', 50);
+      await terminateChildProcessTree(child, 'SIGTERM', 50);
 
-    expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+      expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('delegates with --subscription and injects the default model when omitted', async () => {
@@ -245,8 +250,13 @@ describe('wrap copilot → headroom delegation', () => {
       expect(recordedArgs).toContain('--port 8787');
       const groupDir = join(history, groupId!);
       const files = readdirSync(groupDir);
-      expect(files.some((name) => name.endsWith('.state.json'))).toBe(true);
+      const stateFile = files.find((name) => name.endsWith('.state.json'));
+      expect(stateFile).toBeDefined();
       expect(files.some((name) => name.endsWith('.events.jsonl'))).toBe(true);
+      const producerState = JSON.parse(readFileSync(join(groupDir, stateFile!), 'utf8')) as {
+        endedAt: string | null;
+      };
+      expect(producerState.endedAt).toEqual(expect.any(String));
       if (process.platform !== 'win32') {
         expect(statSync(groupDir).mode & 0o777).toBe(0o700);
       }

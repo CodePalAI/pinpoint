@@ -247,6 +247,7 @@ async function stopDashboard(dashboard: RunningDashboard | undefined): Promise<v
   if (!dashboard) return;
   dashboard.journal.close();
   await dashboard.server.close();
+  console.error("pinpoint dashboard: session saved to local history; reopen it with `pinpoint dashboard`.");
 }
 
 function dashboardEnvironment(dashboard: RunningDashboard | undefined): NodeJS.ProcessEnv {

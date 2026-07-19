@@ -78,9 +78,28 @@ function positiveTimeout(value: number | undefined, fallback: number): number {
   return value;
 }
 
+function environmentNameKey(name: string, platform: NodeJS.Platform): string {
+  return platform === 'win32' ? name.toUpperCase() : name;
+}
+
+export function withoutDestinationOnlyEnvironment(
+  sourceEnv: NodeJS.ProcessEnv,
+  destinationNames: readonly string[],
+  sharedNames: readonly string[],
+  platform: NodeJS.Platform = process.platform,
+): NodeJS.ProcessEnv {
+  const destination = new Set(destinationNames.map((name) => environmentNameKey(name, platform)));
+  const shared = new Set(sharedNames.map((name) => environmentNameKey(name, platform)));
+  return Object.fromEntries(Object.entries(sourceEnv).filter(([name]) => {
+    const key = environmentNameKey(name, platform);
+    return !destination.has(key) || shared.has(key);
+  }));
+}
+
 export function parseMcpOpaqueFlowDestinationConfig(
   value: unknown,
   sourceEnv: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
 ): McpOpaqueFlowDestinationConfig & McpDestinationStdioConfig {
   if (!isRecord(value)) throw new TypeError('opaque-flow destination config must be a JSON object');
   const allowedKeys = new Set([
@@ -122,20 +141,30 @@ export function parseMcpOpaqueFlowDestinationConfig(
     throw new TypeError('opaque-flow destination cwd must be a non-empty string of at most 4096 characters');
   }
   const envAllowlist = value.envAllowlist ?? [];
+  const envNameKeys = Array.isArray(envAllowlist)
+    ? envAllowlist.filter((name): name is string => typeof name === 'string')
+      .map((name) => environmentNameKey(name, platform))
+    : [];
   if (
     !Array.isArray(envAllowlist) ||
     envAllowlist.length > 64 ||
-    new Set(envAllowlist).size !== envAllowlist.length ||
+    new Set(envNameKeys).size !== envAllowlist.length ||
     envAllowlist.some((name) => typeof name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(name))
   ) {
     throw new TypeError('opaque-flow destination envAllowlist must contain at most 64 unique environment names');
   }
   const sharedEnvAllowlist = value.sharedEnvAllowlist ?? [];
+  const allowedEnvNameKeys = new Set(envNameKeys);
+  const sharedEnvNameKeys = Array.isArray(sharedEnvAllowlist)
+    ? sharedEnvAllowlist.filter((name): name is string => typeof name === 'string')
+      .map((name) => environmentNameKey(name, platform))
+    : [];
   if (
     !Array.isArray(sharedEnvAllowlist) ||
     sharedEnvAllowlist.length > 64 ||
-    new Set(sharedEnvAllowlist).size !== sharedEnvAllowlist.length ||
-    sharedEnvAllowlist.some((name) => typeof name !== 'string' || !envAllowlist.includes(name))
+    new Set(sharedEnvNameKeys).size !== sharedEnvAllowlist.length ||
+    sharedEnvAllowlist.some((name) =>
+      typeof name !== 'string' || !allowedEnvNameKeys.has(environmentNameKey(name, platform)))
   ) {
     throw new TypeError('opaque-flow destination sharedEnvAllowlist must be a unique subset of envAllowlist');
   }
@@ -145,11 +174,13 @@ export function parseMcpOpaqueFlowDestinationConfig(
   );
   const requestTimeoutMs = positiveTimeout(value.requestTimeoutMs as number | undefined, 30_000);
   const shutdownGraceMs = positiveTimeout(value.shutdownGraceMs as number | undefined, 2_000);
-  const env = Object.fromEntries(
-    (envAllowlist as string[])
-      .filter((name) => sourceEnv[name] != null)
-      .map((name) => [name, sourceEnv[name]!]),
-  );
+  const sourceEntries = Object.entries(sourceEnv);
+  const env = Object.fromEntries((envAllowlist as string[]).flatMap((name) => {
+    const key = environmentNameKey(name, platform);
+    const matches = sourceEntries.filter(([sourceName]) => environmentNameKey(sourceName, platform) === key);
+    if (matches.length > 1) throw new TypeError(`ambiguous inherited environment name: ${name}`);
+    return matches[0]?.[1] == null ? [] : [[name, matches[0][1]]];
+  }));
   return {
     version: 1,
     id: value.id,

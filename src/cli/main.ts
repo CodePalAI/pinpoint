@@ -9,7 +9,16 @@
  */
 
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, type KeyObject } from 'node:crypto';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  openSync,
+  readFileSync,
+  readSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename } from 'node:path';
 
 import { createProxyServer } from '../proxy/server.js';
@@ -83,11 +92,13 @@ COMMANDS
                    Check core MCP readiness (default), optional legacy optimizer
                    dependencies, or GitHub Copilot wrapper readiness.
   evidence reproduce --relationship RELATIONSHIP [--out FILE]
-                   Run the packaged 30-flow/8-bypass no-model reproduction and
-                   emit a content-free JSON bundle. Relationships: unaffiliated,
-                   maintainer, contracted, other.
+                   Run 30 repeated calls of one packaged synthetic flow plus 8
+                   bypass classes and emit a content-free JSON bundle.
+                   Relationships: unaffiliated, maintainer, contracted, other.
   evidence verify FILE
-                   Verify bundle hash, summary, receipt signatures, and chain.
+                   Check strict schema, accidental-corruption checksum, runtime
+                   manifest, reported results, receipt signatures, and chain.
+                   This does not authenticate the human operator.
   stats            Query a running proxy's session savings (GET /stats).
   dashboard        Open the optional local session recorder. Options:
                    --port, --no-open.
@@ -714,11 +725,27 @@ async function cmdEvidence(args: readonly string[]): Promise<void> {
   }
   if (parsed.mode === 'verify') {
     try {
-      const bytes = statSync(parsed.filePath).size;
-      if (bytes > MAX_REPRODUCTION_BUNDLE_BYTES) {
-        throw new Error(`bundle exceeds ${MAX_REPRODUCTION_BUNDLE_BYTES} bytes`);
+      const descriptor = openSync(parsed.filePath, 'r');
+      let serialized: Buffer;
+      try {
+        if (!fstatSync(descriptor).isFile()) throw new Error('bundle must be a regular file');
+        const chunks: Buffer[] = [];
+        let bytes = 0;
+        while (bytes <= MAX_REPRODUCTION_BUNDLE_BYTES) {
+          const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, MAX_REPRODUCTION_BUNDLE_BYTES + 1 - bytes));
+          const count = readSync(descriptor, chunk, 0, chunk.length, null);
+          if (count === 0) break;
+          chunks.push(chunk.subarray(0, count));
+          bytes += count;
+        }
+        if (bytes > MAX_REPRODUCTION_BUNDLE_BYTES) {
+          throw new Error(`bundle exceeds ${MAX_REPRODUCTION_BUNDLE_BYTES} bytes`);
+        }
+        serialized = Buffer.concat(chunks, bytes);
+      } finally {
+        closeSync(descriptor);
       }
-      const bundle = JSON.parse(readFileSync(parsed.filePath, 'utf8')) as unknown;
+      const bundle = JSON.parse(serialized.toString('utf8')) as unknown;
       const result = verifyMcpReproduction(bundle);
       console.log(JSON.stringify(result, null, 2));
       if (!result.valid) process.exitCode = 1;

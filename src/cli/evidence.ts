@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { arch, platform, release } from 'node:os';
-import { sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -49,6 +49,21 @@ export type ReproductionFailureCode =
   | 'GATEWAY_EXIT_FAILED'
   | 'SELF_CHECK_FAILED'
   | 'INTERNAL_ERROR';
+
+const REPRODUCTION_FAILURE_CODES: readonly ReproductionFailureCode[] = [
+  'PACKAGE_METADATA_UNAVAILABLE',
+  'RUNTIME_MANIFEST_UNAVAILABLE',
+  'GATEWAY_INITIALIZATION_FAILED',
+  'CATALOG_VALIDATION_FAILED',
+  'CAPABILITY_CAPTURE_FAILED',
+  'BYPASS_DENIAL_FAILED',
+  'UNAUTHORIZED_SIDE_EFFECT',
+  'RECEIPT_CHAIN_FAILED',
+  'PRIVATE_VALUE_VISIBLE',
+  'GATEWAY_EXIT_FAILED',
+  'SELF_CHECK_FAILED',
+  'INTERNAL_ERROR',
+] as const;
 
 export interface ReproductionRuntimeManifest {
   readonly executionForm: 'compiled-javascript' | 'typescript-source';
@@ -144,27 +159,33 @@ function packageIdentity(): { name: string; version: string } {
   return { name: value.name, version: value.version };
 }
 
-const RUNTIME_COMPONENTS = [
-  ['src/cli/evidence.ts', 'dist/cli/evidence.js'],
-  ['src/cli/mcp-demo.ts', 'dist/cli/mcp-demo.js'],
-  ['src/mcp/gateway.ts', 'dist/mcp/gateway.js'],
-  ['src/mcp/flow.ts', 'dist/mcp/flow.js'],
-  ['src/mcp/destination.ts', 'dist/mcp/destination.js'],
-  ['src/mcp/tool-result.ts', 'dist/mcp/tool-result.js'],
-  ['src/virtual-context/store.ts', 'dist/virtual-context/store.js'],
-] as const;
+function runtimeFiles(root: string, directory: 'src' | 'dist', extension: '.ts' | '.js'): string[] {
+  const files: string[] = [];
+  const visit = (current: string): void => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const absolute = join(current, entry.name);
+      if (entry.isDirectory()) visit(absolute);
+      else if (entry.isFile() && entry.name.endsWith(extension)) {
+        files.push(relative(root, absolute).split(sep).join('/'));
+      }
+    }
+  };
+  visit(join(root, directory));
+  return files.sort();
+}
 
 function runtimeManifest(): ReproductionRuntimeManifest {
   const modulePath = fileURLToPath(import.meta.url);
   const compiled = modulePath.includes(`${sep}dist${sep}cli${sep}`);
-  const root = new URL('../../', import.meta.url);
+  const rootUrl = new URL('../../', import.meta.url);
+  const root = fileURLToPath(rootUrl);
   const paths = [
-    ...RUNTIME_COMPONENTS.map(([source, built]) => compiled ? built : source),
+    ...runtimeFiles(root, compiled ? 'dist' : 'src', compiled ? '.js' : '.ts'),
     'bin/cli.js',
     'package.json',
   ];
   const files = paths.map((path) => {
-    const absolute = fileURLToPath(new URL(path, root));
+    const absolute = join(root, path);
     if (!existsSync(absolute)) throw new Error(`runtime manifest file is unavailable: ${path}`);
     return { path, sha256: sha256(readFileSync(absolute)) };
   });
@@ -444,7 +465,13 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
   let bypassesDenied: number | null = null;
   let privateValuesVisible: number | null = null;
   const result = (): ReproductionVerification => ({
-    valid: Object.values(checks).slice(0, -1).every(Boolean) && errors.length === 0,
+    valid: checks.schema &&
+      checks.checksum &&
+      checks.receiptChain &&
+      checks.reportedResults &&
+      checks.runtimeManifest &&
+      checks.relationshipDeclared &&
+      errors.length === 0,
     errors,
     warnings,
     checks,
@@ -462,9 +489,13 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
       'passed', 'relationship', 'environment', 'package', 'runtime', 'summary', 'denials',
       'security', 'receiptVerifier', 'receipts', 'failure', 'limitations', 'integrity',
     ] as const;
-    if (!exactKeys(value, topKeys, [], 'bundle', errors)) return result();
-    const bundle = value as unknown as McpReproductionBundle;
+    if (!isRecord(value)) {
+      errors.push('bundle must be an object');
+      return result();
+    }
     const schemaErrors = errors.length;
+    exactKeys(value, topKeys, [], 'bundle', errors);
+    const bundle = value as unknown as McpReproductionBundle;
     if (bundle.schemaVersion !== 1) errors.push('unsupported schemaVersion');
     if (bundle.evidenceLevel !== 'self-contained-protocol-reproduction') errors.push('invalid evidenceLevel');
     if (bundle.kind !== 'mcp-value-opaque-flow-reproduction') errors.push('invalid kind');
@@ -474,7 +505,9 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
     ] as const) {
       if (typeof dateValue !== 'string' || !Number.isFinite(Date.parse(dateValue))) errors.push(`invalid ${label}`);
     }
-    if (bundle.passed !== true || bundle.failure !== null) errors.push('reproduction did not pass');
+    const passedBundle = bundle.passed === true;
+    const failedBundle = bundle.passed === false;
+    if (!passedBundle && !failedBundle) errors.push('passed must be a boolean');
     checks.relationshipDeclared = REPRODUCTION_RELATIONSHIPS.includes(bundle.relationship);
     if (!checks.relationshipDeclared) errors.push('invalid relationship');
 
@@ -494,8 +527,8 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
       if (!['compiled-javascript', 'typescript-source'].includes(String(bundle.runtime.executionForm))) {
         errors.push('invalid runtime.executionForm');
       }
-      if (!Array.isArray(bundle.runtime.files) || bundle.runtime.files.length !== 9) {
-        errors.push('runtime manifest must contain exactly 9 files');
+      if (!Array.isArray(bundle.runtime.files) || bundle.runtime.files.length < 1 || bundle.runtime.files.length > 250) {
+        errors.push('runtime manifest must contain 1 to 250 files');
       } else {
         for (const [index, file] of bundle.runtime.files.entries()) {
           if (!exactKeys(file, ['path', 'sha256'], [], `runtime.files[${index}]`, errors)) continue;
@@ -515,38 +548,70 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
         ? bundle.summary.bypassesDenied : null;
       privateValuesVisible = typeof bundle.summary.privateValuesVisible === 'number'
         ? bundle.summary.privateValuesVisible : null;
+      if (typeof bundle.summary.durationMs !== 'number' || !Number.isFinite(bundle.summary.durationMs) || bundle.summary.durationMs < 0) {
+        errors.push('summary.durationMs must be a finite non-negative number');
+      }
     }
     const expectedDenials = [
       'direct-destination', 'direct-query', 'artifact-read', 'forged-capability',
       'operation-override', 'projection-override', 'fixed-predicate-override',
       'destination-argument-override',
     ];
-    if (!Array.isArray(bundle.denials) || bundle.denials.length !== expectedDenials.length) {
-      errors.push('bundle must contain exactly 8 denial records');
-    } else {
-      for (const [index, denial] of bundle.denials.entries()) {
-        if (!exactKeys(denial, ['id', 'outcome'], [], `denials[${index}]`, errors)) continue;
-        if (denial.id !== expectedDenials[index] || denial.outcome !== 'denied') {
-          errors.push(`denials[${index}] is invalid`);
+    if (passedBundle) {
+      if (bundle.failure !== null) errors.push('passed bundle must not contain a failure');
+      if (!Array.isArray(bundle.denials) || bundle.denials.length !== expectedDenials.length) {
+        errors.push('passed bundle must contain exactly 8 denial records');
+      } else {
+        for (const [index, denial] of bundle.denials.entries()) {
+          if (!exactKeys(denial, ['id', 'outcome'], [], `denials[${index}]`, errors)) continue;
+          if (denial.id !== expectedDenials[index] || denial.outcome !== 'denied') {
+            errors.push(`denials[${index}] is invalid`);
+          }
+        }
+      }
+      if (exactKeys(bundle.security, [
+        'exactPersistedProjection', 'processSeparationValid', 'oneDispatchPerFlow',
+        'receiptChainValid', 'commitmentsDistinctAcrossRepetitions',
+      ], [], 'security', errors)) {
+        for (const field of Object.keys(bundle.security) as Array<keyof typeof bundle.security>) {
+          if (bundle.security[field] !== true) errors.push(`security check failed: ${field}`);
+        }
+      }
+      if (exactKeys(bundle.receiptVerifier, ['algorithm', 'publicKey', 'signingKeyId'], [], 'receiptVerifier', errors)) {
+        if (
+          bundle.receiptVerifier.algorithm !== 'Ed25519' ||
+          typeof bundle.receiptVerifier.publicKey !== 'string' ||
+          !hash(bundle.receiptVerifier.signingKeyId)
+        ) errors.push('invalid receiptVerifier');
+      }
+    } else if (failedBundle) {
+      if (!exactKeys(bundle.failure, ['code'], [], 'failure', errors)) {
+        errors.push('failed bundle must contain a failure code');
+      } else if (!REPRODUCTION_FAILURE_CODES.includes(bundle.failure.code)) {
+        errors.push('failed bundle contains an invalid failure code');
+      }
+      if (!Array.isArray(bundle.denials) || bundle.denials.length !== 0) {
+        errors.push('failed bundle denials must be empty');
+      }
+      if (!Array.isArray(bundle.receipts) || bundle.receipts.length !== 0) {
+        errors.push('failed bundle receipts must be empty');
+      }
+      if (bundle.receiptVerifier !== null) errors.push('failed bundle receiptVerifier must be null');
+      if (exactKeys(bundle.security, [
+        'exactPersistedProjection', 'processSeparationValid', 'oneDispatchPerFlow',
+        'receiptChainValid', 'commitmentsDistinctAcrossRepetitions',
+      ], [], 'security', errors)) {
+        for (const field of Object.keys(bundle.security) as Array<keyof typeof bundle.security>) {
+          if (bundle.security[field] !== null) errors.push(`failed bundle security.${field} must be null`);
+        }
+      }
+      for (const [field, metric] of Object.entries(bundle.summary)) {
+        if (field !== 'durationMs' && metric !== null) {
+          errors.push(`failed bundle summary.${field} must be null`);
         }
       }
     }
-    if (exactKeys(bundle.security, [
-      'exactPersistedProjection', 'processSeparationValid', 'oneDispatchPerFlow',
-      'receiptChainValid', 'commitmentsDistinctAcrossRepetitions',
-    ], [], 'security', errors)) {
-      for (const field of Object.keys(bundle.security) as Array<keyof typeof bundle.security>) {
-        if (bundle.security[field] !== true) errors.push(`security check failed: ${field}`);
-      }
-    }
     if (!stringArray(bundle.limitations, REPRODUCTION_LIMITATIONS)) errors.push('limitations do not match the reviewed boundary');
-    if (exactKeys(bundle.receiptVerifier, ['algorithm', 'publicKey', 'signingKeyId'], [], 'receiptVerifier', errors)) {
-      if (
-        bundle.receiptVerifier.algorithm !== 'Ed25519' ||
-        typeof bundle.receiptVerifier.publicKey !== 'string' ||
-        !hash(bundle.receiptVerifier.signingKeyId)
-      ) errors.push('invalid receiptVerifier');
-    }
     if (exactKeys(bundle.integrity, ['algorithm', 'scope', 'checksum', 'authenticated'], [], 'integrity', errors)) {
       if (
         bundle.integrity.algorithm !== 'SHA-256' ||
@@ -572,38 +637,40 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
     if (!checks.runtimeManifest) errors.push('runtime manifest does not match this verifier package');
 
     const receipts = Array.isArray(bundle.receipts) ? bundle.receipts : [];
-    if (receipts.length !== 30) {
-      errors.push('expected exactly 30 receipts before cryptographic verification');
-    } else {
-      const shapeErrors = errors.length;
-      const shaped = receipts.every((receipt, index) => validReceiptShape(receipt, index, errors));
-      if (shaped && errors.length === shapeErrors && isRecord(bundle.receiptVerifier)) {
-        const verifier = bundle.receiptVerifier as McpOpaqueFlowReceiptVerifier;
-        let previousReceiptHash = '0'.repeat(64);
-        checks.receiptChain = receipts.every((receipt, index) => {
-          const valid = verifyMcpOpaqueFlowReceipt(receipt, verifier) &&
-            receipt.sequence === index + 1 &&
-            receipt.previousReceiptHash === previousReceiptHash;
-          previousReceiptHash = receipt.receiptHash;
-          return valid;
-        });
+    if (passedBundle) {
+      if (receipts.length !== 30) {
+        errors.push('expected exactly 30 receipts before cryptographic verification');
+      } else {
+        const shapeErrors = errors.length;
+        const shaped = receipts.every((receipt, index) => validReceiptShape(receipt, index, errors));
+        if (shaped && errors.length === shapeErrors && isRecord(bundle.receiptVerifier)) {
+          const verifier = bundle.receiptVerifier as McpOpaqueFlowReceiptVerifier;
+          let previousReceiptHash = '0'.repeat(64);
+          checks.receiptChain = receipts.every((receipt, index) => {
+            const valid = verifyMcpOpaqueFlowReceipt(receipt, verifier) &&
+              receipt.sequence === index + 1 &&
+              receipt.previousReceiptHash === previousReceiptHash;
+            previousReceiptHash = receipt.receiptHash;
+            return valid;
+          });
+        }
+        if (!checks.receiptChain) errors.push('receipt signature or chain verification failed');
       }
-      if (!checks.receiptChain) errors.push('receipt signature or chain verification failed');
-    }
 
-    checks.reportedResults = repeatedFlowCalls === 30 &&
-      bundle.summary.destinationAcceptedCalls === 30 &&
-      bundle.summary.bypassAttempts === 8 &&
-      bypassesDenied === 8 &&
-      bundle.summary.privateValuesScanned === 401 &&
-      privateValuesVisible === 0 &&
-      bundle.denials.length === 8 &&
-      bundle.security.exactPersistedProjection === true &&
-      bundle.security.processSeparationValid === true &&
-      bundle.security.oneDispatchPerFlow === true &&
-      bundle.security.receiptChainValid === true &&
-      bundle.security.commitmentsDistinctAcrossRepetitions === true;
-    if (!checks.reportedResults) errors.push('reported reproduction checks do not pass');
+      checks.reportedResults = repeatedFlowCalls === 30 &&
+        bundle.summary.destinationAcceptedCalls === 30 &&
+        bundle.summary.bypassAttempts === 8 &&
+        bypassesDenied === 8 &&
+        bundle.summary.privateValuesScanned === 401 &&
+        privateValuesVisible === 0 &&
+        bundle.denials.length === 8 &&
+        bundle.security.exactPersistedProjection === true &&
+        bundle.security.processSeparationValid === true &&
+        bundle.security.oneDispatchPerFlow === true &&
+        bundle.security.receiptChainValid === true &&
+        bundle.security.commitmentsDistinctAcrossRepetitions === true;
+      if (!checks.reportedResults) errors.push('reported reproduction checks do not pass');
+    }
     return result();
   } catch {
     errors.push('bundle validation raised an internal error');

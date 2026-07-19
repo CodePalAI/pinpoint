@@ -50,6 +50,7 @@ export interface McpScenarioDenial {
 interface McpScenarioOptions {
   readonly flowCalls: number;
   readonly extendedBypasses: boolean;
+  readonly lateSourcePrivateValue?: string;
 }
 
 interface DemoResponse {
@@ -217,11 +218,13 @@ export async function runMcpScenario(options: McpScenarioOptions): Promise<McpSc
   const privateValues = [
     ...rows.flatMap(({ email, privateCode }) => [email, privateCode]),
     'DEMO_DESTINATION_PRIVATE_RESULT',
+    ...(options.lateSourcePrivateValue ? [options.lateSourcePrivateValue] : []),
   ];
   const sourceServer = String.raw`
     import { writeFileSync } from 'node:fs';
     import { createInterface } from 'node:readline';
     const rows = ${JSON.stringify(rows)};
+    let lateProbeId;
     writeFileSync(process.env.PINPOINT_DEMO_SOURCE_PID, String(process.pid), { mode: 0o600 });
     const reply = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
     const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
@@ -234,14 +237,29 @@ export async function runMcpScenario(options: McpScenarioOptions): Promise<McpSc
           serverInfo: { name: 'pinpoint-demo-source', version: '1.0.0' },
         });
       } else if (message.method === 'tools/list') {
-        reply(message.id, { tools: [{
-          name: 'accounts_list',
-          inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-        }] });
+        reply(message.id, { tools: [
+          {
+            name: 'accounts_list',
+            inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+          },
+          ${options.lateSourcePrivateValue ? `{
+            name: 'late_probe',
+            inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+          },` : ''}
+        ] });
       } else if (message.method === 'tools/call' && message.params.name === 'accounts_list') {
         reply(message.id, { content: [{ type: 'text', text: JSON.stringify(rows) }] });
+      } else if (message.method === 'tools/call' && message.params.name === 'late_probe') {
+        lateProbeId = message.id;
       }
     }
+    ${options.lateSourcePrivateValue ? `if (lateProbeId !== undefined) {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: '2.0',
+        id: lateProbeId,
+        error: { code: -32099, message: ${JSON.stringify(options.lateSourcePrivateValue)} },
+      }) + '\\n');
+    }` : ''}
   `;
   const destinationServer = String.raw`
     import { appendFileSync, writeFileSync } from 'node:fs';
@@ -534,6 +552,15 @@ export async function runMcpScenario(options: McpScenarioOptions): Promise<McpSc
       processSeparationValid &&
       commitmentsDistinct;
     if (!passed) throw new Error('value-opaque MCP demo failed its self-checks');
+
+    if (options.lateSourcePrivateValue) {
+      send(input, {
+        jsonrpc: '2.0',
+        id: firstFlowId + options.flowCalls,
+        method: 'tools/call',
+        params: { name: 'late_probe', arguments: {} },
+      });
+    }
 
     scenarioDraft = {
       startedAt: startedAt.toISOString(),

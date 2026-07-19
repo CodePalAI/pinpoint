@@ -47,7 +47,7 @@ const publicEntries = [
 const packageBudget = {
   maxFiles: 210,
   maxPackedBytes: 450_000,
-  maxUnpackedBytes: 1_310_000,
+  maxUnpackedBytes: 1_320_000,
 };
 
 try {
@@ -232,6 +232,20 @@ try {
   ]) {
     if (!doctor.includes(expected)) throw new Error(`installed doctor is missing: ${expected}`);
   }
+  const stdoutReproduction = JSON.parse(run(process.execPath, [
+    cli,
+    'evidence',
+    'reproduce',
+    '--relationship',
+    'maintainer',
+  ]));
+  if (
+    stdoutReproduction.passed !== true ||
+    stdoutReproduction.summary?.repeatedFlowCalls !== 30 ||
+    stdoutReproduction.denials?.length !== 8
+  ) {
+    throw new Error('installed evidence command did not emit valid stdout JSON');
+  }
   const reproductionPath = join(temporary, 'opaque-flow-reproduction.json');
   run(process.execPath, [
     cli,
@@ -288,6 +302,30 @@ try {
   if (!readFileSync(reproductionPath).equals(originalReproduction)) {
     throw new Error('installed evidence command changed an existing bundle');
   }
+  const malformedBundle = join(temporary, 'malformed-reproduction.json');
+  writeFileSync(malformedBundle, '{', 'utf8');
+  let malformedRejected = false;
+  try {
+    run(process.execPath, [cli, 'evidence', 'verify', malformedBundle]);
+  } catch (cause) {
+    const stderr = cause != null && typeof cause === 'object' && 'stderr' in cause
+      ? String(cause.stderr)
+      : '';
+    malformedRejected = /could not verify evidence bundle/.test(stderr);
+  }
+  if (!malformedRejected) throw new Error('installed evidence verifier accepted malformed JSON');
+  const oversizedBundle = join(temporary, 'oversized-reproduction.json');
+  writeFileSync(oversizedBundle, Buffer.alloc(256 * 1024 + 1));
+  let oversizedRejected = false;
+  try {
+    run(process.execPath, [cli, 'evidence', 'verify', oversizedBundle]);
+  } catch (cause) {
+    const stderr = cause != null && typeof cause === 'object' && 'stderr' in cause
+      ? String(cause.stderr)
+      : '';
+    oversizedRejected = /bundle exceeds 262144 bytes/.test(stderr);
+  }
+  if (!oversizedRejected) throw new Error('installed evidence verifier accepted an oversized bundle');
   const installedReadme = join(
     temporary,
     'node_modules',

@@ -1,12 +1,12 @@
 name: Evidence replication
-description: Submit an independent protocol, host, security, or optimizer replication with content-free receipts.
+description: Submit a protocol, host, security, or optimizer replication for independence review.
 title: "replication: "
 labels: [benchmark, replication]
 body:
   - type: markdown
     attributes:
       value: |
-        Fast path: run `pinpoint evidence reproduce --relationship unaffiliated --out pinpoint-opaque-flow-reproduction.json`, then `pinpoint evidence verify pinpoint-opaque-flow-reproduction.json`. Follow `benchmarks/REPRODUCING.md`, keep failed runs, remove credentials and private data, and attach labeled JSON bundles rather than screenshots alone. Relationship is self-declared and will be reviewed.
+        Fast path: run `pinpoint evidence reproduce --relationship unaffiliated --out pinpoint-opaque-flow-reproduction.json`, then `pinpoint evidence verify pinpoint-opaque-flow-reproduction.json`. Follow `benchmarks/REPRODUCING.md`, keep failed runs, remove credentials and private data, and attach labeled JSON bundles rather than screenshots alone. Relationship is self-declared and will be reviewed. Checksum and receipt-verifier success do not authenticate the operator.
   - type: input
     id: commit
     attributes:

@@ -8,6 +8,7 @@ import {
   type McpReproductionBundle,
 } from '../src/cli/evidence.js';
 import { canonicalJson } from '../src/mcp/flow.js';
+import { runMcpScenario } from '../src/cli/mcp-demo.js';
 
 function recomputeChecksum(bundle: McpReproductionBundle): void {
   const { integrity: _integrity, ...unsigned } = bundle;
@@ -148,5 +149,13 @@ describe('packaged opaque-flow reproduction bundle', () => {
     expect(verifyMcpReproduction(root).errors).toContain(
       'bundle exceeds JSON depth, node, string, or collection bounds',
     );
+  });
+
+  it('covers shutdown-time source output in the transcript scan', async () => {
+    await expect(runMcpScenario({
+      flowCalls: 1,
+      extendedBypasses: false,
+      lateSourcePrivateValue: 'DEMO_LATE_SHUTDOWN_PRIVATE_VALUE',
+    })).rejects.toThrow('value-opaque MCP demo exposed a private fixture value');
   });
 });

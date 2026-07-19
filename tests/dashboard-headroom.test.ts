@@ -17,11 +17,13 @@ function stats(overrides: {
   output: number;
   saved: number;
   cost?: number;
+  agent?: string;
+  model?: string;
 }) {
   return {
     agent_usage: {
       agents: [{
-        agent: 'copilot',
+        agent: overrides.agent ?? 'copilot',
         label: 'GitHub Copilot',
         source: 'client',
         requests: overrides.requests,
@@ -29,7 +31,7 @@ function stats(overrides: {
         after_tokens: overrides.after,
         output_tokens: overrides.output,
         tokens_saved: overrides.saved,
-        models: { 'gpt-5.3-codex': overrides.requests },
+        models: { [overrides.model ?? 'gpt-5.3-codex']: overrides.requests },
         providers: { openai: overrides.requests },
         request_id: 'sensitive-request-id',
         tags: { private: 'sensitive-tag-value' },
@@ -82,6 +84,35 @@ afterEach(() => {
 });
 
 describe('HeadroomDashboardAdapter', () => {
+  it('recovers the model from a sole provider-labeled row on a dedicated proxy', async () => {
+    const events: DashboardEvent[] = [];
+    const adapter = new HeadroomDashboardAdapter({
+      baseUrl: 'http://127.0.0.1:8787',
+      attribution: 'dedicated',
+      observer: { onEvent: (event) => { events.push(event); } },
+      fetch: queuedFetch([
+        stats({
+          requests: 2,
+          before: 4_000,
+          after: 4_000,
+          output: 80,
+          saved: 0,
+          agent: 'openai',
+          model: 'gpt-4o',
+        }),
+      ]),
+    });
+
+    await adapter.poll();
+
+    expect(events[0]).toMatchObject({
+      model: 'gpt-4o',
+      requests: { value: 2 },
+      tokensText: { value: 4_000 },
+      outputTokens: { value: 80 },
+    });
+  });
+
   it('samples fast enough to observe short-lived wrapped requests', async () => {
     vi.useFakeTimers();
     const fetchImpl = vi.fn(queuedFetch([

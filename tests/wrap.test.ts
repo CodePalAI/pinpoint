@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { spawn } from 'node:child_process';
 import {
   chmodSync,
   copyFileSync,
@@ -19,7 +20,7 @@ import {
   knownAgents,
   type LaunchAgent,
 } from '../src/wrap/agents.js';
-import { runWrap, copilotPreflight } from '../src/wrap/runner.js';
+import { runWrap, copilotPreflight, terminateChildProcessTree } from '../src/wrap/runner.js';
 
 const B = 'http://127.0.0.1:8788';
 
@@ -160,6 +161,21 @@ function fakeBin(): { dir: string; wrapperScript: string; argsFile: string; rest
 }
 
 describe('wrap copilot → headroom delegation', () => {
+  it('escalates when a delegated process ignores graceful termination', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'pinpoint-wrap-termination-'));
+    const script = join(directory, 'ignore-termination.cjs');
+    writeFileSync(script, `process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);\n`);
+    const child = spawn(process.execPath, [script], {
+      stdio: 'ignore',
+      detached: process.platform !== 'win32',
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    await terminateChildProcessTree(child, 'SIGTERM', 50);
+
+    expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+  });
+
   it('delegates with --subscription and injects the default model when omitted', async () => {
     const fake = fakeBin();
     try {

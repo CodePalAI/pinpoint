@@ -35,6 +35,8 @@ import {
   selectVisibleEvidenceEvents,
   selectVisibleTokenLanes,
 } from './evidence.js';
+import { clearDashboardToken, readDashboardToken } from './session-auth.js';
+import { compareDashboardSnapshots } from './snapshot-sync.js';
 
 import './styles.css';
 
@@ -54,6 +56,9 @@ interface AppState {
   retryMs: number;
   retryTimer: number | null;
   streamController: AbortController | null;
+  reconcileTimer: number | null;
+  lastSynchronizedAt: number | null;
+  reconcileInFlight: boolean;
   requestQuery: string;
   requestProvider: RequestProviderFilter;
   requestOutcome: RequestOutcomeFilter;
@@ -67,6 +72,19 @@ interface AppState {
 
 const app = document.querySelector<HTMLDivElement>('#app') ?? (() => {
   throw new Error('dashboard root not found');
+})();
+
+const unavailableTokenStorage = {
+  getItem: () => null,
+  setItem: () => undefined,
+  removeItem: () => undefined,
+};
+const tokenStorage = (() => {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return unavailableTokenStorage;
+  }
 })();
 
 const views: readonly { readonly id: ViewName; readonly label: string; readonly icon: IconNode }[] = [
@@ -87,6 +105,9 @@ const state: AppState = {
   retryMs: 1_000,
   retryTimer: null,
   streamController: null,
+  reconcileTimer: null,
+  lastSynchronizedAt: null,
+  reconcileInFlight: false,
   requestQuery: '',
   requestProvider: 'all',
   requestOutcome: 'all',
@@ -102,10 +123,9 @@ let pendingSnapshot: DashboardSnapshot | null = null;
 let snapshotScheduled = false;
 
 function readToken(): string | null {
-  const hash = new URLSearchParams(location.hash.replace(/^#/, ''));
-  const token = hash.get('access_token');
-  if (token) history.replaceState(null, '', `${location.pathname}${location.search}`);
-  return token;
+  const result = readDashboardToken(location.hash, tokenStorage);
+  if (result.consumedHash) history.replaceState(null, '', `${location.pathname}${location.search}`);
+  return result.token;
 }
 
 function readView(): ViewName {
@@ -312,10 +332,12 @@ function describeEvent(event: DashboardEvent): TapeEntry {
     };
   }
   return {
-    title: event.healthy ? 'Copilot telemetry attached' : 'Copilot telemetry unavailable',
-    detail: `${event.model ?? 'Unknown model'} · ${event.attribution === 'shared' ? 'shared proxy attribution' : 'dedicated session'}`,
-    measure: `${formatNumber(event.tokensSaved.value)} tokens saved`,
-    basis: event.tokensSaved.basis,
+    title: event.requests.value > 0
+      ? `Copilot session reached ${formatNumber(event.requests.value)} request${event.requests.value === 1 ? '' : 's'}`
+      : event.healthy ? 'Copilot usage updated' : 'Copilot telemetry unavailable',
+    detail: `${event.model ?? 'Model not reported'} · ${event.attribution === 'shared' ? 'shared proxy attribution' : 'dedicated session'}`,
+    measure: `${formatNumber(event.tokensText.value)} → ${formatNumber(event.tokensSent.value)} input tokens`,
+    basis: `${formatNumber(event.outputTokens.value)} output · ${formatNumber(event.tokensSaved.value)} saved`,
     tone: event.healthy ? 'info' : 'attention',
     icon: TerminalSquare,
   };
@@ -366,8 +388,8 @@ function updateChrome(snapshot: DashboardSnapshot | null): void {
   const label = app.querySelector<HTMLElement>('[data-session-label]');
   if (label) label.textContent = statusLabel();
   const time = app.querySelector<HTMLElement>('[data-session-time]');
-  if (time) time.textContent = snapshot
-    ? `Updated ${formatTime(snapshot.generatedAt)}`
+  if (time) time.textContent = snapshot && state.lastSynchronizedAt != null
+    ? `${formatNumber(snapshot.requests)} request${snapshot.requests === 1 ? '' : 's'} · synced ${formatTime(new Date(state.lastSynchronizedAt).toISOString())}`
     : 'Waiting for local telemetry';
   for (const button of app.querySelectorAll<HTMLButtonElement>('[data-view]')) {
     const selected = button.dataset.view === state.view;
@@ -1033,6 +1055,56 @@ async function api<T>(path: string, signal?: AbortSignal): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function acceptSnapshot(snapshot: DashboardSnapshot): boolean {
+  const comparison = compareDashboardSnapshots(state.snapshot, snapshot);
+  if (comparison === 'rejected') return false;
+  const connectionChanged = state.connection !== 'live' || state.error != null;
+  if (comparison === 'changed') state.snapshot = snapshot;
+  state.connection = 'live';
+  state.error = null;
+  state.retryMs = 1_000;
+  state.lastSynchronizedAt = Date.now();
+  return comparison === 'changed' || connectionChanged;
+}
+
+async function reconcileSnapshot(): Promise<void> {
+  if (document.hidden || !state.token || state.reconcileInFlight) return;
+  state.reconcileInFlight = true;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 1_500);
+  try {
+    const snapshot = await api<DashboardSnapshot>('/api/v1/snapshot', controller.signal);
+    if (acceptSnapshot(snapshot)) render();
+    else updateChrome(state.snapshot);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === 'unauthorized' || message === 'missing_access_token') {
+      clearDashboardToken(tokenStorage);
+      state.token = null;
+      state.connection = 'unauthorized';
+      state.error = null;
+      render();
+      return;
+    }
+    const staleFor = state.lastSynchronizedAt == null
+      ? Number.POSITIVE_INFINITY
+      : Date.now() - state.lastSynchronizedAt;
+    if (state.connection === 'live' && staleFor >= 8_000) {
+      state.connection = 'reconnecting';
+      state.error = 'Live reconciliation paused. Recorded evidence remains visible while Pinpoint reconnects.';
+      render();
+    }
+  } finally {
+    window.clearTimeout(timeout);
+    state.reconcileInFlight = false;
+  }
+}
+
+function startReconciliation(): void {
+  if (state.reconcileTimer != null) return;
+  state.reconcileTimer = window.setInterval(() => void reconcileSnapshot(), 2_000);
+}
+
 async function loadHistory(selectLatest = false): Promise<void> {
   try {
     const payload = await api<{ sessions: DashboardHistorySession[] }>('/api/v1/history');
@@ -1128,12 +1200,10 @@ async function readSse(response: Response, signal: AbortSignal): Promise<void> {
           queueMicrotask(() => {
             snapshotScheduled = false;
             if (signal.aborted || !pendingSnapshot) return;
-            state.snapshot = pendingSnapshot;
+            const changed = acceptSnapshot(pendingSnapshot);
             pendingSnapshot = null;
-            state.connection = 'live';
-            state.error = null;
-            state.retryMs = 1_000;
-            render();
+            if (changed) render();
+            else updateChrome(state.snapshot);
           });
         }
       }
@@ -1170,6 +1240,8 @@ async function connect(): Promise<void> {
     if (controller.signal.aborted) return;
     const message = error instanceof Error ? error.message : String(error);
     if (message === 'unauthorized' || message === 'missing_access_token') {
+      clearDashboardToken(tokenStorage);
+      state.token = null;
       state.connection = 'unauthorized';
       state.error = null;
       render();
@@ -1186,7 +1258,20 @@ document.addEventListener('visibilitychange', () => {
     state.retryTimer = null;
     return;
   }
+  void reconcileSnapshot();
   if (state.connection !== 'live') void connect();
+});
+
+window.addEventListener('focus', () => void reconcileSnapshot());
+window.addEventListener('online', () => {
+  void reconcileSnapshot();
+  if (state.connection !== 'live') void connect();
+});
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) {
+    void reconcileSnapshot();
+    void connect();
+  }
 });
 
 window.addEventListener('popstate', () => {
@@ -1235,4 +1320,5 @@ document.addEventListener('keydown', (event) => {
 mountShell();
 bindInteractions();
 render();
+startReconciliation();
 void connect();

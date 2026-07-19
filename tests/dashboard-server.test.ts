@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { DashboardJournal } from '../src/dashboard/journal.js';
 import { createDashboardServer, type DashboardServer } from '../src/dashboard/server.js';
-import type { DashboardProviderRouteEvent } from '../src/dashboard/types.js';
+import type { DashboardProviderRouteEvent, DashboardSnapshot } from '../src/dashboard/types.js';
 
 const directories: string[] = [];
 const servers: DashboardServer[] = [];
@@ -91,7 +91,110 @@ function request(
   });
 }
 
+function streamSnapshots(
+  port: number,
+  token: string,
+  count: number,
+  onSnapshot?: (snapshot: DashboardSnapshot, index: number) => void,
+): Promise<DashboardSnapshot[]> {
+  return new Promise((resolveSnapshots, rejectSnapshots) => {
+    const snapshots: DashboardSnapshot[] = [];
+    let buffer = '';
+    const timeout = setTimeout(() => {
+      req.destroy();
+      rejectSnapshots(new Error(`timed out after ${snapshots.length} snapshots`));
+    }, 3_000);
+    const req = http.request({
+      host: '127.0.0.1',
+      port,
+      path: '/api/v1/stream',
+      headers: { authorization: `Bearer ${token}` },
+    }, (response) => {
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => {
+        buffer += chunk;
+        for (;;) {
+          const boundary = buffer.indexOf('\n\n');
+          if (boundary < 0) break;
+          const frame = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          const data = frame.split('\n').find((line) => line.startsWith('data: '));
+          if (!data || !frame.includes('event: snapshot')) continue;
+          const snapshot = JSON.parse(data.slice(6)) as DashboardSnapshot;
+          snapshots.push(snapshot);
+          onSnapshot?.(snapshot, snapshots.length - 1);
+          if (snapshots.length === count) {
+            clearTimeout(timeout);
+            req.destroy();
+            resolveSnapshots(snapshots);
+            return;
+          }
+        }
+      });
+    });
+    req.once('error', (error) => {
+      clearTimeout(timeout);
+      if (snapshots.length < count) rejectSnapshots(error);
+    });
+    req.end();
+  });
+}
+
 describe('dashboard server', () => {
+  it('pushes every subsequent journal update to an attached dashboard', async () => {
+    const { rootDir, assetsDir, journal } = fixture();
+    const server = createDashboardServer({
+      rootDir,
+      assetsDir,
+      groupId: journal.groupId,
+      port: 0,
+      token: 'stream-token',
+      pollIntervalMs: 100,
+    });
+    servers.push(server);
+    const { port } = await server.listen();
+    let resolveFirst!: () => void;
+    const first = new Promise<void>((resolve) => { resolveFirst = resolve; });
+    const snapshotsPromise = streamSnapshots(port, server.token, 2, (_snapshot, index) => {
+      if (index === 0) resolveFirst();
+    });
+    await first;
+    const metric = (value: number) => ({
+      value,
+      unit: 'tokens' as const,
+      source: 'pinpoint' as const,
+      basis: 'estimate' as const,
+      scope: 'request' as const,
+    });
+    journal.onEvent({
+      schemaVersion: 1,
+      type: 'provider.route',
+      source: 'pinpoint',
+      occurredAt: '2026-07-17T10:00:01.000Z',
+      provider: 'openai',
+      model: 'gpt-test',
+      authMode: 'payg',
+      mode: 'optimize',
+      durationMs: 5,
+      tokensText: metric(50),
+      tokensCompressed: metric(20),
+      tokensSaved: metric(30),
+      reversibleCount: 0,
+      stages: [{
+        stage: 'virtual',
+        applied: true,
+        reason: 'applied',
+        tokensText: 50,
+        tokensCompressed: 20,
+        tokensSaved: 30,
+        basis: 'estimate',
+      }],
+    });
+    const snapshots = await snapshotsPromise;
+    expect(snapshots.map(({ requests }) => requests)).toEqual([1, 2]);
+    expect(snapshots.map(({ eventCount }) => eventCount)).toEqual([1, 2]);
+  });
+
   it('serves local assets and authenticated read-only snapshots with hardened headers', async () => {
     const { rootDir, assetsDir, journal } = fixture();
     const server = createDashboardServer({

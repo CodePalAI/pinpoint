@@ -142,16 +142,25 @@ export function createDashboardServer(options: DashboardServerOptions): Dashboar
     response.write(`event: ${event}\ndata: ${JSON.stringify(value)}\n\n`);
   };
 
+  const snapshotSignature = (current: DashboardSnapshot): string => JSON.stringify({
+    state: current.state,
+    requests: current.requests,
+    eventCount: current.eventCount,
+    negativeSavingsRoutes: current.negativeSavingsRoutes,
+    reversibleCount: current.reversibleCount,
+    corruptRecords: current.corruptRecords,
+    tokenLanes: current.tokenLanes,
+    byteLanes: current.byteLanes,
+    mcp: current.mcp,
+    headroom: current.headroom,
+    sources: current.sources,
+    latest: current.recentEvents.at(-1)?.occurredAt ?? null,
+  });
+
   const broadcastIfChanged = (): void => {
     if (clients.size === 0) return;
     const current = snapshot();
-    const signature = JSON.stringify({
-      state: current.state,
-      requests: current.requests,
-      corruptRecords: current.corruptRecords,
-      sources: current.sources,
-      latest: current.recentEvents.at(-1)?.occurredAt ?? null,
-    });
+    const signature = snapshotSignature(current);
     if (signature === lastSignature) return;
     lastSignature = signature;
     for (const client of clients) writeSse(client, 'snapshot', current);
@@ -221,8 +230,13 @@ export function createDashboardServer(options: DashboardServerOptions): Dashboar
           'x-accel-buffering': 'no',
         });
         clients.add(response);
-        writeSse(response, 'snapshot', snapshot());
-        request.once('close', () => clients.delete(response));
+        const initial = snapshot();
+        lastSignature = snapshotSignature(initial);
+        writeSse(response, 'snapshot', initial);
+        const removeClient = (): void => { clients.delete(response); };
+        request.once('close', removeClient);
+        response.once('close', removeClient);
+        response.once('error', removeClient);
         return;
       }
       return sendJson(response, 404, { error: 'not_found' });

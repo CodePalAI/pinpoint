@@ -68,8 +68,10 @@ function readCounters(payload: unknown, attribution: DashboardHeadroomAttributio
   const usage = isRecord(payload.agent_usage) ? payload.agent_usage : {};
   const agents = Array.isArray(usage.agents) ? usage.agents.filter(isRecord) : [];
   const copilot = agents.find((row) => row.agent === 'copilot');
-  let source: Record<string, unknown> | undefined = copilot;
+  const dedicatedAgent = attribution === 'dedicated' && agents.length === 1 ? agents[0] : undefined;
+  let source: Record<string, unknown> | undefined = copilot ?? dedicatedAgent;
   let coverage: DashboardHeadroomCoverage = copilot ? 'copilot-request-logs' : 'unavailable';
+  if (dedicatedAgent && !copilot) coverage = 'aggregate-fallback';
   if (!source && attribution === 'dedicated' && isRecord(usage.totals)) {
     source = usage.totals;
     coverage = 'aggregate-fallback';

@@ -314,15 +314,64 @@ function availableLoopbackPort(): Promise<number> {
 // ── process helpers ─────────────────────────────────────────────────────────
 
 /** Spawn a child with inherited stdio, forward signals, resolve with its exit code. */
+function childExited(child: ChildProcess): boolean {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+function signalChildTree(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (childExited(child)) return;
+  try {
+    if (process.platform !== 'win32' && child.pid != null) process.kill(-child.pid, signal);
+    else child.kill(signal);
+  } catch {
+    try { child.kill(signal); } catch { /* The process already exited. */ }
+  }
+}
+
+function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (childExited(child)) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const finish = (exited: boolean): void => {
+      clearTimeout(timeout);
+      child.off('exit', onExit);
+      resolve(exited);
+    };
+    const onExit = (): void => finish(true);
+    const timeout = setTimeout(() => finish(false), timeoutMs);
+    child.once('exit', onExit);
+  });
+}
+
+export async function terminateChildProcessTree(
+  child: ChildProcess,
+  signal: NodeJS.Signals = 'SIGTERM',
+  graceMs = 3_000,
+): Promise<void> {
+  if (childExited(child)) return;
+  signalChildTree(child, signal);
+  if (await waitForChildExit(child, graceMs)) return;
+  signalChildTree(child, 'SIGKILL');
+  await waitForChildExit(child, Math.max(250, Math.min(graceMs, 1_000)));
+}
+
 function spawnAndWait(
   command: string,
   args: string[],
   env: NodeJS.ProcessEnv,
 ): Promise<number> {
   return new Promise<number>((resolve, reject) => {
-    const child: ChildProcess = spawn(command, args, { stdio: 'inherit', env });
-    const forward = (sig: NodeJS.Signals) => {
-      if (!child.killed) child.kill(sig);
+    const child: ChildProcess = spawn(command, args, {
+      stdio: 'inherit',
+      env,
+      detached: process.platform !== 'win32',
+    });
+    let termination: Promise<void> | null = null;
+    const forward = (signal: NodeJS.Signals) => {
+      if (termination) {
+        signalChildTree(child, 'SIGKILL');
+        return;
+      }
+      termination = terminateChildProcessTree(child, signal);
     };
     const onInt = () => forward('SIGINT');
     const onTerm = () => forward('SIGTERM');

@@ -26,10 +26,32 @@ export function selectVisibleEvidenceEvents(
     : events.findLastIndex(
       (event) => event.type === 'headroom.sample' && isIdleHeadroomSample(event) && event.healthy,
     );
+  const latestHeadroomActivity = new Map<string, number>();
+  events.forEach((event, index) => {
+    if (event.type !== 'headroom.sample' || isIdleHeadroomSample(event)) return;
+    latestHeadroomActivity.set(JSON.stringify([
+      event.requests.value,
+      event.tokensText.value,
+      event.tokensSent.value,
+      event.outputTokens.value,
+      event.tokensSaved.value,
+      event.costSaved?.value ?? null,
+    ]), index);
+  });
 
-  return events.filter(
-    (event, index) => !isIdleHeadroomSample(event) || index === latestHealthyIdleIndex,
-  );
+  return events.filter((event, index) => {
+    if (isIdleHeadroomSample(event)) return index === latestHealthyIdleIndex;
+    if (event.type !== 'headroom.sample') return true;
+    const signature = JSON.stringify([
+      event.requests.value,
+      event.tokensText.value,
+      event.tokensSent.value,
+      event.outputTokens.value,
+      event.tokensSaved.value,
+      event.costSaved?.value ?? null,
+    ]);
+    return latestHeadroomActivity.get(signature) === index;
+  });
 }
 
 export function selectVisibleTokenLanes(

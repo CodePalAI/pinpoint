@@ -49,6 +49,29 @@ function headroomSample(
 }
 
 describe('dashboard evidence visibility', () => {
+  it('collapses metadata-only duplicates but keeps each cumulative request update', () => {
+    const first = headroomSample('2026-07-17T22:24:01.000Z', {
+      model: 'gpt-4o',
+      requests: metric(1, 'requests'),
+      tokensText: metric(1_000, 'tokens'),
+      tokensSent: metric(1_000, 'tokens'),
+      outputTokens: metric(10, 'tokens'),
+    });
+    const duplicate = headroomSample('2026-07-17T22:24:02.000Z', {
+      ...first,
+      occurredAt: '2026-07-17T22:24:02.000Z',
+    });
+    const second = headroomSample('2026-07-17T22:24:03.000Z', {
+      model: 'gpt-4o',
+      requests: metric(2, 'requests'),
+      tokensText: metric(2_100, 'tokens'),
+      tokensSent: metric(2_100, 'tokens'),
+      outputTokens: metric(20, 'tokens'),
+    });
+
+    expect(selectVisibleEvidenceEvents([first, duplicate, second])).toEqual([duplicate, second]);
+  });
+
   it('hides only legacy all-zero Headroom calibration lanes', () => {
     const idleHeadroom = {
       source: 'headroom' as const,

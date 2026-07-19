@@ -150,6 +150,7 @@
     "pretest": "npm run build",
     "test": "vitest run",
     "test:dashboard:e2e": "npm run build && playwright test --config playwright.dashboard.config.ts",
+    "test:mcp-adversarial": "vitest run tests/mcp-gateway.test.ts tests/mcp-cross-server.test.ts tests/mcp-destination.test.ts tests/mcp-opaque-flow-properties.test.ts",
     "test:watch": "vitest",
     "bench:profile": "npm run build && node benchmarks/v2/profile_proxy.mjs",
     "bench:profile:isolated": "npm run build && node benchmarks/v2/profile_proxy_isolated.mjs",

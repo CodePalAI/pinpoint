@@ -92,6 +92,11 @@ separate specification. Implementation conformance is tested at adjacent boundar
 | Operator delegation and policy opening | `src/mcp/flow.ts` | stable-root/fresh-session, changed-fixed-policy, key-swap, wrong-root, and tamper properties |
 | Standalone receipt verification | `bin/verify-receipt.js` (no runtime imports) | committed receipt and exact policy opening accepted; tampered, wrong-session, wrong-root, and changed-policy inputs rejected |
 | Client event-stream absence | production gateway and host harnesses | 400 protocol canaries and 800 aggregate cross-host canary checks |
+| Async dispatch and terminalization | `src/mcp/gateway.ts`, `src/mcp/destination.ts` | duplicate-id reservation, malformed-status rejection, catalog invalidation, post-dispatch child exit, timeout, and pre-aborted startup in `npm run test:mcp-adversarial` |
+
+Receipt dispatch and emission are atomic in the Promela model. The TypeScript runtime is
+not atomic: process I/O separates preparation, dispatch, completion, and receipt output.
+The adversarial implementation gate checks those asynchronous boundaries directly.
 
 ## Assumptions
 

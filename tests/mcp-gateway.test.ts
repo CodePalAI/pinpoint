@@ -464,6 +464,28 @@ describe('McpResultFirewall', () => {
     expect(await running).toBeNull();
   });
 
+  it('does not spawn the wrapped server when the gateway signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const diagnostics = new PassThrough();
+    let diagnosticText = '';
+    diagnostics.on('data', (chunk) => { diagnosticText += String(chunk); });
+
+    const exitCode = await runMcpGateway(
+      process.execPath,
+      ['--input-type=module', '--eval', "process.stdout.write('spawned\\n'); setTimeout(() => process.exit(0), 20)"],
+      {
+        input: new PassThrough(),
+        output: new PassThrough(),
+        error: diagnostics,
+        signal: controller.signal,
+      },
+    );
+
+    expect(exitCode).toBeNull();
+    expect(diagnosticText).toBe('');
+  });
+
   it('observes upstream tool failures without copying JSON-RPC error details', async () => {
     const secret = 'upstream-error-private-canary';
     const upstream = String.raw`
@@ -655,6 +677,11 @@ describe('McpResultFirewall', () => {
               inputSchema: { type: 'object', properties: {} },
             },
             {
+              name: 'catalog_change',
+              description: 'Emit a tool catalog change notification.',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
               name: 'campaign_deliver',
               description: 'Deliver a campaign to exact recipients.',
               inputSchema: {
@@ -666,21 +693,28 @@ describe('McpResultFirewall', () => {
                 required: ['campaign', 'recipients'],
               },
             },
-          ] });
+          ], ...(message.params?.forcePagination ? { nextCursor: 'next-page' } : {}) });
         } else if (message.method === 'tools/call') {
           if (message.params.name === 'secrets_list') {
             reply(message.id, {
               content: [{ type: 'text', text: JSON.stringify(rows) }],
             });
+          } else if (message.params.name === 'catalog_change') {
+            process.stdout.write(JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'notifications/tools/list_changed',
+            }) + '\n');
+            reply(message.id, { content: [{ type: 'text', text: 'catalog changed' }] });
           } else if (message.params.name === 'campaign_deliver') {
             const recipients = message.params.arguments.recipients;
             if (message.params.arguments.campaign === 'crash-after-dispatch') process.exit(7);
             const payloadHash = createHash('sha256').update(JSON.stringify(recipients)).digest('hex');
             const valid = payloadHash === '${selectedHash}' && message.params.arguments.campaign === 'renewal';
+            const malformedStatus = message.params.arguments.campaign === 'malformed-status';
             setTimeout(() => reply(message.id, {
               content: [{ type: 'text', text: JSON.stringify({ accepted: recipients.length, valid }) }],
               structuredContent: { accepted: recipients.length, valid },
-              ...(valid ? {} : { isError: true }),
+              ...(malformedStatus ? { isError: 'true' } : valid ? {} : { isError: true }),
             }), 20);
           }
         }
@@ -726,10 +760,21 @@ describe('McpResultFirewall', () => {
       _meta: { pinpoint: { opaqueFlow: { receiptVerifier: Record<string, unknown> } } };
     })._meta.pinpoint.opaqueFlow.receiptVerifier;
     expect(initializedVerifier.authority).toEqual(authorityRecord?.authority);
+    send(input, {
+      jsonrpc: '2.0',
+      id: 20,
+      method: 'tools/list',
+      params: { forcePagination: true },
+    });
+    expect(await next()).toMatchObject({
+      id: 20,
+      error: { code: -32603, message: 'opaque flow policy validation requires a complete first tools/list page' },
+    });
     send(input, { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
     const listed = await next();
     expect((listed.result as { tools: Array<{ name: string }> }).tools.map(({ name }) => name)).toEqual([
       'secrets_list',
+      'catalog_change',
       MCP_FLOW_TOOL_NAME,
     ]);
 
@@ -954,6 +999,47 @@ describe('McpResultFirewall', () => {
       jsonrpc: '2.0',
       id: 8,
       method: 'tools/call',
+      params: { name: 'catalog_change', arguments: {} },
+    });
+    expect(await next()).toMatchObject({
+      id: 8,
+      result: { content: [{ type: 'text', text: 'catalog changed' }] },
+    });
+    send(input, { ...duplicateFlow, id: 9 });
+    expect(await next()).toMatchObject({
+      id: 9,
+      error: { code: -32003, message: 'opaque flow policies require a successful tools/list first' },
+    });
+    send(input, { jsonrpc: '2.0', id: 10, method: 'tools/list', params: {} });
+    expect(await next()).toMatchObject({ id: 10, result: { tools: expect.any(Array) } });
+
+    send(input, {
+      ...duplicateFlow,
+      id: 11,
+      params: {
+        ...duplicateFlow.params,
+        arguments: {
+          ...duplicateFlow.params.arguments,
+          destinationArguments: { campaign: 'malformed-status' },
+        },
+      },
+    });
+    const malformedResponse = await next();
+    const malformedText = (malformedResponse.result as {
+      content: Array<{ text: string }>;
+    }).content[0]?.text ?? '';
+    const malformedReceipt = JSON.parse(malformedText).pinpointFlow;
+    expect(malformedReceipt).toMatchObject({
+      sequence: 5,
+      previousReceiptHash: uniqueDuplicateReceipt.receiptHash,
+      destinationSucceeded: false,
+    });
+    expect(verifyMcpOpaqueFlowReceipt(malformedReceipt)).toBe(true);
+
+    send(input, {
+      jsonrpc: '2.0',
+      id: 12,
+      method: 'tools/call',
       params: {
         name: MCP_FLOW_TOOL_NAME,
         arguments: {
@@ -972,13 +1058,13 @@ describe('McpResultFirewall', () => {
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line))
-      .find(({ id }) => id === 8);
+      .find(({ id }) => id === 12);
     expect(crashResponse).toBeDefined();
     const crashReceiptText = crashResponse?.result?.content?.[0]?.text ?? '';
     const crashReceipt = JSON.parse(crashReceiptText).pinpointFlow;
     expect(crashReceipt).toMatchObject({
-      sequence: 5,
-      previousReceiptHash: uniqueDuplicateReceipt.receiptHash,
+      sequence: 6,
+      previousReceiptHash: malformedReceipt.receiptHash,
       destinationSucceeded: false,
     });
     expect(verifyMcpOpaqueFlowReceipt(crashReceipt)).toBe(true);

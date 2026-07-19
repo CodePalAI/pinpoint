@@ -728,6 +728,7 @@ export async function runMcpGateway(
   options: McpGatewayOptions = {},
 ): Promise<number | null> {
   if (!command.trim()) throw new TypeError('upstream MCP command is required');
+  if (options.signal?.aborted) return null;
 
   const input = options.input ?? process.stdin;
   const output = options.output ?? process.stdout;
@@ -1074,6 +1075,9 @@ export async function runMcpGateway(
       );
       return;
     }
+    if (message.method === 'notifications/tools/list_changed' && flowEngine) {
+      flowPoliciesValidated = false;
+    }
     if (message.method && (sensitiveOperationActive() || protectedDataHandled)) {
       if (message.id !== undefined) {
         child.stdin.write(`${JSON.stringify(rpcError(message.id, -32601, 'server requests are disabled during opaque flows'))}\n`);
@@ -1162,7 +1166,8 @@ export async function runMcpGateway(
         result = mergeInitialize(result, firewall.exposeArtifactResources, flowEngine);
       } else if (request.method === 'tools/list') {
         if (flowEngine && request.firstPage === true) {
-          if (!isRecord(result) || !Array.isArray(result.tools)) {
+          flowPoliciesValidated = false;
+          if (!isRecord(result) || !Array.isArray(result.tools) || result.nextCursor != null) {
             throw new TypeError('opaque flow policy validation requires a complete first tools/list page');
           }
           const sourceTools = new Set(

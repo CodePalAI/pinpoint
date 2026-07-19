@@ -702,6 +702,8 @@ Security-sensitive MCP or release changes also run:
 ```bash
 npm run formal:opaque-flow
 npm run formal:opaque-flow:mutation
+npm run formal:opaque-flow:async
+npm run test:mcp-adversarial
 ```
 
 Use [GitHub Discussions](https://github.com/CodePalAI/pinpoint/discussions) for architecture questions and sanitized field reports. Report vulnerabilities through [SECURITY.md](./SECURITY.md).

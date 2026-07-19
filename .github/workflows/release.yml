@@ -62,6 +62,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y spin
       - name: Check opaque-flow reference model
         run: npm run formal:opaque-flow
+      - name: Check opaque-flow asynchronous model
+        run: npm run formal:opaque-flow:async
       - run: npm run verify:release
       - name: Install Chromium for dashboard E2E
         run: npx playwright install --with-deps chromium

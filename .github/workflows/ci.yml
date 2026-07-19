@@ -48,6 +48,9 @@ jobs:
         name: Check opaque-flow reference model
         run: npm run formal:opaque-flow
       - if: matrix.node == 24
+        name: Check opaque-flow asynchronous model
+        run: npm run formal:opaque-flow:async
+      - if: matrix.node == 24
         run: npm run bench:anthropic:self-test
       - if: matrix.node == 24
         run: npm run bench:qcv-quality

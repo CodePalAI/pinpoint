@@ -59,6 +59,7 @@ for (const required of [
   'git verify-tag "$RELEASE_TAG"',
   'npm run sbom',
   'npm run verify:release',
+  'npm run formal:opaque-flow:async',
   'npx playwright install --with-deps chromium',
   'npm run test:dashboard:e2e',
   'test "$NPM_USER" = "codepalaiorg"',

@@ -72,6 +72,17 @@ const opaqueFlowModelReceipt = JSON.parse(
     'utf8',
   ),
 );
+const opaqueFlowAsyncModelReceipt = JSON.parse(
+  readFileSync(
+    join(
+      root,
+      'benchmarks',
+      'results',
+      'opaque-flow-async-model-check.first-party-macos-arm64-20260719.json',
+    ),
+    'utf8',
+  ),
+);
 const ossFilesystemReceipt = JSON.parse(
   readFileSync(
     join(
@@ -298,6 +309,17 @@ for (const [sourcePath, expectedHash] of Object.entries(opaqueFlowModelReceipt.s
   const actualHash = sha256(readFileSync(absolute));
   if (actualHash !== expectedHash) {
     fail(`opaque-flow model receipt fingerprint is stale: ${sourcePath}`);
+  }
+}
+for (const [sourcePath, expectedHash] of Object.entries(opaqueFlowAsyncModelReceipt.source.fingerprints)) {
+  const absolute = join(root, sourcePath);
+  if (!existsSync(absolute)) {
+    fail(`opaque-flow async model source does not exist: ${sourcePath}`);
+    continue;
+  }
+  const actualHash = sha256(readFileSync(absolute));
+  if (actualHash !== expectedHash) {
+    fail(`opaque-flow async model receipt fingerprint is stale: ${sourcePath}`);
   }
 }
 for (const [sourcePath, expectedHash] of Object.entries(ossFilesystemReceipt.source.fingerprints)) {

@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "evidenceLevel": "bounded-model-check",
+  "kind": "mcp-value-opaque-flow-async-reference-model",
+  "date": "2026-07-19",
+  "passed": true,
+  "environment": {
+    "platform": "darwin",
+    "release": "25.5.0",
+    "architecture": "arm64",
+    "node": "v26.0.0",
+    "spin": "Spin Version 6.5.2 -- 6 December 2019"
+  },
+  "model": {
+    "path": "formal/opaque_flow_async.pml",
+    "maxStepsPerTrace": 8,
+    "depthReached": 157,
+    "statesStored": 2780,
+    "statesMatched": 410,
+    "transitions": 3190,
+    "unreachedControlStates": 0,
+    "assertionViolations": 0
+  },
+  "mutationSensitivity": {
+    "passed": true,
+    "mutations": [
+      {
+        "mutation": "duplicate outstanding flow id dispatches twice",
+        "expected": "at least one assertion violation",
+        "assertionViolations": 1
+      },
+      {
+        "mutation": "malformed destination status is signed as success",
+        "expected": "at least one assertion violation",
+        "assertionViolations": 1
+      },
+      {
+        "mutation": "post-dispatch process loss omits terminal receipt",
+        "expected": "at least one assertion violation",
+        "assertionViolations": 1
+      },
+      {
+        "mutation": "pre-aborted startup spawns the wrapped process",
+        "expected": "at least one assertion violation",
+        "assertionViolations": 1
+      }
+    ],
+    "assertionViolations": 4
+  },
+  "checkedProperties": [
+    "A pre-aborted startup never starts the wrapped process.",
+    "At most one destination dispatch is outstanding.",
+    "A duplicate outstanding flow id does not dispatch again.",
+    "Catalog-invalid state cannot dispatch.",
+    "Every modeled terminal completion emits exactly one chain-linked receipt.",
+    "Malformed status and process loss emit failure, never success."
+  ],
+  "source": {
+    "fingerprints": {
+      "formal/opaque_flow_async.pml": "59aa79506d834359bd0d2a5000b1ca96252ecf923320d5c02681a924eb413628",
+      "scripts/check-opaque-flow-async-model.mjs": "03f3bb23bd529aadf739a28a9e073b9a9c312556d50b77a77c645bbdf4bfb53c"
+    }
+  },
+  "limitations": [
+    "This model covers asynchronous lifecycle accounting, not payload values or policy predicates.",
+    "The search is bounded to eight actions over one outstanding-flow slot.",
+    "A trace may end with one pending dispatch; eventual completion requires runtime/process assumptions.",
+    "Whole-gateway crash, OS isolation, cryptography, JSON parsing, and exactly-once side effects are abstracted."
+  ]
+}

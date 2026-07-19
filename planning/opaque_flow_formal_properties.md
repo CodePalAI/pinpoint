@@ -1,6 +1,6 @@
 # Opaque-flow formal properties
 
-_Status: bounded reference model checked with Spin 6.5.2 on 2026-07-16._
+_Status: policy and asynchronous boundary models checked with Spin 6.5.2 on 2026-07-19._
 
 ## What was checked
 
@@ -16,6 +16,11 @@ The committed run reached depth 208 and explored:
 - 3,416,444 transitions;
 - zero unreached control states;
 - zero assertion violations.
+
+`formal/opaque_flow_async.pml` separately models non-atomic startup, catalog state,
+dispatch reservation, duplicate attempts, and terminal completion. Its eight-action
+search reached depth 157 and explored 2,780 stored states, 410 matched states, and
+3,190 transitions with zero unreached states or assertion violations.
 
 The model asserts these properties on every reachable state:
 
@@ -71,10 +76,14 @@ combination of the policy predicates.
 
 ## Non-vacuity check
 
-`npm run formal:opaque-flow:mutation` creates two temporary models with deliberate
+`npm run formal:opaque-flow:mutation` creates two temporary policy models with deliberate
 bugs: late protected upstream output sets the client-visible value state, and a source
 credential crosses into the destination domain. Spin must find at least one assertion
 violation for each mutation. The committed gate detected both with one violation each.
+
+`npm run formal:opaque-flow:async` also injects four runtime-boundary mutations:
+duplicate dispatch, malformed-status success, omitted process-loss receipt, and
+pre-aborted process spawn. Spin detected each with one assertion violation.
 
 ## Relationship to the implementation
 
@@ -94,9 +103,10 @@ separate specification. Implementation conformance is tested at adjacent boundar
 | Client event-stream absence | production gateway and host harnesses | 400 protocol canaries and 800 aggregate cross-host canary checks |
 | Async dispatch and terminalization | `src/mcp/gateway.ts`, `src/mcp/destination.ts` | duplicate-id reservation, malformed-status rejection, catalog invalidation, post-dispatch child exit, timeout, and pre-aborted startup in `npm run test:mcp-adversarial` |
 
-Receipt dispatch and emission are atomic in the Promela model. The TypeScript runtime is
-not atomic: process I/O separates preparation, dispatch, completion, and receipt output.
-The adversarial implementation gate checks those asynchronous boundaries directly.
+Receipt dispatch and emission are atomic in the policy model. The asynchronous model
+separates them into one pending slot, while the TypeScript runtime permits many
+concurrent ids. The adversarial implementation gate checks that broader runtime boundary
+directly.
 
 ## Assumptions
 
@@ -105,7 +115,8 @@ The adversarial implementation gate checks those asynchronous boundaries directl
   transport framing.
 - Capabilities are abstract Booleans; cryptographic entropy is tested separately.
 - Tool names, field names, counts, sizes, limits, timing, and success are observable.
-- The search is bounded to ten actions per trace over finite predicates.
+- The searches are bounded to ten policy actions and eight asynchronous actions per
+  trace over finite state.
 
 ## Not proved
 
@@ -123,8 +134,12 @@ Install Spin 6.5.2 or newer, then run:
 ```bash
 npm run formal:opaque-flow
 npm run formal:opaque-flow:mutation
+npm run formal:opaque-flow:async
+npm run test:mcp-adversarial
 pinpoint-verify-receipt benchmarks/results/mcp-opaque-flow.first-party-macos-arm64-20260715.json --path firstReceipt
 ```
 
-The content-free receipt is
-`benchmarks/results/opaque-flow-model-check.first-party-macos-arm64-20260715.json`.
+The content-free receipts are
+`benchmarks/results/opaque-flow-model-check.first-party-macos-arm64-20260715.json`
+and
+`benchmarks/results/opaque-flow-async-model-check.first-party-macos-arm64-20260719.json`.

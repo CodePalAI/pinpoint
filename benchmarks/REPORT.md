@@ -62,6 +62,12 @@ isolation, timing, cardinality, and upstream behavior. See
 `results/opaque-flow-model-check.first-party-macos-arm64-20260715.json` and
 `../planning/opaque_flow_formal_properties.md`.
 
+The companion asynchronous model separates startup, catalog state, dispatch, and
+terminal receipt emission. It explored 2,780 stored states and 3,190 transitions with
+zero violations or unreached states. Four deliberate mutations were detected: duplicate
+dispatch, malformed-status success, omitted process-loss receipt, and pre-aborted spawn.
+See `results/opaque-flow-async-model-check.first-party-macos-arm64-20260719.json`.
+
 ### Published OSS filesystem MCP gate
 
 Evidence: `oss-protocol-integration`. The production gateway wrapped unmodified

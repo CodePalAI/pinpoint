@@ -59,10 +59,10 @@ Every pair must produce the same exact answer.
 | UTC meeting time converted to Tokyo | `mcp-server-time==2026.7.10` | passthrough; naturally bounded response |
 
 The retained first-party run passed 10/10 workflows. Across data-bearing responses,
-direct MCP exposed 1,259,328 bytes and Pinpoint exposed 12,251 bytes, a 99.0%
+direct MCP exposed 1,259,326 bytes and Pinpoint exposed 12,249 bytes, a 99.0%
 reduction. The eight oversized workflows kept 11,992 unrelated synthetic marker
 occurrences out of the Pinpoint-side client transcript. Two controls created no
-artifact: native `open_nodes` returned 437 bytes in both arms and Time returned 452
+artifact: native `open_nodes` returned 437 bytes in both arms and Time returned 450
 in both.
 
 These are protocol measurements, not model-token measurements. Fixture setup,
@@ -74,6 +74,15 @@ the [internet research index](../comparisons/README.md), and the
 [evaluation plan](../planning/common_mcp_workflow_evaluation.md).
 
 The opaque-flow protocol gate starts the committed unmodified stdio fixture, runs 30 exact flows and eight adversarial calls, scans 400 generated canaries, verifies every receipt and chain link, validates an operator delegation and exact policy opening, rejects receipt/authority tampering and a wrong operator root, and compares client-visible bytes with a constructed direct-MCP transcript. It makes no provider request. The committed receipt is `results/mcp-opaque-flow.first-party-macos-arm64-20260715.json`.
+
+For security-sensitive runtime changes, run both bounded models and the real-process
+adversarial conformance slice:
+
+```bash
+npm run formal:opaque-flow
+npm run formal:opaque-flow:async
+npm run test:mcp-adversarial
+```
 
 Repeat the retained synthetic policy opening independently:
 

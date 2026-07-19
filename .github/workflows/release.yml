@@ -47,7 +47,7 @@ jobs:
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
           TAG_COMMIT=$(git rev-list -n 1 "$RELEASE_TAG")
-          test "$PACKAGE_NAME" = "@codepal/pinpoint"
+          test "$PACKAGE_NAME" = "@codepalaiorg/pinpoint"
           test "$RELEASE_TAG" = "v$PACKAGE_VERSION"
           test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = "tag"
           test "$(git for-each-ref --format='%(taggeremail)' "refs/tags/$RELEASE_TAG")" = "<support@codepal.ai>"
@@ -63,6 +63,10 @@ jobs:
       - name: Check opaque-flow reference model
         run: npm run formal:opaque-flow
       - run: npm run verify:release
+      - name: Install Chromium for dashboard E2E
+        run: npx playwright install --with-deps chromium
+      - name: Test dashboard in Chromium
+        run: npm run test:dashboard:e2e
       - name: Verify generated files are committed
         run: git diff --exit-code
       - name: Pack release artifact
@@ -79,12 +83,12 @@ jobs:
             --output release/npm-12.0.1.tgz
           NPM_SHA512=$(openssl dgst -sha512 -binary release/npm-12.0.1.tgz | openssl base64 -A)
           test "$NPM_SHA512" = "L5T9i/YAQWQWqTS/xZxJkei/9zcu99hCeE4qi41IyBVV7mRQad3qc2JfuOktwmH+qwGI/V2rbCL+/UYxb1+RQA=="
-          PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
+          PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepalaiorg-pinpoint-*.tgz' -print -quit)
           test -n "$PACKAGE_TARBALL"
           PACKAGE_SHA512=$(openssl dgst -sha512 -binary "$PACKAGE_TARBALL" | openssl base64 -A)
           printf 'sha512-%s\n' "$PACKAGE_SHA512" > release/PACKAGE_INTEGRITY
           cd release
-          shasum -a 512 ./codepal-pinpoint-*.tgz ./sbom.cdx.json ./PACKAGE_INTEGRITY > SHA512SUMS
+          shasum -a 512 ./codepalaiorg-pinpoint-*.tgz ./sbom.cdx.json ./PACKAGE_INTEGRITY > SHA512SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: npm-release
@@ -114,7 +118,7 @@ jobs:
         run: |
           cd release
           shasum -a 512 -c SHA512SUMS
-          test "$(find . -maxdepth 1 -name 'codepal-pinpoint-*.tgz' | wc -l)" -eq 1
+          test "$(find . -maxdepth 1 -name 'codepalaiorg-pinpoint-*.tgz' | wc -l)" -eq 1
           NPM_SHA512=$(openssl dgst -sha512 -binary npm-12.0.1.tgz | openssl base64 -A)
           test "$NPM_SHA512" = "L5T9i/YAQWQWqTS/xZxJkei/9zcu99hCeE4qi41IyBVV7mRQad3qc2JfuOktwmH+qwGI/V2rbCL+/UYxb1+RQA=="
           mkdir ../npm-cli
@@ -125,9 +129,9 @@ jobs:
             const fs = require("node:fs");
             const sbom = JSON.parse(fs.readFileSync("sbom.cdx.json", "utf8"));
             const version = process.argv[1];
-            if (sbom.metadata?.component?.name !== "@codepal/pinpoint") throw new Error("invalid SBOM name");
+            if (sbom.metadata?.component?.name !== "@codepalaiorg/pinpoint") throw new Error("invalid SBOM name");
             if (sbom.metadata?.component?.version !== version) throw new Error("invalid SBOM version");
-            if (sbom.metadata?.component?.purl !== `pkg:npm/%40codepal/pinpoint@${version}`) throw new Error("invalid SBOM purl");
+            if (sbom.metadata?.component?.purl !== `pkg:npm/%40codepalaiorg/pinpoint@${version}`) throw new Error("invalid SBOM purl");
           ' "$PACKAGE_VERSION"
       - name: Resolve protected draft release
         env:
@@ -156,13 +160,13 @@ jobs:
         run: |
           NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
           NPM_USER=$(node "$NPM_CLI" whoami)
-          test -n "$NPM_USER"
+          test "$NPM_USER" = "codepalaiorg"
           echo "authenticated npm user: $NPM_USER"
       - name: Check whether version is already published
         id: registry
         run: |
           NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
-          PACKAGE_NAME='@codepal/pinpoint'
+          PACKAGE_NAME='@codepalaiorg/pinpoint'
           PACKAGE_VERSION=${RELEASE_TAG#v}
           EXPECTED_INTEGRITY=$(cat release/PACKAGE_INTEGRITY)
           REGISTRY_OUTPUT=$(mktemp)
@@ -184,14 +188,14 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
-          PACKAGE_TARBALL=$(find "$PWD/release" -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
+          PACKAGE_TARBALL=$(find "$PWD/release" -maxdepth 1 -name 'codepalaiorg-pinpoint-*.tgz' -print -quit)
           test -n "$PACKAGE_TARBALL"
           node "$NPM_CLI" publish "$PACKAGE_TARBALL" --access public --provenance --ignore-scripts
       - name: Publish with npm trusted publishing
         if: steps.registry.outputs.published == 'false' && steps.auth.outputs.mode == 'oidc'
         run: |
           NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
-          PACKAGE_TARBALL=$(find "$PWD/release" -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
+          PACKAGE_TARBALL=$(find "$PWD/release" -maxdepth 1 -name 'codepalaiorg-pinpoint-*.tgz' -print -quit)
           test -n "$PACKAGE_TARBALL"
           node "$NPM_CLI" publish "$PACKAGE_TARBALL" --access public --ignore-scripts
       - name: Attach verified release assets
@@ -202,9 +206,9 @@ jobs:
           UPLOAD_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
             --jq '.upload_url | sub("\\{\\?name,label\\}$"; "")')
           test -n "$UPLOAD_URL"
-          PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' -print -quit)
+          PACKAGE_TARBALL=$(find release -maxdepth 1 -name 'codepalaiorg-pinpoint-*.tgz' -print -quit)
           test -n "$PACKAGE_TARBALL"
-          test "$(find release -maxdepth 1 -name 'codepal-pinpoint-*.tgz' | wc -l)" -eq 1
+          test "$(find release -maxdepth 1 -name 'codepalaiorg-pinpoint-*.tgz' | wc -l)" -eq 1
           for ASSET in "$PACKAGE_TARBALL" release/sbom.cdx.json release/PACKAGE_INTEGRITY release/SHA512SUMS; do
             NAME=$(basename "$ASSET")
             ASSET_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" \

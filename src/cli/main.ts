@@ -39,6 +39,7 @@ import {
   type DashboardServer,
 } from '../dashboard/server.js';
 import { openDashboardInBrowser } from '../dashboard/browser.js';
+import { closeDashboardSession } from '../dashboard/lifecycle.js';
 
 function version(): string {
   try {
@@ -397,16 +398,14 @@ async function cmdProxy(args: readonly string[]): Promise<void> {
     await server.listen();
     if (dashboard && parsed.dashboard) await announceDashboard(dashboard, parsed.dashboard.open);
   } catch (error) {
-    await dashboard?.close();
-    journal?.close();
+    await closeDashboardSession(journal, dashboard, false);
     await server.close();
     throw error;
   }
   const shutdown = async (sig: string) => {
     server.pinpoint.log.info(`received ${sig}, shutting down`);
     await server.close();
-    journal?.close();
-    await dashboard?.close();
+    await closeDashboardSession(journal, dashboard);
     process.exit(0);
   };
   process.on('SIGINT', () => void shutdown('SIGINT'));
@@ -747,8 +746,7 @@ async function cmdMcp(args: readonly string[]): Promise<void> {
     });
     if (!controller.signal.aborted && code !== 0) process.exitCode = code ?? 1;
   } finally {
-    journal?.close();
-    await dashboard?.close();
+    await closeDashboardSession(journal, dashboard);
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
   }

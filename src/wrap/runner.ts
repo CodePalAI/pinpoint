@@ -20,6 +20,7 @@ import { delimiter, join } from 'node:path';
 import type { LogLevel } from '../config.js';
 import { createProxyServer, type ProxyServer } from '../proxy/server.js';
 import { openDashboardInBrowser } from '../dashboard/browser.js';
+import { closeDashboardSession } from '../dashboard/lifecycle.js';
 import { HeadroomDashboardAdapter } from '../dashboard/headroom.js';
 import {
   dashboardRootFromEnvironment,
@@ -245,9 +246,7 @@ async function startDashboard(
 
 async function stopDashboard(dashboard: RunningDashboard | undefined): Promise<void> {
   if (!dashboard) return;
-  dashboard.journal.close();
-  await dashboard.server.close();
-  console.error("pinpoint dashboard: session saved to local history; reopen it with `pinpoint dashboard`.");
+  await closeDashboardSession(dashboard.journal, dashboard.server);
 }
 
 function dashboardEnvironment(dashboard: RunningDashboard | undefined): NodeJS.ProcessEnv {

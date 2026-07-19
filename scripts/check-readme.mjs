@@ -547,9 +547,9 @@ if (waitingForNpm) {
     fail('pre-npm README is missing the local-directory SDK install');
   }
   for (const unavailable of [
-    'npm install -g @codepal/pinpoint',
-    'npm install @codepal/pinpoint',
-    'npx @codepal/pinpoint demo',
+    'npm install -g @codepalaiorg/pinpoint',
+    'npm install @codepalaiorg/pinpoint',
+    'npx @codepalaiorg/pinpoint demo',
   ]) {
     if (visibleReadme.includes(unavailable)) fail(`README advertises unpublished npm path: ${unavailable}`);
   }
@@ -558,9 +558,9 @@ if (waitingForNpm) {
   }
 } else {
   for (const required of [
-    'npm install -g @codepal/pinpoint',
-    'npm install @codepal/pinpoint',
-    'npx @codepal/pinpoint demo',
+    'npm install -g @codepalaiorg/pinpoint',
+    'npm install @codepalaiorg/pinpoint',
+    'npx @codepalaiorg/pinpoint demo',
   ]) {
     if (!visibleReadme.includes(required)) fail(`release README is missing npm path: ${required}`);
   }

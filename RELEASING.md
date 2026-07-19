@@ -54,7 +54,8 @@ the GitHub Release.
 Manual workflow dispatch requires an explicit `auth_mode` choice:
 
 - `token`: bootstrap-only mode for the first registry publication; requires the
-  environment secret `NPM_TOKEN` and verifies it with `npm whoami`.
+  environment secret `NPM_TOKEN`. The workflow requires `npm whoami` to return
+  the user `codepalaiorg`, which owns the `@codepalaiorg` package scope.
 - `oidc`: normal mode after npm Trusted Publisher is configured for organization
   `CodePalAI`, repository `pinpoint`, workflow `release.yml`, environment `release`,
   and action `npm publish`. This mode uses no long-lived npm token.
@@ -75,10 +76,10 @@ byte-for-byte and refuse to replace them.
 From a clean environment, confirm identity, integrity, provenance, and runtime behavior:
 
 ```bash
-npm view @codepal/pinpoint version repository.url dist.integrity
+npm view @codepalaiorg/pinpoint version repository.url dist.integrity
 npm audit signatures
-npx --yes @codepal/pinpoint@<version> --version
-npx --yes @codepal/pinpoint@<version> demo
+npx --yes @codepalaiorg/pinpoint@<version> --version
+npx --yes @codepalaiorg/pinpoint@<version> demo
 ```
 
 Compare the registry `dist.integrity` with the release workflow artifact. Preserve the

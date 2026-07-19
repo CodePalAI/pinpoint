@@ -1,4 +1,4 @@
-import { estimateTokens } from '@codepal/pinpoint';
+import { estimateTokens } from '@codepalaiorg/pinpoint';
 
 function compactJson(text) {
   try {

@@ -4,16 +4,22 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## Unreleased
 
-## 0.2.4 - 2026-07-18
+## 0.2.4 - 2026-07-19
 
 ### Changed
 
+- The npm package moved from inaccessible organization scopes to the user-owned
+	`@codepalaiorg` scope. Public imports and install commands now use
+	`@codepalaiorg/pinpoint`; the CLI remains `pinpoint`.
 - First publication now requires a granular npm automation token authorized for
-	the `@codepal` scope with bypass-2FA publishing enabled. The reviewer-protected
+	the `@codepalaiorg` scope with bypass-2FA publishing enabled. The reviewer-protected
 	GitHub environment remains the only place that receives the token.
 
 ### Fixed
 
+- Copilot dashboard sessions now survive same-tab refresh, reconcile live
+	request counters independently of SSE, recover ended history accurately, and
+	terminate delegated process trees within a bounded shutdown window.
 - The failed `v0.2.3` candidate completed signed provenance generation but npm
 	rejected the existing protected token with `E403` before package publication
 	or release-asset upload. Version `0.2.4` supersedes it after credential
@@ -57,7 +63,7 @@ All notable changes are documented here. This project follows semantic versionin
 
 - A transparent stdio MCP gateway: `pinpoint mcp gateway -- <server> [args...]` starts an unmodified upstream server without a shell and forwards bidirectional JSON-RPC traffic.
 - A lossless MCP result firewall that replaces eligible oversized text or structured results with a compact `pinpoint://artifact/...` resource link and deterministic `pinpoint_query` access.
-- Protocol-native artifact resources, bounded previews, exact schema/select/count/grep/slice/join operations, and a public `@codepal/pinpoint/mcp` API.
+- Protocol-native artifact resources, bounded previews, exact schema/select/count/grep/slice/join operations, and a public `@codepalaiorg/pinpoint/mcp` API.
 - Deterministic discovery of one unambiguous nested record array under structured wrappers such as `data.accounts`, while retaining the complete wrapper payload.
 - A real Claude Code MCP gate in which an 81,665-character, 1,000-row result became a 508-character handle and Claude autonomously queried the exact email through the expected SHA-derived artifact.
 - A matching GitHub Copilot CLI gate using auto-routed GPT-5.3 Codex: the same artifact id, upstream call, exact query, and final email passed with zero premium requests and no file changes.

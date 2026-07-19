@@ -402,12 +402,12 @@ code { padding: 2px 5px; background: #070b0f; color: var(--signal); font-family:
 .history-loading i:nth-of-type(3) { animation-delay: 0.3s; }
 .history-error button { margin-top: 14px; padding: 7px 12px; border: 1px solid var(--warning); background: transparent; color: var(--warning); cursor: pointer; }
 .history-error button:hover { background: rgba(240,179,90,0.1); }
-.historical-header { display: flex; min-height: 48px; border-bottom: 1px solid var(--line-strong); align-items: center; justify-content: space-between; }
-.historical-header > div { display: flex; align-items: center; gap: 9px; color: var(--signal); }
+.historical-header { display: flex; min-height: 48px; border-bottom: 1px solid var(--line-strong); align-items: center; justify-content: space-between; gap: 8px 16px; }
+.historical-header > div { display: flex; min-width: 0; align-items: center; gap: 9px; color: var(--signal); }
 .historical-header[data-tone='attention'] > div { color: var(--warning); }
 .historical-header .icon { width: 17px; }
 .historical-header span { color: var(--ink); font-size: 0.78rem; font-weight: 580; }
-.historical-header code { color: var(--ink-dim); font-size: 0.6rem; }
+.historical-header code { min-width: 0; max-width: 100%; color: var(--ink-dim); font-size: 0.6rem; overflow-wrap: anywhere; text-align: right; }
 .session-comparison { display: grid; grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); margin-top: 12px; border: 1px solid var(--line); background: #0b1319; }
 .session-comparison > div { min-height: 58px; padding: 11px; border-right: 1px solid var(--line); }
 .session-comparison > div:last-child { border-right: 0; }
@@ -506,7 +506,8 @@ code { padding: 2px 5px; background: #070b0f; color: var(--signal); font-family:
   .session-button { grid-template-columns: 8px minmax(130px, 1fr) 52px 68px 14px; }
   .history-detail { padding: 15px; }
   .history-detail:focus { outline: 0; }
-  .historical-header { align-items: flex-start; gap: 12px; }
+  .historical-header { padding-block: 10px; align-items: flex-start; flex-wrap: wrap; }
+  .historical-header code { flex: 1 1 100%; text-align: left; }
   .history-calibration { grid-template-columns: 1fr; }
   .session-comparison { grid-template-columns: 1fr 1fr; }
   .session-comparison > div { border-bottom: 1px solid var(--line); }

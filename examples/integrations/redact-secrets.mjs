@@ -1,4 +1,4 @@
-import { estimateTokens } from '@codepal/pinpoint';
+import { estimateTokens } from '@codepalaiorg/pinpoint';
 
 const DEFAULT_PATTERNS = [
   /\b(?:api[_-]?key|access[_-]?token|password)\s*[:=]\s*[^\s,;]+/gi,

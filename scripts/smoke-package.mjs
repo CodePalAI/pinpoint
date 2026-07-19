@@ -28,21 +28,21 @@ function parseTrailingJsonArray(output, label) {
 }
 
 const publicEntries = [
-  '@codepal/pinpoint',
-  '@codepal/pinpoint/anthropic',
-  '@codepal/pinpoint/openai',
-  '@codepal/pinpoint/sdk',
-  '@codepal/pinpoint/proxy',
-  '@codepal/pinpoint/router',
-  '@codepal/pinpoint/kernel',
-  '@codepal/pinpoint/protocols',
-  '@codepal/pinpoint/output',
-  '@codepal/pinpoint/agents',
-  '@codepal/pinpoint/virtual-context',
-  '@codepal/pinpoint/capture',
-  '@codepal/pinpoint/telemetry',
-  '@codepal/pinpoint/mcp',
-  '@codepal/pinpoint/dashboard',
+  '@codepalaiorg/pinpoint',
+  '@codepalaiorg/pinpoint/anthropic',
+  '@codepalaiorg/pinpoint/openai',
+  '@codepalaiorg/pinpoint/sdk',
+  '@codepalaiorg/pinpoint/proxy',
+  '@codepalaiorg/pinpoint/router',
+  '@codepalaiorg/pinpoint/kernel',
+  '@codepalaiorg/pinpoint/protocols',
+  '@codepalaiorg/pinpoint/output',
+  '@codepalaiorg/pinpoint/agents',
+  '@codepalaiorg/pinpoint/virtual-context',
+  '@codepalaiorg/pinpoint/capture',
+  '@codepalaiorg/pinpoint/telemetry',
+  '@codepalaiorg/pinpoint/mcp',
+  '@codepalaiorg/pinpoint/dashboard',
 ];
 const packageBudget = {
   maxFiles: 210,
@@ -56,7 +56,7 @@ try {
     'npm pack',
   );
   const artifact = packed[0];
-  if (!artifact || artifact.name !== '@codepal/pinpoint') {
+  if (!artifact || artifact.name !== '@codepalaiorg/pinpoint') {
     throw new Error('npm pack returned the wrong package identity');
   }
   const packedBytes = readFileSync(join(temporary, artifact.filename));
@@ -153,7 +153,7 @@ try {
   const runtimeScript = [
     `const entries = ${JSON.stringify(publicEntries)};`,
     'for (const entry of entries) await import(entry);',
-    "const { McpResultFirewall, MCP_FLOW_TOOL_NAME, MCP_QUERY_TOOL_NAME, parseMcpOpaqueFlowConfig, parseMcpOpaqueFlowDestinationConfig, verifyMcpOpaqueFlowReceipt } = await import('@codepal/pinpoint/mcp');",
+    "const { McpResultFirewall, MCP_FLOW_TOOL_NAME, MCP_QUERY_TOOL_NAME, parseMcpOpaqueFlowConfig, parseMcpOpaqueFlowDestinationConfig, verifyMcpOpaqueFlowReceipt } = await import('@codepalaiorg/pinpoint/mcp');",
     'const firewall = new McpResultFirewall({ minChars: 10 });',
     "const transformed = firewall.transformResult('smoke', { content: [{ type: 'text', text: JSON.stringify(Array.from({ length: 100 }, (_, id) => ({ id, value: `exact-smoke-value-${id}` }))) }] });",
     "if (!transformed.virtualized) throw new Error('public MCP firewall did not virtualize');",
@@ -164,7 +164,7 @@ try {
     "const destination = parseMcpOpaqueFlowDestinationConfig({ version: 1, id: 'smoke-domain', command: 'smoke-destination', envAllowlist: ['PATH', 'DESTINATION_TOKEN'], sharedEnvAllowlist: ['PATH'] }, { PATH: '/usr/bin', DESTINATION_TOKEN: 'destination-only', SOURCE_TOKEN: 'source-only' });",
     "if (destination.env.DESTINATION_TOKEN !== 'destination-only' || destination.env.SOURCE_TOKEN != null || destination.sharedEnvNames.join(',') !== 'PATH') throw new Error('public destination config isolation is invalid');",
     "if (verifyMcpOpaqueFlowReceipt({})) throw new Error('public receipt verifier accepted an invalid receipt');",
-    "const { createDashboardGroupId, normalizeDashboardEvent } = await import('@codepal/pinpoint/dashboard');",
+    "const { createDashboardGroupId, normalizeDashboardEvent } = await import('@codepalaiorg/pinpoint/dashboard');",
     "if (!/^dash_[a-f0-9]{32}$/.test(createDashboardGroupId())) throw new Error('public dashboard group id is invalid');",
     "const dashboardMetric = (value) => ({ value, unit: 'tokens', source: 'pinpoint', basis: 'estimate', scope: 'request' });",
     "const dashboardEvent = normalizeDashboardEvent({ schemaVersion: 1, type: 'provider.route', source: 'pinpoint', occurredAt: new Date(0).toISOString(), provider: 'openai', model: 'smoke', authMode: 'payg', mode: 'optimize', durationMs: 1, tokensText: dashboardMetric(10), tokensCompressed: dashboardMetric(4), tokensSaved: dashboardMetric(6), reversibleCount: 0, stages: [{ stage: 'virtual', applied: true, reason: 'applied', tokensText: 10, tokensCompressed: 4, tokensSaved: 6, basis: 'estimate' }] });",
@@ -190,8 +190,8 @@ try {
     'smoke.mts',
   ]);
 
-  const cli = join(temporary, 'node_modules', '@codepal', 'pinpoint', 'bin', 'cli.js');
-  const receiptVerifier = join(temporary, 'node_modules', '@codepal', 'pinpoint', 'bin', 'verify-receipt.js');
+  const cli = join(temporary, 'node_modules', '@codepalaiorg', 'pinpoint', 'bin', 'cli.js');
+  const receiptVerifier = join(temporary, 'node_modules', '@codepalaiorg', 'pinpoint', 'bin', 'verify-receipt.js');
   if (run(process.execPath, [cli, '--version']).trim() !== artifact.version) {
     throw new Error('installed CLI version does not match the packed version');
   }
@@ -218,7 +218,7 @@ try {
   const installedReadme = join(
     temporary,
     'node_modules',
-    '@codepal',
+    '@codepalaiorg',
     'pinpoint',
     'README.md',
   );
@@ -226,7 +226,7 @@ try {
   const installedPackageJson = JSON.parse(readFileSync(join(
     temporary,
     'node_modules',
-    '@codepal',
+    '@codepalaiorg',
     'pinpoint',
     'package.json',
   ), 'utf8'));
@@ -245,7 +245,7 @@ try {
   const installedReceipt = join(
     temporary,
     'node_modules',
-    '@codepal',
+    '@codepalaiorg',
     'pinpoint',
     'benchmarks',
     'results',

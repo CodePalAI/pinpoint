@@ -8,7 +8,7 @@ These modules live outside `src` and import only Pinpoint's public package API.
 **Security note:** `redact-secrets.mjs` is a deliberately lossy example that invalidates prompt-cache prefixes. It is not a substitute for secret management or input prevention. Review and constrain every pattern before using it on untrusted traffic.
 
 ```js
-import { createRuntime } from '@codepal/pinpoint';
+import { createRuntime } from '@codepalaiorg/pinpoint';
 import { createSecretRedactionIntegration } from './redact-secrets.mjs';
 import { createJsonToolMinifierIntegration } from './json-tool-minifier.mjs';
 

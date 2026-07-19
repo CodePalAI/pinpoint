@@ -4,5 +4,7 @@ dist/
 *.tgz
 .DS_Store
 coverage/
+.playwright-results/
+playwright-report/
 *.tsbuildinfo
 .pinpoint/

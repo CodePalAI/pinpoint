@@ -22,7 +22,7 @@ const raw = execFileSync(
 );
 const sbom = JSON.parse(raw);
 const expectedRef = `${packageJson.name}@${packageJson.version}`;
-const expectedPurl = `pkg:npm/%40codepal/pinpoint@${packageJson.version}`;
+const expectedPurl = `pkg:npm/%40codepalaiorg/pinpoint@${packageJson.version}`;
 const releaseDate = new RegExp(
   `^## ${packageJson.version.replaceAll('.', '\\.')} - (\\d{4}-\\d{2}-\\d{2})$`,
   'm',

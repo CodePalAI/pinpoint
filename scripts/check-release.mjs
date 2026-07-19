@@ -15,7 +15,7 @@ const allowedSigners = readFileSync(
 const failures = [];
 const fail = (message) => failures.push(message);
 
-if (packageJson.name !== '@codepal/pinpoint') fail('package name must remain @codepal/pinpoint');
+if (packageJson.name !== '@codepalaiorg/pinpoint') fail('package name must remain @codepalaiorg/pinpoint');
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(packageJson.version)) {
   fail(`package version is not valid semver: ${packageJson.version}`);
 }
@@ -59,6 +59,9 @@ for (const required of [
   'git verify-tag "$RELEASE_TAG"',
   'npm run sbom',
   'npm run verify:release',
+  'npx playwright install --with-deps chromium',
+  'npm run test:dashboard:e2e',
+  'test "$NPM_USER" = "codepalaiorg"',
   'RELEASE_ID=$(gh api --paginate',
   'releases/$RELEASE_ID/assets',
   'releases/assets/$ASSET_ID',
@@ -70,7 +73,7 @@ for (const required of [
   'contents: write',
   'Resolve protected draft release',
   'printf \'%s\\n\' "$RELEASE_ID" > release/RELEASE_ID',
-  'test "$(find release -maxdepth 1 -name \'codepal-pinpoint-*.tgz\' | wc -l)" -eq 1',
+  'test "$(find release -maxdepth 1 -name \'codepalaiorg-pinpoint-*.tgz\' | wc -l)" -eq 1',
   'NPM_AUTH_MODE',
   "environment: release",
 ]) {

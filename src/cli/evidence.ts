@@ -519,11 +519,16 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
       }
     }
     if (exactKeys(bundle.package, ['name', 'version'], [], 'package', errors)) {
-      if (bundle.package.name !== '@codepalaiorg/pinpoint' || typeof bundle.package.version !== 'string') {
+      const packageAvailable = bundle.package.name === '@codepalaiorg/pinpoint' &&
+        typeof bundle.package.version === 'string';
+      const packageUnavailable = failedBundle && bundle.package.name === null && bundle.package.version === null;
+      if (!packageAvailable && !packageUnavailable) {
         errors.push('invalid package identity');
       }
     }
-    if (exactKeys(bundle.runtime, ['executionForm', 'files'], [], 'runtime', errors)) {
+    if (bundle.runtime === null) {
+      if (passedBundle) errors.push('passed bundle runtime manifest is missing');
+    } else if (exactKeys(bundle.runtime, ['executionForm', 'files'], [], 'runtime', errors)) {
       if (!['compiled-javascript', 'typescript-source'].includes(String(bundle.runtime.executionForm))) {
         errors.push('invalid runtime.executionForm');
       }

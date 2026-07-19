@@ -506,7 +506,7 @@ pinpoint evidence reproduce \
 pinpoint evidence verify pinpoint-opaque-flow-reproduction.json
 ```
 
-The bundle contains environment and package metadata, a nine-file runtime manifest, all
+The bundle contains environment and package metadata, a complete runtime-code manifest, all
 30 signed chain-linked receipts from repeated calls of one synthetic flow, eight retained
 denial records, process/side-effect checks, explicit limitations, and an accidental-
 corruption checksum. It excludes fixture values and is created with mode `0600` on

@@ -57,6 +57,12 @@ describe('packaged opaque-flow reproduction bundle', () => {
       'destination-argument-override',
     ]);
     expect(bundle.receipts).toHaveLength(30);
+    expect(bundle.runtime?.files.length).toBeGreaterThan(9);
+    expect(bundle.runtime?.files.map(({ path }) => path)).toEqual(expect.arrayContaining([
+      'src/cli/main.ts',
+      'src/dashboard/types.ts',
+      'src/policy/content-normalization.ts',
+    ]));
     expect(verification).toMatchObject({
       valid: true,
       errors: [],
@@ -133,7 +139,29 @@ describe('packaged opaque-flow reproduction bundle', () => {
     expect(serialized).not.toContain('DEMO_PRIVATE_7');
     const verification = verifyMcpReproduction(bundle);
     expect(verification.valid).toBe(false);
-    expect(verification.errors).toContain('reproduction did not pass');
+    expect(verification.errors).toEqual([]);
+    expect(verification.checks).toMatchObject({
+      schema: true,
+      checksum: true,
+      receiptChain: false,
+      reportedResults: false,
+      runtimeManifest: true,
+      relationshipDeclared: true,
+      operatorAuthenticated: false,
+    });
+  });
+
+  it('rejects invalid duration even when checksum is recomputed', async () => {
+    const bundle = await runMcpReproduction('maintainer');
+    const tampered = structuredClone(bundle) as McpReproductionBundle;
+    (tampered.summary as { durationMs: unknown }).durationMs = 'not-a-number';
+    recomputeChecksum(tampered);
+
+    const verification = verifyMcpReproduction(tampered);
+    expect(verification.valid).toBe(false);
+    expect(verification.checks.checksum).toBe(true);
+    expect(verification.checks.schema).toBe(false);
+    expect(verification.errors).toContain('summary.durationMs must be a finite non-negative number');
   });
 
   it('contains hostile depth without throwing', () => {

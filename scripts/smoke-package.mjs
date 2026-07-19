@@ -47,7 +47,7 @@ const publicEntries = [
 const packageBudget = {
   maxFiles: 210,
   maxPackedBytes: 450_000,
-  maxUnpackedBytes: 1_320_000,
+  maxUnpackedBytes: 1_325_000,
 };
 
 try {
@@ -326,6 +326,16 @@ try {
     oversizedRejected = /bundle exceeds 262144 bytes/.test(stderr);
   }
   if (!oversizedRejected) throw new Error('installed evidence verifier accepted an oversized bundle');
+  let nonRegularRejected = false;
+  try {
+    run(process.execPath, [cli, 'evidence', 'verify', temporary]);
+  } catch (cause) {
+    const stderr = cause != null && typeof cause === 'object' && 'stderr' in cause
+      ? String(cause.stderr)
+      : '';
+    nonRegularRejected = /bundle must be a regular file/.test(stderr);
+  }
+  if (!nonRegularRejected) throw new Error('installed evidence verifier accepted a non-regular file');
   const installedReadme = join(
     temporary,
     'node_modules',

@@ -140,7 +140,6 @@ export interface McpOpaqueFlowPolicyOpening {
 export interface McpOpaqueFlowAuthorityRecord {
   readonly authority: McpOpaqueFlowAuthorityBinding;
   readonly opening: McpOpaqueFlowPolicyOpening;
-  readonly policy: unknown;
 }
 
 export interface McpOpaqueFlowAuthorityDestinationIdentity {
@@ -634,7 +633,6 @@ export class McpOpaqueFlowEngine {
   private readonly signingKeyId: string;
   private readonly authorityBinding?: McpOpaqueFlowAuthorityBinding;
   private readonly policyOpening?: McpOpaqueFlowPolicyOpening;
-  private readonly authorityPolicy?: unknown;
   private readonly destinationServerId?: string;
   private sequence = 0;
   private previousReceiptHash = '0'.repeat(64);
@@ -673,7 +671,6 @@ export class McpOpaqueFlowEngine {
       const authorityPolicy = JSON.parse(canonicalJson(
         options.authorityPolicy ?? { flows: [...this.policies.values()] },
       )) as unknown;
-      this.authorityPolicy = authorityPolicy;
       const policyNonce = randomBytes(32).toString('base64url');
       const policyAuthorizationSignature = signValue(
         null,
@@ -739,12 +736,8 @@ export class McpOpaqueFlowEngine {
   }
 
   get authorityRecord(): McpOpaqueFlowAuthorityRecord | undefined {
-    return this.authorityBinding && this.policyOpening && this.authorityPolicy
-      ? {
-          authority: this.authorityBinding,
-          opening: this.policyOpening,
-          policy: this.authorityPolicy,
-        }
+    return this.authorityBinding && this.policyOpening
+      ? { authority: this.authorityBinding, opening: this.policyOpening }
       : undefined;
   }
 

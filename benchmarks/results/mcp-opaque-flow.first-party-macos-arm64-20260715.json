@@ -14,10 +14,10 @@
     "description": "Production gateway and an unmodified deterministic stdio MCP fixture; no model or provider call.",
     "persistedData": "Synthetic source and destination values are not persisted. Counts, byte sizes, fingerprints, receipts, and the opening signature for the already-public synthetic policy are retained.",
     "fingerprints": {
-      "src/mcp/flow.ts": "3e07fea5fe05f703b43c31b353fd4ce8eb873c12ada0ae745e22c84970e7eddf",
-      "src/mcp/gateway.ts": "64cb1ce13f7077d6c8b49abe413a293d8841c3aaccfec57d7425c4c7b3433e17",
+      "src/mcp/flow.ts": "fb176f85fe8ef675a188fc02cd9ff2f422ebba4bd9f71596130cae0ca5ebddf4",
+      "src/mcp/gateway.ts": "5b4ea774342578f28791950b91fc36833f67f19c431c7070fe9a7315dc477143",
       "src/virtual-context/store.ts": "7b0bbc2de4e400b7cb85a23d926bf5ec2c898c7242df57b220026bf3cbc36783",
-      "src/cli/main.ts": "c18752136c89bf1d57d3415633133d1ea20547c862bd176696f803e4d36d8eee",
+      "src/cli/main.ts": "599cbda60038c4b9e25a556b285817e9d828a52670f6462d0544cafa1eafc960",
       "benchmarks/v2/mcp_opaque_flow_gate.mjs": "adf0563992a9e697501443c9163562c8e8cba242015ff61e82222f73951b0840",
       "benchmarks/fixtures/opaque_flow_data.mjs": "af3b9cdde4f9a025acc1d8dade13dec080025072edd2d3483dbde7226d11b263",
       "benchmarks/fixtures/opaque_flow_server.mjs": "1a70a6162a7b30ae71f72616d611b7e3e0081806ee666ef64db1dc9bd006d603",
@@ -28,7 +28,7 @@
         "name": "@codepalaiorg/pinpoint",
         "version": "0.2.5"
       },
-      "gitBaseCommit": "4ba4c74edccd9bb5645926b15dbeebf93bc9e99d",
+      "gitBaseCommit": "0294d9aa6d2f179ce1bfe2de23495a1a084f17d7",
       "worktreeDirty": true,
       "entryPoint": "dist/mcp/index.js",
       "javascriptManifest": [
@@ -58,11 +58,11 @@
         },
         {
           "path": "dist/cli/evidence.js",
-          "sha256": "b2964a4617c6b537023d30317b14b55743b34f0df8a3e5d00ac3532872088c90"
+          "sha256": "cb69095de9e1ef7cac405be626549ab5f61fc588ece3f63f24d8f4797825fcae"
         },
         {
           "path": "dist/cli/main.js",
-          "sha256": "048f6fb8a282e0188307e84d40381eb5b8818fa1e03180ac36508e16bb472036"
+          "sha256": "6acc2e5cdb9f9135c1cf9c713cca9146e068e8c209b33d1c88bb1ccbed2ed895"
         },
         {
           "path": "dist/cli/mcp-demo.js",
@@ -126,7 +126,7 @@
         },
         {
           "path": "dist/index.js",
-          "sha256": "812d8e1ff846ce7b195142a373d4dca30cfed65699d810bbefd04cc847d1a954"
+          "sha256": "2f40a1804d37fee8b44a61d582e5f32a81bf4439ac30a3c3da82da050f5f6f5f"
         },
         {
           "path": "dist/integrations/legacy-compressor.js",
@@ -166,19 +166,23 @@
         },
         {
           "path": "dist/mcp/destination.js",
-          "sha256": "ea03972945c2b6ff090fb613222972e680deaed841c6240fd6aceeee204f606e"
+          "sha256": "65a0b8abff80b63fe1c08b9b370ab3e0831a96d61848f8b6d5b807a3f826e2d1"
         },
         {
           "path": "dist/mcp/flow.js",
-          "sha256": "5dc05ab99ea826d295dbde754faf0bf898f51d0e329de5a1c060ccd480334ae4"
+          "sha256": "e8eb42a134c65e1086d4ff4c169093a130c366cff260c15c46c5e94ccfa9ce35"
         },
         {
           "path": "dist/mcp/gateway.js",
-          "sha256": "addc21f33eec306b2beea5899cbc3df4b08af376314a9c4feb67156cb6c85425"
+          "sha256": "934e8236e33e5306f618d3c819e595395abdfac8d67a3d263c2f83605a9af401"
         },
         {
           "path": "dist/mcp/index.js",
-          "sha256": "2eb72e02bd435651d359b539edc8074db2fa337bda81715926cace06c37e7b33"
+          "sha256": "d13e81949e8750b9a9a217e72cfe11e4a2ee1655cd96545ed83f74821d773b75"
+        },
+        {
+          "path": "dist/mcp/ndjson.js",
+          "sha256": "94518b8fbe2ba209f622de6e328429fe36bfb517d5eae916ccd957151a59cb53"
         },
         {
           "path": "dist/mcp/server.js",
@@ -186,7 +190,7 @@
         },
         {
           "path": "dist/mcp/tool-result.js",
-          "sha256": "316d13b509f86776af9186084e0d3e51335d8a629df3932044bb3ccf4a6c204a"
+          "sha256": "119908feadf8c07a1ed8340e231655f47a79796fe8065976a81b86f1cf433bc4"
         },
         {
           "path": "dist/measurement/savings.js",
@@ -357,8 +361,8 @@
     "verifierPinnedAtInitialize": true,
     "operatorAuthorityBindingValid": true,
     "exactPolicyOpeningValid": true,
-    "operatorKeyId": "5c557723acdcb9c6bce4e9b2a595981e825a3b2c07f5f486af58dbf1d73cb42f",
-    "policyCommitment": "sha256:23a6534db73f3335ae8ceb87f4ec9549c9822ac181c3a6bba06587679fbf6385",
+    "operatorKeyId": "93e6fb3144446a4e020aa6eb35e6974ca80798e11531d8a4886889864a550ae9",
+    "policyCommitment": "sha256:e2bbe00984a2ec3a287fc92dbc80a64e38a2885593b7bf8739cc07f6f8335b0d",
     "commitmentsUnlinkableAcrossIdenticalPayloads": true,
     "tamperedReceiptRejected": true,
     "tamperedAuthorityRejected": true,
@@ -366,41 +370,41 @@
     "destinationAcceptedExactProjection": true,
     "receiptChain": {
       "count": 30,
-      "signingKeyId": "3655120f4f20279fe34ce5ec2d46b7cbbb234f54e344861c997c35f44272f029",
-      "firstReceiptHash": "60e211e60071011b73bf7da39a4e1a24abb6b9e024a38f822f40208678b16063",
-      "lastReceiptHash": "1a3a822d6a7ccd76d323a4882f82beebd70be4420498f443f025250ad8ee0ae6"
+      "signingKeyId": "b045802ddb1049821a78470686fec93ee51d07020a90f4a67f1452dd95b798f5",
+      "firstReceiptHash": "c39a37e8e1c41d44932b4b0e9a93a9deb6ca68f15b2d807210ba97cdc12eb436",
+      "lastReceiptHash": "9d3f1f338c4b46d75443fb2ca8580bf29a837e64280cbc018456f1195ba2dded"
     }
   },
   "latencyMs": {
     "samples": 30,
-    "p50": 0.25762500000001864,
-    "p95": 0.7768330000000105,
-    "p99": 1.055250000000001,
-    "max": 1.055250000000001
+    "p50": 0.33654200000000856,
+    "p95": 0.7821250000000077,
+    "p99": 1.3541669999999613,
+    "max": 1.3541669999999613
   },
   "authority": {
     "authorityVersion": 1,
     "domain": "pinpoint.mcp.opaque-flow.session",
-    "operatorKeyId": "5c557723acdcb9c6bce4e9b2a595981e825a3b2c07f5f486af58dbf1d73cb42f",
-    "sessionSigningKeyId": "3655120f4f20279fe34ce5ec2d46b7cbbb234f54e344861c997c35f44272f029",
-    "sessionPublicKey": "MCowBQYDK2VwAyEA586yM49_b5IA8UAnucklAcqB73BVQwjKIxRScmSZwk8",
-    "policyNonce": "SyRDMR9NvYFFi8bLb45eHL7tYmWg7Ni1559_kW2CMHc",
+    "operatorKeyId": "93e6fb3144446a4e020aa6eb35e6974ca80798e11531d8a4886889864a550ae9",
+    "sessionSigningKeyId": "b045802ddb1049821a78470686fec93ee51d07020a90f4a67f1452dd95b798f5",
+    "sessionPublicKey": "MCowBQYDK2VwAyEA2eejx6roFjrk5kkuUIfYEIs4-7-co17yh_zx2LfTwv0",
+    "policyNonce": "T1-nDzdlRBMGbyPowq06jxeSVkU40KVK2VO9iKnNoKY",
     "policyCommitmentAlgorithm": "Ed25519-SHA256",
-    "policyCommitment": "sha256:23a6534db73f3335ae8ceb87f4ec9549c9822ac181c3a6bba06587679fbf6385",
+    "policyCommitment": "sha256:e2bbe00984a2ec3a287fc92dbc80a64e38a2885593b7bf8739cc07f6f8335b0d",
     "verifier": {
       "algorithm": "Ed25519",
-      "publicKey": "MCowBQYDK2VwAyEAORfWy0NyrCEwwsZbM3MSZ9dzkYNb6J0vLgfZLpJ73WY"
+      "publicKey": "MCowBQYDK2VwAyEAN3N0SLUltSDiG8BxZ_FyexYzynGtZUhiDAaQXNRYjpM"
     },
-    "signature": "KsZ_6o5kYJlXC_D8g2XIjR20ryZgOLMslILfPTDWpeHF_sLKMwVHAK2cPGsAO6MlnNQXOyCZVuizBSHyPcf7DA"
+    "signature": "v3aYVWEGTCyf8qt94c55HCR_SneaVaxHmJ2nByn_0R_SJ0IkaPFdJ9lbacmSqq4dTDG9TvMe3EjUdaDSaRVoAw"
   },
   "opening": {
-    "policyAuthorizationSignature": "y7VM4jBJrguZg5hrbvRCwefIGFMbj5G-vIGywZ0SJsHH5SvBzduY6s9khe6EdhRJeyrQDfun7qEsH40HZRp7CA"
+    "policyAuthorizationSignature": "X3bouncJJOL1MX5A_7_Zf5MTsDDVBHS8Olr4RJZ19Ro6GlqQJ3HjEruz5Na7vLnzic4qup6QYZwAtHOVyU13Cg"
   },
   "firstReceipt": {
     "receiptVersion": 1,
     "sequence": 1,
     "flow": "validate_renewal_projection",
-    "artifactId": "vctx_40d6d1e62174fea78015a1d8a4a16835",
+    "artifactId": "vctx_1391c23441e03d7566fcd48a33bcb955",
     "sourceTool": "synthetic_accounts_list",
     "destinationTool": "synthetic_projection_validate",
     "destinationArgument": "projectedRecords",
@@ -422,35 +426,35 @@
     "items": 40,
     "payloadBytes": 1739,
     "commitmentAlgorithm": "HMAC-SHA256",
-    "payloadCommitment": "hmac-sha256:6951abca8cc94a59d9bc1f4bc6971c79e35eb5f49e443d93dce95d631f199be8",
-    "queryCommitment": "hmac-sha256:eaf5b886ad932b039937c90f5349f62a3f44a77c13110975c40f761cf0859baa",
+    "payloadCommitment": "hmac-sha256:46046650f5dd47a35b4615abe1ccbc1a567d6f7f480e1dc05ba7107882afdec1",
+    "queryCommitment": "hmac-sha256:3b8470c09462b87a4ba6d3b6108a3217fae350efd29189768a6a3725710b507d",
     "destinationSucceeded": true,
     "destinationResultBytes": 120,
-    "destinationResultCommitment": "hmac-sha256:76f38092e4aafaf2283053c59e4000791a3bb73a836bccfd1ac4cbacc15673e2",
+    "destinationResultCommitment": "hmac-sha256:5c323ef1d5e225bf1555bf5f54364d9de376193a101f61fd114a1f6e36082656",
     "previousReceiptHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "signingKeyId": "3655120f4f20279fe34ce5ec2d46b7cbbb234f54e344861c997c35f44272f029",
+    "signingKeyId": "b045802ddb1049821a78470686fec93ee51d07020a90f4a67f1452dd95b798f5",
     "disclosure": "receipt",
-    "receiptHash": "60e211e60071011b73bf7da39a4e1a24abb6b9e024a38f822f40208678b16063",
+    "receiptHash": "c39a37e8e1c41d44932b4b0e9a93a9deb6ca68f15b2d807210ba97cdc12eb436",
     "verifier": {
       "algorithm": "Ed25519",
-      "publicKey": "MCowBQYDK2VwAyEA586yM49_b5IA8UAnucklAcqB73BVQwjKIxRScmSZwk8",
+      "publicKey": "MCowBQYDK2VwAyEA2eejx6roFjrk5kkuUIfYEIs4-7-co17yh_zx2LfTwv0",
       "authority": {
         "authorityVersion": 1,
         "domain": "pinpoint.mcp.opaque-flow.session",
-        "operatorKeyId": "5c557723acdcb9c6bce4e9b2a595981e825a3b2c07f5f486af58dbf1d73cb42f",
-        "sessionSigningKeyId": "3655120f4f20279fe34ce5ec2d46b7cbbb234f54e344861c997c35f44272f029",
-        "sessionPublicKey": "MCowBQYDK2VwAyEA586yM49_b5IA8UAnucklAcqB73BVQwjKIxRScmSZwk8",
-        "policyNonce": "SyRDMR9NvYFFi8bLb45eHL7tYmWg7Ni1559_kW2CMHc",
+        "operatorKeyId": "93e6fb3144446a4e020aa6eb35e6974ca80798e11531d8a4886889864a550ae9",
+        "sessionSigningKeyId": "b045802ddb1049821a78470686fec93ee51d07020a90f4a67f1452dd95b798f5",
+        "sessionPublicKey": "MCowBQYDK2VwAyEA2eejx6roFjrk5kkuUIfYEIs4-7-co17yh_zx2LfTwv0",
+        "policyNonce": "T1-nDzdlRBMGbyPowq06jxeSVkU40KVK2VO9iKnNoKY",
         "policyCommitmentAlgorithm": "Ed25519-SHA256",
-        "policyCommitment": "sha256:23a6534db73f3335ae8ceb87f4ec9549c9822ac181c3a6bba06587679fbf6385",
+        "policyCommitment": "sha256:e2bbe00984a2ec3a287fc92dbc80a64e38a2885593b7bf8739cc07f6f8335b0d",
         "verifier": {
           "algorithm": "Ed25519",
-          "publicKey": "MCowBQYDK2VwAyEAORfWy0NyrCEwwsZbM3MSZ9dzkYNb6J0vLgfZLpJ73WY"
+          "publicKey": "MCowBQYDK2VwAyEAN3N0SLUltSDiG8BxZ_FyexYzynGtZUhiDAaQXNRYjpM"
         },
-        "signature": "KsZ_6o5kYJlXC_D8g2XIjR20ryZgOLMslILfPTDWpeHF_sLKMwVHAK2cPGsAO6MlnNQXOyCZVuizBSHyPcf7DA"
+        "signature": "v3aYVWEGTCyf8qt94c55HCR_SneaVaxHmJ2nByn_0R_SJ0IkaPFdJ9lbacmSqq4dTDG9TvMe3EjUdaDSaRVoAw"
       }
     },
-    "signature": "o_fdPEQLW-ZgY5gqQjClI99X4DvKc5K1u1kBWDEA81rr8-g7LAb4KTmCtKcDlieR_6pa8B2jVgWBbytvmgxVDA"
+    "signature": "rST4kLTBPZR-CVRrsvgQMLYjHELD90hRKTaw6k1SD0-DTzOwhM-kyhYok35bC9anzD3EoHKA7bv9vIfWL2D7DA"
   },
   "limitations": [
     "This is a deterministic first-party protocol integration, not a model-quality or production-demand measurement.",

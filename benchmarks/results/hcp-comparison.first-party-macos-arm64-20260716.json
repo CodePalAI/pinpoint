@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "evidenceLevel": "comparative-mechanism-evaluation",
   "kind": "pinpoint-vs-hcp-same-workflow",
-  "date": "2026-07-16",
+  "date": "2026-07-19",
   "passed": true,
   "environment": {
     "platform": "darwin",
@@ -11,8 +11,8 @@
     "node": "v26.0.0"
   },
   "pins": {
-    "pinpointCommit": "56d21e03134ac49ad3f56c4f1df84e5ce9dc4ee9",
-    "pinpointVersion": "0.1.1",
+    "pinpointCommit": "0294d9aa6d2f179ce1bfe2de23495a1a084f17d7",
+    "pinpointVersion": "0.2.5",
     "hcpRepository": "https://github.com/SymbolicLight-AGI/handle-capability-protocol.git",
     "hcpCommit": "e7eb50158f3d495f1dc99a2755abe08f0d0db716",
     "hcpRuntimeVersion": "0.3.0"
@@ -101,7 +101,7 @@
     "pinpoint": {
       "providers": "two pinned unmodified published MCP packages",
       "logicalProcesses": 3,
-      "relevantSourceLines": 3246
+      "relevantSourceLines": 3540
     },
     "hcp": {
       "providers": "two comparison-specific HCP-native adapters",
@@ -113,16 +113,16 @@
   },
   "timing": {
     "pinpoint": {
-      "elapsedMs": 3267.652584,
+      "elapsedMs": 4420.227292,
       "scope": "cold gateway plus two npx-launched published stdio servers and one flow"
     },
     "hcp": {
       "samples": 30,
       "scope": "in-process source task plus data.pipe; runtime/provider setup excluded",
-      "p50": 0.23679100000001085,
-      "p95": 0.47845900000000086,
-      "p99": 1.680334000000002,
-      "max": 1.680334000000002
+      "p50": 0.24279200000000856,
+      "p95": 0.5583340000000021,
+      "p99": 1.5409580000000034,
+      "max": 1.5409580000000034
     },
     "comparableRanking": false,
     "reason": "HCP is an in-process mechanism timing with setup excluded; Pinpoint includes cold process/package startup."
@@ -136,7 +136,7 @@
     "fingerprints": {
       "benchmarks/competitors/hcp_same_workflow_adapter.mjs": "869a33a0cbbc28e286f10da03edd5eaddb418b09c8d408b24e77292cfd5458b4",
       "benchmarks/v2/hcp_comparison_gate.mjs": "336db2df1399c130e1af7f2d2cd6b07aed7ba6121d13ffeb04499f57008e1a6f",
-      "benchmarks/v2/mcp_oss_cross_server_gate.mjs": "adf8f23c8c30ebfc156d209e416da463fff8d9859abf9383cae52d5f0997b88f",
+      "benchmarks/v2/mcp_oss_cross_server_gate.mjs": "e2db8ff08bba3f3ae329e1b09bd4b3a329deab1fa0283345db86f2e003593985",
       "hcp-runtime/src/runtime.js": "830ef87a405f8ad11b78f955869abd2b47fd09d2944813c18d5c0dbf95f9e9ac",
       "hcp-runtime/src/jsonrpc.js": "cbcd7d8447fa2ee813ad859b3345822f8fee76e333b1d68df4a144993a551d10",
       "hcp-runtime/src/provider-sdk.js": "0f525e9fe09902b3782d89e5acc52904992e9e23cab3f7dc321b656d5aaab563"

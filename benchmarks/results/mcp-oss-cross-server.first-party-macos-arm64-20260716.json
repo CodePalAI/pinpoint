@@ -45,7 +45,7 @@
     "persistedEntities": 40,
     "privateCanariesScanned": 600,
     "privateCanariesLeaked": 0,
-    "elapsedMs": 6076.444667
+    "elapsedMs": 5521.568458
   },
   "security": {
     "separateProcesses": true,
@@ -55,17 +55,17 @@
     "operatorAuthorityBindingValid": true,
     "exactPolicyOpeningValid": true,
     "destinationServerBoundInReceipt": true,
-    "operatorKeyId": "d4892857191f2b5f0107743efd8f2d7dd6cacdda2ff5850bcb046a1455911bc8",
-    "policyCommitment": "sha256:2b08ec0b87b4decf290afc65cb572c847b030ad3bf8f30ed9266a222eeff5d84",
-    "receiptHash": "63a4524d90550c9b965379bebc1ad88982683206659fc55b9f58993f5c67de80"
+    "operatorKeyId": "45aff26a3125fcee76b276a583066af9eaf6089f8274392d45beadcfa379ecba",
+    "policyCommitment": "sha256:07f493a7ffada405068ee88759be4c4a3da9009cd7a8058f4055103f5f80e2fa",
+    "receiptHash": "f29ef98b9a1e24668d25ffeedab1765ffbb92e750d42da435cb400e7f6818ced"
   },
   "source": {
     "fingerprints": {
-      "src/mcp/destination.ts": "2445bb6cfaf74c5012c00a85738907d79df93e408a58716d98915393cd9977b4",
-      "src/mcp/flow.ts": "3e07fea5fe05f703b43c31b353fd4ce8eb873c12ada0ae745e22c84970e7eddf",
-      "src/mcp/gateway.ts": "64cb1ce13f7077d6c8b49abe413a293d8841c3aaccfec57d7425c4c7b3433e17",
+      "src/mcp/destination.ts": "8f6872a067bab2c2ece6171acfa2f38c23dbaa5d0d272ef1014699f466794ce3",
+      "src/mcp/flow.ts": "fb176f85fe8ef675a188fc02cd9ff2f422ebba4bd9f71596130cae0ca5ebddf4",
+      "src/mcp/gateway.ts": "5b4ea774342578f28791950b91fc36833f67f19c431c7070fe9a7315dc477143",
       "src/virtual-context/store.ts": "7b0bbc2de4e400b7cb85a23d926bf5ec2c898c7242df57b220026bf3cbc36783",
-      "benchmarks/v2/mcp_oss_cross_server_gate.mjs": "adf8f23c8c30ebfc156d209e416da463fff8d9859abf9383cae52d5f0997b88f"
+      "benchmarks/v2/mcp_oss_cross_server_gate.mjs": "e2db8ff08bba3f3ae329e1b09bd4b3a329deab1fa0283345db86f2e003593985"
     }
   },
   "limitations": [

@@ -439,6 +439,11 @@ pinpoint-verify-receipt receipt.json \
   --authority-opening ./pinpoint-authority-opening.json
 ```
 
+For a private destination, add `--destination-config ./destination.json`. Pinpoint
+normalizes the supplied flow and destination files exactly as the gateway did, then
+verifies that policy against the signed opening. Fixed values are not copied into the
+opening record.
+
 SDK users can call `verifyMcpOpaqueFlowReceipt(receipt, initializedVerifier)`.
 
 ### Safe failure behavior

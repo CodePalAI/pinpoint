@@ -57,14 +57,23 @@ if (allowedSigners.length !== 1 || allowedSigners[0] !== expectedSigner) {
 }
 for (const required of [
   'git verify-tag "$RELEASE_TAG"',
+  'test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"',
+  'test "$GITHUB_SHA" = "$TAG_COMMIT"',
   'npm run sbom',
   'npm run verify:release',
   'PINPOINT_PACKAGE_SMOKE_OUT="$PWD/release/codepalaiorg-pinpoint-$PACKAGE_VERSION.tgz"',
   'Verify retained release artifact',
+  'git ls-files --others --exclude-standard',
+  'overwrite: true',
   'npm run formal:opaque-flow:async',
   'npx playwright install --with-deps chromium',
   'npm run test:dashboard:e2e',
   'test "$NPM_USER" = "codepalaiorg"',
+  'Verify published provenance',
+  'node scripts/verify-npm-provenance.mjs',
+  'audit signatures',
+  'EXPECTED_REF="refs/tags/$RELEASE_TAG"',
+  'EXPECTED_COMMIT=$(git rev-list -n 1 "$RELEASE_TAG")',
   'RELEASE_ID=$(gh api --paginate',
   'releases/$RELEASE_ID/assets',
   'releases/assets/$ASSET_ID',
@@ -83,6 +92,9 @@ for (const required of [
   if (!releaseWorkflow.includes(required)) fail(`release workflow is missing: ${required}`);
 }
 if (releaseWorkflow.includes('npm pack')) fail('release workflow must publish the exact package-smoke tarball without repacking');
+if (!readFileSync(join(root, 'scripts', 'verify-npm-provenance.mjs'), 'utf8').includes('https://slsa.dev/provenance/v1')) {
+  fail('npm provenance verifier must require SLSA provenance');
+}
 if (!String(packageJson.scripts?.prepublishOnly ?? '').includes('npm run publish:state-check')) {
   fail('prepublishOnly must enforce publish:state-check');
 }

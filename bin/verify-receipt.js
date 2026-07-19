@@ -85,22 +85,13 @@ function verifyAuthority(binding, receiptPublicKey, receiptKeyId, expectedOperat
 
 function verifyPolicyOpening(authority, policyPath, openingPath, destinationPath) {
   if (policyPath == null && openingPath == null && destinationPath == null) return true;
-  if (openingPath == null || authority == null || (destinationPath != null && policyPath == null)) return false;
+  if (policyPath == null || openingPath == null || authority == null) return false;
   const record = readJsonFile(openingPath, MAX_OPENING_BYTES, 'authority opening');
   if (canonicalJson(record.authority) !== canonicalJson(authority)) return false;
   const signature = record.opening?.policyAuthorizationSignature;
-  if (typeof signature !== 'string' || record.policy == null) return false;
+  if (typeof signature !== 'string') return false;
   const signatureBytes = Buffer.from(signature, 'base64url');
   if (`sha256:${createHash('sha256').update(signatureBytes).digest('hex')}` !== authority.policyCommitment) return false;
-  const publicKeyBytes = Buffer.from(authority.verifier.publicKey, 'base64url');
-  const publicKey = createPublicKey({ key: publicKeyBytes, format: 'der', type: 'spki' });
-  const message = canonicalJson({
-    domain: 'pinpoint.mcp.opaque-flow.policy',
-    policyNonce: authority.policyNonce,
-    policy: record.policy,
-  });
-  if (!verify(null, Buffer.from(message), publicKey, signatureBytes)) return false;
-  if (policyPath == null) return true;
   const config = parseMcpOpaqueFlowConfig(readJsonFile(policyPath, MAX_POLICY_BYTES, 'flow policy'));
   const destination = destinationPath == null
     ? undefined
@@ -108,8 +99,6 @@ function verifyPolicyOpening(authority, policyPath, openingPath, destinationPath
         readJsonFile(destinationPath, MAX_POLICY_BYTES, 'destination config'),
         {},
       );
-  if (record.policy.destination != null && destination == null) return false;
-  if (record.policy.destination == null && destination != null) return false;
   const expectedPolicy = createMcpOpaqueFlowAuthorityPolicy(config, destination == null ? undefined : {
     id: destination.id,
     command: destination.command,
@@ -118,7 +107,14 @@ function verifyPolicyOpening(authority, policyPath, openingPath, destinationPath
     envNames: destination.declaredEnvNames,
     sharedEnvNames: destination.sharedEnvNames,
   });
-  return canonicalJson(record.policy) === canonicalJson(expectedPolicy);
+  const publicKeyBytes = Buffer.from(authority.verifier.publicKey, 'base64url');
+  const publicKey = createPublicKey({ key: publicKeyBytes, format: 'der', type: 'spki' });
+  const message = canonicalJson({
+    domain: 'pinpoint.mcp.opaque-flow.policy',
+    policyNonce: authority.policyNonce,
+    policy: expectedPolicy,
+  });
+  return verify(null, Buffer.from(message), publicKey, signatureBytes);
 }
 
 const file = process.argv[2];

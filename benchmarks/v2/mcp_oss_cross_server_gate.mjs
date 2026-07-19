@@ -6,7 +6,9 @@ import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 import {
+  createMcpOpaqueFlowAuthorityPolicy,
   MCP_FLOW_TOOL_NAME,
+  parseMcpOpaqueFlowConfig,
   runMcpGateway,
   verifyMcpOpaqueFlowAuthorityBinding,
   verifyMcpOpaqueFlowPolicyOpening,
@@ -235,21 +237,19 @@ try {
     operatorVerifier,
     verifier,
   );
-  const authorityPolicy = {
+  const authorityPolicy = createMcpOpaqueFlowAuthorityPolicy(parseMcpOpaqueFlowConfig({
     version: 1,
     exposeQueryTool: false,
     exposeArtifactResources: false,
     opaqueArtifactIds: true,
     flows: [flowPolicy],
-    destination: {
-      id: destination.id,
-      command: destination.command,
-      args: destination.args,
-      cwd: null,
-      envNames: [...destination.declaredEnvNames].sort(),
-      sharedEnvNames: [...destination.sharedEnvNames].sort(),
-    },
-  };
+  }), {
+    id: destination.id,
+    command: destination.command,
+    args: destination.args,
+    envNames: destination.declaredEnvNames,
+    sharedEnvNames: destination.sharedEnvNames,
+  });
   const exactPolicyOpeningValid = verifyMcpOpaqueFlowPolicyOpening(
     verifier?.authority,
     authorityPolicy,

@@ -60,7 +60,7 @@ const publicEntries = [
   '@codepalaiorg/pinpoint/dashboard',
 ];
 const packageBudget = {
-  maxFiles: 210,
+  maxFiles: 212,
   maxPackedBytes: 450_000,
   maxUnpackedBytes: 1_325_000,
 };

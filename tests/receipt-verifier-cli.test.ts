@@ -22,7 +22,7 @@ const receiptPath = join(
 const verifier = join(process.cwd(), 'bin', 'verify-receipt.js');
 
 describe('standalone opaque-flow receipt verifier', () => {
-  it('verifies the committed receipt without importing Pinpoint runtime code', () => {
+  it('verifies the committed receipt without starting Pinpoint runtime services', () => {
     const source = JSON.parse(readFileSync(receiptPath, 'utf8'));
     const output = JSON.parse(execFileSync(process.execPath, [
       verifier,

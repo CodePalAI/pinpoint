@@ -54,6 +54,8 @@ jobs:
           git config --local gpg.format ssh
           git config --local gpg.ssh.allowedSignersFile "$PWD/.github/release-allowed-signers"
           git verify-tag "$RELEASE_TAG"
+          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
+          test "$GITHUB_SHA" = "$TAG_COMMIT"
           test "$(git rev-parse HEAD)" = "$TAG_COMMIT"
           git fetch --no-tags origin "$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
           git merge-base --is-ancestor "$TAG_COMMIT" "origin/$DEFAULT_BRANCH"
@@ -75,7 +77,9 @@ jobs:
       - name: Test dashboard in Chromium
         run: npm run test:dashboard:e2e
       - name: Verify generated files are committed
-        run: git diff --exit-code
+        run: |
+          git diff --exit-code
+          test -z "$(git ls-files --others --exclude-standard)"
       - name: Verify retained release artifact
         run: test "$(find release -maxdepth 1 -name '*.tgz' | wc -l)" -eq 1
       - name: Generate production SBOM
@@ -99,6 +103,7 @@ jobs:
           path: release/
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
 
   publish:
     name: Publish verified package
@@ -110,6 +115,11 @@ jobs:
       contents: write
       id-token: write
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ env.RELEASE_TAG }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.22.2
@@ -173,19 +183,23 @@ jobs:
           PACKAGE_NAME='@codepalaiorg/pinpoint'
           PACKAGE_VERSION=${RELEASE_TAG#v}
           EXPECTED_INTEGRITY=$(cat release/PACKAGE_INTEGRITY)
-          REGISTRY_OUTPUT=$(mktemp)
-          REGISTRY_ERROR=$(mktemp)
-          if node "$NPM_CLI" view "$PACKAGE_NAME@$PACKAGE_VERSION" dist.integrity --json >"$REGISTRY_OUTPUT" 2>"$REGISTRY_ERROR"; then
-            PUBLISHED_INTEGRITY=$(node -e 'const fs=require("node:fs"); const value=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(String(value));' "$REGISTRY_OUTPUT")
-            test "$PUBLISHED_INTEGRITY" = "$EXPECTED_INTEGRITY"
-            echo "published=true" >> "$GITHUB_OUTPUT"
-            echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published with the verified artifact"
-          elif grep -q 'E404' "$REGISTRY_ERROR"; then
-            echo "published=false" >> "$GITHUB_OUTPUT"
-          else
-            cat "$REGISTRY_ERROR" >&2
-            exit 1
-          fi
+          for ATTEMPT in 1 2 3 4 5; do
+            REGISTRY_OUTPUT=$(mktemp)
+            REGISTRY_ERROR=$(mktemp)
+            if node "$NPM_CLI" view "$PACKAGE_NAME@$PACKAGE_VERSION" dist.integrity --json >"$REGISTRY_OUTPUT" 2>"$REGISTRY_ERROR"; then
+              PUBLISHED_INTEGRITY=$(node -e 'const fs=require("node:fs"); const value=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(String(value));' "$REGISTRY_OUTPUT")
+              test "$PUBLISHED_INTEGRITY" = "$EXPECTED_INTEGRITY"
+              echo "published=true" >> "$GITHUB_OUTPUT"
+              echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published with the verified artifact"
+              exit 0
+            fi
+            if ! grep -q 'E404' "$REGISTRY_ERROR"; then
+              cat "$REGISTRY_ERROR" >&2
+              exit 1
+            fi
+            if test "$ATTEMPT" -lt 5; then sleep 5; fi
+          done
+          echo "published=false" >> "$GITHUB_OUTPUT"
       - name: Publish with bootstrap token
         if: steps.registry.outputs.published == 'false' && steps.auth.outputs.mode == 'token'
         env:
@@ -194,14 +208,36 @@ jobs:
           NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
           PACKAGE_TARBALL=$(find "$PWD/release" -maxdepth 1 -name 'codepalaiorg-pinpoint-*.tgz' -print -quit)
           test -n "$PACKAGE_TARBALL"
-          node "$NPM_CLI" publish "$PACKAGE_TARBALL" --access public --provenance --ignore-scripts
+          if ! node "$NPM_CLI" publish "$PACKAGE_TARBALL" --access public --provenance --ignore-scripts; then
+            echo "npm publish returned non-zero; checking immutable registry state and provenance" >&2
+          fi
       - name: Publish with npm trusted publishing
         if: steps.registry.outputs.published == 'false' && steps.auth.outputs.mode == 'oidc'
         run: |
           NPM_CLI="$PWD/npm-cli/package/bin/npm-cli.js"
           PACKAGE_TARBALL=$(find "$PWD/release" -maxdepth 1 -name 'codepalaiorg-pinpoint-*.tgz' -print -quit)
           test -n "$PACKAGE_TARBALL"
-          node "$NPM_CLI" publish "$PACKAGE_TARBALL" --access public --ignore-scripts
+          if ! node "$NPM_CLI" publish "$PACKAGE_TARBALL" --access public --ignore-scripts; then
+            echo "npm publish returned non-zero; checking immutable registry state and provenance" >&2
+          fi
+      - name: Verify published provenance
+        env:
+          PACKAGE_NAME: '@codepalaiorg/pinpoint'
+          EXPECTED_REPOSITORY: https://github.com/CodePalAI/pinpoint
+          EXPECTED_WORKFLOW: .github/workflows/release.yml
+        run: |
+          PACKAGE_VERSION=${RELEASE_TAG#v}
+          EXPECTED_INTEGRITY=$(cat release/PACKAGE_INTEGRITY)
+          EXPECTED_REF="refs/tags/$RELEASE_TAG"
+          EXPECTED_COMMIT=$(git rev-list -n 1 "$RELEASE_TAG")
+          export PACKAGE_VERSION EXPECTED_INTEGRITY EXPECTED_REF EXPECTED_COMMIT
+          node scripts/verify-npm-provenance.mjs
+          VERIFY_DIR=$(mktemp -d)
+          node "$PWD/npm-cli/package/bin/npm-cli.js" init --prefix "$VERIFY_DIR" -y >/dev/null
+          node "$PWD/npm-cli/package/bin/npm-cli.js" install --prefix "$VERIFY_DIR" \
+            "$PACKAGE_NAME@$PACKAGE_VERSION" --ignore-scripts >/dev/null
+          cd "$VERIFY_DIR"
+          node "$GITHUB_WORKSPACE/npm-cli/package/bin/npm-cli.js" audit signatures
       - name: Attach verified release assets
         env:
           GH_TOKEN: ${{ github.token }}

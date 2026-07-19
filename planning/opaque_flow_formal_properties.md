@@ -99,7 +99,7 @@ separate specification. Implementation conformance is tested at adjacent boundar
 | Item and byte confinement | `src/mcp/flow.ts` | protocol gate and query-store bounds |
 | Receipt signature and session pinning | `src/mcp/flow.ts` | valid, tampered, wrong-session, concurrent-chain tests |
 | Operator delegation and policy opening | `src/mcp/flow.ts` | stable-root/fresh-session, changed-fixed-policy, key-swap, wrong-root, and tamper properties |
-| Standalone receipt verification | `bin/verify-receipt.js` (no runtime imports) | committed receipt and exact policy opening accepted; tampered, wrong-session, wrong-root, and changed-policy inputs rejected |
+| Standalone receipt verification | `bin/verify-receipt.js` plus the packaged policy parser | committed receipt and exact normalized same-server/private-destination policy opening accepted; tampered, wrong-session, wrong-root, changed-policy, and changed-destination inputs rejected |
 | Client event-stream absence | production gateway and host harnesses | 400 protocol canaries and 800 aggregate cross-host canary checks |
 | Async dispatch and terminalization | `src/mcp/gateway.ts`, `src/mcp/destination.ts` | duplicate-id reservation, malformed-status rejection, catalog invalidation, post-dispatch child exit, timeout, and pre-aborted startup in `npm run test:mcp-adversarial` |
 

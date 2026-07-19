@@ -47,7 +47,7 @@ const publicEntries = [
 const packageBudget = {
   maxFiles: 210,
   maxPackedBytes: 450_000,
-  maxUnpackedBytes: 1_275_000,
+  maxUnpackedBytes: 1_310_000,
 };
 
 try {
@@ -231,6 +231,50 @@ try {
     'ready: pinpoint mcp gateway -- <your-server> [args...]',
   ]) {
     if (!doctor.includes(expected)) throw new Error(`installed doctor is missing: ${expected}`);
+  }
+  const reproductionPath = join(temporary, 'opaque-flow-reproduction.json');
+  run(process.execPath, [
+    cli,
+    'evidence',
+    'reproduce',
+    '--relationship',
+    'maintainer',
+    '--out',
+    reproductionPath,
+  ]);
+  if (process.platform !== 'win32' && (statSync(reproductionPath).mode & 0o777) !== 0o600) {
+    throw new Error('installed evidence command did not create a mode-0600 bundle');
+  }
+  const reproductionVerification = JSON.parse(run(process.execPath, [
+    cli,
+    'evidence',
+    'verify',
+    reproductionPath,
+  ]));
+  if (
+    reproductionVerification.valid !== true ||
+    reproductionVerification.flowCalls !== 30 ||
+    reproductionVerification.bypassesDenied !== 8 ||
+    reproductionVerification.privateValuesVisible !== 0
+  ) {
+    throw new Error('installed evidence reproduction did not verify');
+  }
+  try {
+    run(process.execPath, [
+      cli,
+      'evidence',
+      'reproduce',
+      '--relationship',
+      'maintainer',
+      '--out',
+      reproductionPath,
+    ]);
+    throw new Error('installed evidence command overwrote an existing bundle');
+  } catch (cause) {
+    if (
+      cause instanceof Error &&
+      cause.message === 'installed evidence command overwrote an existing bundle'
+    ) throw cause;
   }
   const installedReadme = join(
     temporary,

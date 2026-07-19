@@ -599,6 +599,8 @@ if (waitingForNpm) {
       'wrong verifier rejected',
       'pinpoint demo qcv',
       'pinpoint doctor optimizer',
+      'pinpoint evidence reproduce',
+      'pinpoint evidence verify',
     ]) {
       if (!visibleReadme.includes(required)) fail(`published README is missing: ${required}`);
     }

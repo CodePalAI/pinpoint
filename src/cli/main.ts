@@ -41,6 +41,12 @@ import {
 import { openDashboardInBrowser } from '../dashboard/browser.js';
 import { closeDashboardSession } from '../dashboard/lifecycle.js';
 import { runMcpDemo } from './mcp-demo.js';
+import {
+  REPRODUCTION_RELATIONSHIPS,
+  runMcpReproduction,
+  verifyMcpReproduction,
+  type ReproductionRelationship,
+} from './evidence.js';
 
 export { runMcpDemo } from './mcp-demo.js';
 
@@ -75,6 +81,12 @@ COMMANDS
   doctor [mcp|optimizer|copilot]
                    Check core MCP readiness (default), optional legacy optimizer
                    dependencies, or GitHub Copilot wrapper readiness.
+  evidence reproduce --relationship RELATIONSHIP [--out FILE]
+                   Run the packaged 30-flow/8-bypass no-model reproduction and
+                   emit a content-free JSON bundle. Relationships: unaffiliated,
+                   maintainer, contracted, other.
+  evidence verify FILE
+                   Verify bundle hash, summary, receipt signatures, and chain.
   stats            Query a running proxy's session savings (GET /stats).
   dashboard        Open the optional local session recorder. Options:
                    --port, --no-open.
@@ -213,6 +225,56 @@ export function parseDashboardArgs(args: readonly string[]): DashboardArgsResult
     }
   }
   return { ok: true, options: { ...(port != null ? { port } : {}), open } };
+}
+
+export type EvidenceArgsResult =
+  | {
+      readonly ok: true;
+      readonly mode: 'reproduce';
+      readonly relationship: ReproductionRelationship;
+      readonly outputPath?: string;
+    }
+  | { readonly ok: true; readonly mode: 'verify'; readonly filePath: string }
+  | { readonly ok: false; readonly error: string };
+
+export function parseEvidenceArgs(args: readonly string[]): EvidenceArgsResult {
+  if (args[0] === 'verify') {
+    return args.length === 2 && args[1]
+      ? { ok: true, mode: 'verify', filePath: args[1] }
+      : { ok: false, error: 'usage: pinpoint evidence verify FILE' };
+  }
+  if (args[0] !== 'reproduce') {
+    return {
+      ok: false,
+      error: 'usage: pinpoint evidence reproduce --relationship RELATIONSHIP [--out FILE]',
+    };
+  }
+  let relationship: ReproductionRelationship | undefined;
+  let outputPath: string | undefined;
+  for (let index = 1; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--relationship') {
+      const value = args[++index];
+      if (!value || !REPRODUCTION_RELATIONSHIPS.includes(value as ReproductionRelationship)) {
+        return {
+          ok: false,
+          error: `--relationship must be ${REPRODUCTION_RELATIONSHIPS.join(', ')}`,
+        };
+      }
+      if (relationship != null) return { ok: false, error: '--relationship may be specified only once' };
+      relationship = value as ReproductionRelationship;
+    } else if (arg === '--out') {
+      const value = args[++index];
+      if (!value) return { ok: false, error: '--out requires a file path' };
+      if (outputPath != null) return { ok: false, error: '--out may be specified only once' };
+      outputPath = value;
+    } else {
+      return { ok: false, error: `unknown evidence option: ${String(arg)}` };
+    }
+  }
+  return relationship
+    ? { ok: true, mode: 'reproduce', relationship, ...(outputPath ? { outputPath } : {}) }
+    : { ok: false, error: '--relationship is required' };
 }
 
 export type McpArgsResult =
@@ -642,6 +704,42 @@ async function cmdDoctor(rest: string[]): Promise<void> {
   }
 }
 
+async function cmdEvidence(args: readonly string[]): Promise<void> {
+  const parsed = parseEvidenceArgs(args);
+  if (!parsed.ok) {
+    console.error(parsed.error);
+    process.exitCode = 2;
+    return;
+  }
+  if (parsed.mode === 'verify') {
+    try {
+      const bundle = JSON.parse(readFileSync(parsed.filePath, 'utf8')) as unknown;
+      const result = verifyMcpReproduction(bundle);
+      console.log(JSON.stringify(result, null, 2));
+      if (!result.valid) process.exitCode = 1;
+    } catch (cause) {
+      console.error(`could not verify evidence bundle: ${cause instanceof Error ? cause.message : String(cause)}`);
+      process.exitCode = 2;
+    }
+    return;
+  }
+  const bundle = await runMcpReproduction(parsed.relationship);
+  const serialized = `${JSON.stringify(bundle, null, 2)}\n`;
+  if (parsed.outputPath) {
+    try {
+      writeFileSync(parsed.outputPath, serialized, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      console.log(`wrote content-free reproduction bundle: ${parsed.outputPath}`);
+    } catch (cause) {
+      console.error(`could not write evidence bundle: ${cause instanceof Error ? cause.message : String(cause)}`);
+      process.exitCode = 2;
+      return;
+    }
+  } else {
+    process.stdout.write(serialized);
+  }
+  if (!bundle.passed) process.exitCode = 1;
+}
+
 async function cmdStats(): Promise<void> {
   const cfg = loadConfig();
   const url = `http://${cfg.host}:${cfg.port}/stats`;
@@ -939,6 +1037,8 @@ export async function main(argv: string[]): Promise<void> {
       return cmdReplay(rest);
     case 'doctor':
       return cmdDoctor(rest);
+    case 'evidence':
+      return cmdEvidence(rest);
     case 'stats':
       return cmdStats();
     case 'dashboard':

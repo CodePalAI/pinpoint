@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -10,8 +10,47 @@ import {
 } from '../mcp/gateway.js';
 import {
   verifyMcpOpaqueFlowReceipt,
+  type McpOpaqueFlowReceipt,
   type McpOpaqueFlowReceiptVerifier,
 } from '../mcp/flow.js';
+
+export interface McpScenarioResult {
+  readonly startedAt: string;
+  readonly completedAt: string;
+  readonly durationMs: number;
+  readonly sourceRecords: number;
+  readonly selectedRecords: number;
+  readonly bypassAttempts: number;
+  readonly bypassesDenied: number;
+  readonly denials: readonly McpScenarioDenial[];
+  readonly privateValuesScanned: number;
+  readonly privateValuesVisible: number;
+  readonly destinationDispatches: number;
+  readonly projectionExact: boolean;
+  readonly processSeparationValid: boolean;
+  readonly receiptVerifier: McpOpaqueFlowReceiptVerifier;
+  readonly receipts: readonly McpOpaqueFlowReceipt[];
+}
+
+export type McpScenarioDenialId =
+  | 'direct-destination'
+  | 'direct-query'
+  | 'artifact-read'
+  | 'forged-capability'
+  | 'operation-override'
+  | 'projection-override'
+  | 'fixed-predicate-override'
+  | 'destination-argument-override';
+
+export interface McpScenarioDenial {
+  readonly id: McpScenarioDenialId;
+  readonly outcome: 'denied';
+}
+
+interface McpScenarioOptions {
+  readonly flowCalls: number;
+  readonly extendedBypasses: boolean;
+}
 
 interface DemoResponse {
   readonly id?: number | string | null;
@@ -21,6 +60,14 @@ interface DemoResponse {
 
 function send(stream: PassThrough, message: unknown): void {
   stream.write(`${JSON.stringify(message)}\n`);
+}
+
+function minimalChildEnvironment(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = { ...extra };
+  for (const name of ['SystemRoot', 'SYSTEMROOT', 'ComSpec', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP']) {
+    if (process.env[name] != null) environment[name] = process.env[name];
+  }
+  return environment;
 }
 
 function responseKey(id: DemoResponse['id']): string {
@@ -136,7 +183,7 @@ function receiptVerifierFrom(response: DemoResponse): McpOpaqueFlowReceiptVerifi
   return verifier as McpOpaqueFlowReceiptVerifier;
 }
 
-function receiptFrom(response: DemoResponse): Record<string, unknown> {
+function receiptFrom(response: DemoResponse): McpOpaqueFlowReceipt {
   const result = response.result as { content?: Array<{ text?: string }> } | undefined;
   const text = result?.content?.[0]?.text;
   if (typeof text !== 'string') throw new Error('demo flow did not return a receipt');
@@ -144,10 +191,15 @@ function receiptFrom(response: DemoResponse): Record<string, unknown> {
   if (parsed.pinpointFlow == null || typeof parsed.pinpointFlow !== 'object') {
     throw new Error('demo flow returned an invalid receipt');
   }
-  return parsed.pinpointFlow as Record<string, unknown>;
+  return parsed.pinpointFlow as McpOpaqueFlowReceipt;
 }
 
-export async function runMcpDemo(): Promise<string> {
+export async function runMcpScenario(options: McpScenarioOptions): Promise<McpScenarioResult> {
+  if (!Number.isInteger(options.flowCalls) || options.flowCalls < 1 || options.flowCalls > 100) {
+    throw new TypeError('MCP scenario flowCalls must be an integer from 1 to 100');
+  }
+  const startedAt = new Date();
+  const started = performance.now();
   const root = mkdtempSync(join(tmpdir(), 'pinpoint-mcp-demo-'));
   const persistedPath = join(root, 'delivered.json');
   const destinationAuditPath = join(root, 'destination-calls.jsonl');
@@ -235,7 +287,7 @@ export async function runMcpDemo(): Promise<string> {
     input,
     output,
     error,
-    env: { ...process.env, PINPOINT_DEMO_SOURCE_PID: sourcePidPath },
+    env: minimalChildEnvironment({ PINPOINT_DEMO_SOURCE_PID: sourcePidPath }),
     minChars: 1,
     flows: [{
       name: 'deliver_active_accounts',
@@ -269,7 +321,12 @@ export async function runMcpDemo(): Promise<string> {
     },
   });
 
-  let summary: string | undefined;
+  let scenarioDraft: Omit<
+    McpScenarioResult,
+    'completedAt' | 'durationMs' | 'privateValuesVisible'
+  > | undefined;
+  let scenario: McpScenarioResult | undefined;
+  let failure: unknown;
   try {
     send(input, { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
     const initialized = await next(1);
@@ -286,6 +343,7 @@ export async function runMcpDemo(): Promise<string> {
     const source = await next(3);
     const artifactId = JSON.stringify(source).match(/vctx_[a-f0-9]{32}/)?.[0];
     if (!artifactId) throw new Error('demo protected source did not produce a capability');
+    const denials: McpScenarioDenial[] = [];
 
     send(input, {
       jsonrpc: '2.0', id: 4, method: 'tools/call',
@@ -296,6 +354,7 @@ export async function runMcpDemo(): Promise<string> {
       4,
       `campaign_deliver is restricted to a configured ${MCP_FLOW_TOOL_NAME} flow`,
     );
+    denials.push({ id: 'direct-destination', outcome: 'denied' });
     send(input, {
       jsonrpc: '2.0', id: 5, method: 'tools/call',
       params: { name: MCP_QUERY_TOOL_NAME, arguments: { id: artifactId, op: 'slice', limit: 1 } },
@@ -305,11 +364,13 @@ export async function runMcpDemo(): Promise<string> {
       5,
       `${MCP_QUERY_TOOL_NAME} is disabled; use a configured ${MCP_FLOW_TOOL_NAME} flow`,
     );
+    denials.push({ id: 'direct-query', outcome: 'denied' });
     send(input, {
       jsonrpc: '2.0', id: 6, method: 'resources/read',
       params: { uri: `pinpoint://artifact/${artifactId}` },
     });
     expectRpcDenial(await next(6), 6, -32002, 'Pinpoint artifact not found');
+    denials.push({ id: 'artifact-read', outcome: 'denied' });
     const forgedArtifactId = `vctx_${'f'.repeat(32)}`;
     send(input, {
       jsonrpc: '2.0', id: 7, method: 'tools/call',
@@ -324,25 +385,116 @@ export async function runMcpDemo(): Promise<string> {
       },
     });
     expectToolDenial(await next(7), 7, `artifact not found: ${forgedArtifactId}`);
-    const bypassesDenied = 4;
-
-    send(input, {
-      jsonrpc: '2.0',
-      id: 8,
-      method: 'tools/call',
-      params: {
-        name: MCP_FLOW_TOOL_NAME,
-        arguments: {
-          flow: 'deliver_active_accounts',
-          id: artifactId,
-          op: 'json_select',
-          fields: ['email'],
+    denials.push({ id: 'forged-capability', outcome: 'denied' });
+    if (options.extendedBypasses) {
+      send(input, {
+        jsonrpc: '2.0', id: 8, method: 'tools/call',
+        params: {
+          name: MCP_FLOW_TOOL_NAME,
+          arguments: { flow: 'deliver_active_accounts', id: artifactId, op: 'count' },
         },
-      },
-    });
-    const receipt = receiptFrom(await next(8));
-    const receiptValid = verifyMcpOpaqueFlowReceipt(receipt, initializedVerifier);
-    const wrongVerifierRejected = !verifyMcpOpaqueFlowReceipt(receipt, {
+      });
+      expectToolDenial(
+        await next(8),
+        8,
+        'operation not allowed by flow deliver_active_accounts: count',
+      );
+      denials.push({ id: 'operation-override', outcome: 'denied' });
+      send(input, {
+        jsonrpc: '2.0', id: 9, method: 'tools/call',
+        params: {
+          name: MCP_FLOW_TOOL_NAME,
+          arguments: {
+            flow: 'deliver_active_accounts',
+            id: artifactId,
+            op: 'json_select',
+            fields: ['privateCode'],
+          },
+        },
+      });
+      expectToolDenial(
+        await next(9),
+        9,
+        'projection field not allowed by flow policy: privateCode',
+      );
+      denials.push({ id: 'projection-override', outcome: 'denied' });
+      send(input, {
+        jsonrpc: '2.0', id: 10, method: 'tools/call',
+        params: {
+          name: MCP_FLOW_TOOL_NAME,
+          arguments: {
+            flow: 'deliver_active_accounts',
+            id: artifactId,
+            op: 'json_select',
+            where: { active: false },
+            fields: ['email'],
+          },
+        },
+      });
+      expectToolDenial(
+        await next(10),
+        10,
+        'where field not allowed by flow policy: active',
+      );
+      denials.push({ id: 'fixed-predicate-override', outcome: 'denied' });
+      send(input, {
+        jsonrpc: '2.0', id: 11, method: 'tools/call',
+        params: {
+          name: MCP_FLOW_TOOL_NAME,
+          arguments: {
+            flow: 'deliver_active_accounts',
+            id: artifactId,
+            op: 'json_select',
+            fields: ['email'],
+            destinationArguments: { campaign: 'override' },
+          },
+        },
+      });
+      expectToolDenial(
+        await next(11),
+        11,
+        'destination argument not allowed by flow policy: campaign',
+      );
+      denials.push({ id: 'destination-argument-override', outcome: 'denied' });
+    }
+    const bypassesDenied = denials.length;
+    if (existsSync(destinationAuditPath) || existsSync(persistedPath)) {
+      throw new Error('demo bypass caused an unauthorized destination side effect');
+    }
+
+    const receipts: McpOpaqueFlowReceipt[] = [];
+    let previousReceiptHash = '0'.repeat(64);
+    const firstFlowId = options.extendedBypasses ? 12 : 8;
+    for (let index = 0; index < options.flowCalls; index += 1) {
+      const id = firstFlowId + index;
+      send(input, {
+        jsonrpc: '2.0',
+        id,
+        method: 'tools/call',
+        params: {
+          name: MCP_FLOW_TOOL_NAME,
+          arguments: {
+            flow: 'deliver_active_accounts',
+            id: artifactId,
+            op: 'json_select',
+            fields: ['email'],
+          },
+        },
+      });
+      const receipt = receiptFrom(await next(id));
+      if (
+        !verifyMcpOpaqueFlowReceipt(receipt, initializedVerifier) ||
+        receipt.sequence !== index + 1 ||
+        receipt.previousReceiptHash !== previousReceiptHash ||
+        receipt.destinationSucceeded !== true ||
+        receipt.items !== selected.length
+      ) {
+        throw new Error(`demo receipt chain failed at sequence ${index + 1}`);
+      }
+      receipts.push(receipt);
+      previousReceiptHash = receipt.receiptHash;
+    }
+    const wrongVerifierRejected = !verifyMcpOpaqueFlowReceipt(receipts[0], {
       ...initializedVerifier,
       signingKeyId: '0'.repeat(64),
     });
@@ -364,46 +516,84 @@ export async function runMcpDemo(): Promise<string> {
       sourcePid !== destinationPid &&
       sourcePid !== process.pid &&
       destinationPid !== process.pid;
-    const destinationDispatchExact = destinationCalls.length === 1 &&
-      destinationCalls[0]?.pid === destinationPid &&
-      destinationCalls[0]?.tool === 'campaign_deliver' &&
-      JSON.stringify(destinationCalls[0]?.arguments.recipients) === JSON.stringify(selected) &&
-      destinationCalls[0]?.arguments.campaign === 'renewal';
-    const transcript = visible.join('');
-    const privateValuesVisible = privateValues.filter((value) => transcript.includes(value)).length;
-    const passed = bypassesDenied === 4 &&
-      receipt.destinationSucceeded === true &&
-      receipt.items === selected.length &&
-      receiptValid &&
+    const destinationDispatchExact = destinationCalls.length === options.flowCalls &&
+      destinationCalls.every((call) =>
+        call.pid === destinationPid &&
+        call.tool === 'campaign_deliver' &&
+        JSON.stringify(call.arguments.recipients) === JSON.stringify(selected) &&
+        call.arguments.campaign === 'renewal'
+      );
+    const expectedBypasses = options.extendedBypasses ? 8 : 4;
+    const commitmentsDistinct = new Set(receipts.map(({ payloadCommitment }) => payloadCommitment)).size ===
+      options.flowCalls;
+    const passed = bypassesDenied === expectedBypasses &&
+      receipts.length === options.flowCalls &&
       wrongVerifierRejected &&
       projectionExact &&
       destinationDispatchExact &&
       processSeparationValid &&
-      privateValuesVisible === 0;
+      commitmentsDistinct;
     if (!passed) throw new Error('value-opaque MCP demo failed its self-checks');
 
-    summary = [
-      'pinpoint value-opaque MCP demo (offline)',
-      `source: ${rows.length} synthetic account records`,
-      'policy: active=true; project email only',
-      `destination: ${selected.length}/${selected.length} exact recipients persisted`,
-      `bypass attempts denied: ${bypassesDenied}/4`,
-      `private values in client transcript: ${privateValuesVisible}/${privateValues.length}`,
-      'destination dispatches: 1 authorized; 0 bypass side effects',
-      'signed receipt: valid against initialized verifier; wrong verifier rejected',
-      'processes: source and destination PIDs are separate from the CLI',
-      'transport: local stdio only; external services configured: none',
-      'passed: true',
-    ].join('\n');
-  } finally {
-    input.end();
-    try {
-      const exitCode = await running;
-      if (exitCode !== 0) throw new Error(`demo gateway exited with code ${String(exitCode)}`);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
+    scenarioDraft = {
+      startedAt: startedAt.toISOString(),
+      sourceRecords: rows.length,
+      selectedRecords: selected.length,
+      bypassAttempts: expectedBypasses,
+      bypassesDenied,
+      denials,
+      privateValuesScanned: privateValues.length,
+      destinationDispatches: destinationCalls.length,
+      projectionExact,
+      processSeparationValid,
+      receiptVerifier: initializedVerifier,
+      receipts,
+    };
+  } catch (cause) {
+    failure = cause;
+  }
+  input.end();
+  try {
+    const exitCode = await running;
+    if (exitCode !== 0 && failure == null) {
+      failure = new Error(`demo gateway exited with code ${String(exitCode)}`);
+    }
+  } catch (cause) {
+    if (failure == null) failure = cause;
+  }
+  if (failure == null && scenarioDraft != null) {
+    const transcript = visible.join('');
+    const privateValuesVisible = privateValues.filter((value) => transcript.includes(value)).length;
+    if (privateValuesVisible !== 0) {
+      failure = new Error('value-opaque MCP demo exposed a private fixture value');
+    } else {
+      scenario = {
+        ...scenarioDraft,
+        completedAt: new Date().toISOString(),
+        durationMs: performance.now() - started,
+        privateValuesVisible,
+      };
     }
   }
-  if (summary == null) throw new Error('value-opaque MCP demo did not produce a summary');
-  return summary;
+  rmSync(root, { recursive: true, force: true });
+  if (failure != null) throw failure;
+  if (scenario == null) throw new Error('value-opaque MCP scenario did not produce a result');
+  return scenario;
+}
+
+export async function runMcpDemo(): Promise<string> {
+  const result = await runMcpScenario({ flowCalls: 1, extendedBypasses: false });
+  return [
+    'pinpoint value-opaque MCP demo (offline)',
+    `source: ${result.sourceRecords} synthetic account records`,
+    'policy: active=true; project email only',
+    `destination: ${result.selectedRecords}/${result.selectedRecords} exact recipients persisted`,
+    `bypass attempts denied: ${result.bypassesDenied}/${result.bypassAttempts}`,
+    `private values in client transcript: ${result.privateValuesVisible}/${result.privateValuesScanned}`,
+    `destination dispatches: ${result.destinationDispatches} authorized; 0 bypass side effects`,
+    'signed receipt: valid against initialized verifier; wrong verifier rejected',
+    'processes: source and destination PIDs are separate from the CLI',
+    'transport: local stdio only; external services configured: none',
+    'passed: true',
+  ].join('\n');
 }

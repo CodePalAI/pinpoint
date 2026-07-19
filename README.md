@@ -491,7 +491,30 @@ The tests use synthetic data. They preserve failures and remove raw model event 
 | Published OSS cross-server flow | **40/40 entities; 4/4 denials; 0/600 canaries** | Filesystem `2026.7.10` to memory `2026.7.4`; exact JSONL side effect |
 | Matched HCP comparison | **Pinpoint exact; HCP 30/30 exact; both 4/4 denials and 0/600 canaries** | Byte-identical fixture and native authority comparison; No scalar winner |
 | Constructed visible traffic | **31,013 -> 3,414 bytes, 89.0% lower** | Same synthetic source/destination payload with authority receipt |
-| Local flow latency | **1.02 ms p95** | 30 local protocol samples, not a production load test |
+| Local flow latency | **1.03 ms p95** | 30 local protocol samples, not a production load test |
+
+### Reproduce the protocol gate independently
+
+The installed package can generate a content-free clean-machine bundle without a
+source checkout, model, API key, sidecar, or external service:
+
+```bash
+pinpoint evidence reproduce \
+  --relationship unaffiliated \
+  --out pinpoint-opaque-flow-reproduction.json
+
+pinpoint evidence verify pinpoint-opaque-flow-reproduction.json
+```
+
+The bundle contains environment and package metadata, runtime fingerprints, all 30
+signed chain-linked receipts, eight denial outcomes, process/side-effect checks, explicit
+limitations, and a canonical bundle hash. It excludes fixture values and is created with
+mode `0600` on POSIX. Keep failed bundles too. Relationship is operator-declared and
+does not become independent evidence until an unaffiliated submission is reviewed.
+
+Submit the JSON through the
+[Evidence replication form](https://github.com/CodePalAI/pinpoint/issues/new?template=benchmark_replication.yml).
+The source-checkout gates remain available for deeper implementation review.
 
 <details>
 <summary><strong>Detailed receipt measurements</strong></summary>

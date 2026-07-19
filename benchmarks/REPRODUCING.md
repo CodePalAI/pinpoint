@@ -2,6 +2,31 @@
 
 Pinpoint separates deterministic offline checks from paid model evidence. Do not use an offline token estimate as proof of provider billing or model quality.
 
+## Packaged clean-machine reproduction
+
+The lowest-friction no-model replication runs from the installed package and writes one
+content-free mode-0600 JSON bundle:
+
+```bash
+pinpoint evidence reproduce \
+	--relationship unaffiliated \
+	--out pinpoint-opaque-flow-reproduction.json
+
+pinpoint evidence verify pinpoint-opaque-flow-reproduction.json
+```
+
+Use `maintainer`, `contracted`, or `other` instead of `unaffiliated` when appropriate.
+The relationship field is self-declared and must be checked with the submission. The
+bundle runs 30 exact hidden destination calls and eight bypass classes through the
+production gateway, retains every signed receipt for chain verification, scans 401
+synthetic private values, and records runtime file fingerprints plus package identity.
+It contains no fixture values, credentials, prompts, or raw event stream.
+
+Keep failed bundles and disclose every attempt. Submit through the
+[Evidence replication issue form](../.github/ISSUE_TEMPLATE/benchmark_replication.yml)
+or a pull request. This packaged gate reduces setup friction; it does not establish
+production demand, external identity, or independence by itself.
+
 ## No-key checks
 
 These commands make no provider calls:

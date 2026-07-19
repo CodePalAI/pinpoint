@@ -6,12 +6,12 @@ body:
   - type: markdown
     attributes:
       value: |
-        Follow `benchmarks/REPRODUCING.md`. Keep failed runs, remove credentials and private data, and attach labeled JSON receipts rather than screenshots alone.
+        Fast path: run `pinpoint evidence reproduce --relationship unaffiliated --out pinpoint-opaque-flow-reproduction.json`, then `pinpoint evidence verify pinpoint-opaque-flow-reproduction.json`. Follow `benchmarks/REPRODUCING.md`, keep failed runs, remove credentials and private data, and attach labeled JSON bundles rather than screenshots alone. Relationship is self-declared and will be reviewed.
   - type: input
     id: commit
     attributes:
-      label: Pinpoint commit
-      description: Full Git SHA used for the run.
+      label: Pinpoint version or commit
+      description: Exact npm package version or full Git SHA used for the run. The packaged bundle records its package version and runtime fingerprints.
     validations:
       required: true
   - type: input
@@ -53,7 +53,7 @@ body:
     id: receipts
     attributes:
       label: Raw receipts
-      description: Drag in content-free protocol, host, preflight, canary, or benchmark JSON receipts, or link a pull request that adds them. Never attach raw event streams containing business data.
+      description: Drag in the content-free reproduction bundle or other protocol, host, preflight, canary, or benchmark JSON receipts, or link a pull request that adds them. Never attach raw event streams containing business data.
     validations:
       required: true
   - type: checkboxes

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   parseDashboardArgs,
+  parseEvidenceArgs,
   parseMcpArgs,
   parseProxyArgs,
   runMcpDemo,
@@ -66,6 +67,32 @@ describe('parseDashboardArgs', () => {
     expect(parseDashboardArgs(['--remote'])).toEqual({
       ok: false,
       error: 'unknown dashboard option: --remote',
+    });
+  });
+});
+
+describe('parseEvidenceArgs', () => {
+  it('requires relationship disclosure and parses private bundle output', () => {
+    expect(parseEvidenceArgs([
+      'reproduce',
+      '--relationship',
+      'unaffiliated',
+      '--out',
+      'receipt.json',
+    ])).toEqual({
+      ok: true,
+      mode: 'reproduce',
+      relationship: 'unaffiliated',
+      outputPath: 'receipt.json',
+    });
+    expect(parseEvidenceArgs(['reproduce'])).toEqual({
+      ok: false,
+      error: '--relationship is required',
+    });
+    expect(parseEvidenceArgs(['verify', 'receipt.json'])).toEqual({
+      ok: true,
+      mode: 'verify',
+      filePath: 'receipt.json',
     });
   });
 });

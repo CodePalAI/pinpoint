@@ -213,7 +213,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "pxpipe-proxy": "0.8.0"
+    "pxpipe-proxy": "0.9.0"
   },
   "devDependencies": {
     "@fontsource-variable/instrument-sans": "^5.2.8",

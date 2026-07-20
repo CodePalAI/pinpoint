@@ -503,7 +503,7 @@ The tests use synthetic data. They preserve failures and remove raw model event 
 | Published OSS cross-server flow | **40/40 entities; 4/4 denials; 0/600 canaries** | Filesystem `2026.7.10` to memory `2026.7.4`; exact JSONL side effect |
 | Matched HCP comparison | **Pinpoint exact; HCP 30/30 exact; both 4/4 denials and 0/600 canaries** | Byte-identical fixture and native authority comparison; No scalar winner |
 | Constructed visible traffic | **31,013 -> 3,414 bytes, 89.0% lower** | Same synthetic source/destination payload with authority receipt |
-| Local flow latency | **0.78 ms p95** | 30 local protocol samples, not a production load test |
+| Local flow latency | **2.93 ms p95** | 30 local protocol samples, not a production load test |
 
 ### Reproduce the protocol gate independently
 

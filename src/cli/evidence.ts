@@ -562,6 +562,19 @@ export function verifyMcpReproduction(value: unknown): ReproductionVerification 
       'repeatedFlowCalls', 'destinationAcceptedCalls', 'bypassAttempts', 'bypassesDenied',
       'privateValuesScanned', 'privateValuesVisible', 'durationMs',
     ], [], 'summary', errors)) {
+      for (const field of [
+        'repeatedFlowCalls',
+        'destinationAcceptedCalls',
+        'bypassAttempts',
+        'bypassesDenied',
+        'privateValuesScanned',
+        'privateValuesVisible',
+      ] as const) {
+        const metric = bundle.summary[field];
+        if (passedBundle && (!Number.isSafeInteger(metric) || (metric as number) < 0)) {
+          errors.push(`summary.${field} must be a non-negative safe integer`);
+        }
+      }
       repeatedFlowCalls = typeof bundle.summary.repeatedFlowCalls === 'number'
         ? bundle.summary.repeatedFlowCalls : null;
       bypassesDenied = typeof bundle.summary.bypassesDenied === 'number'

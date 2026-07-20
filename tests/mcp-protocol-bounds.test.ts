@@ -21,6 +21,38 @@ describe('MCP protocol bounds', () => {
     expect(lines).toEqual(['{"ok":1}']);
   });
 
+  it('accepts an exact-limit frame across one-byte chunks and preserves CRLF framing', () => {
+    const input = new PassThrough();
+    const lines: string[] = [];
+    let overflows = 0;
+    readBoundedNdjson(input, {
+      onLine: (line) => lines.push(line),
+      onOverflow: () => { overflows += 1; },
+    }, 8);
+
+    for (const byte of Buffer.from('12345678\nOK\r\n')) input.write(Buffer.of(byte));
+    input.end();
+
+    expect(overflows).toBe(0);
+    expect(lines).toEqual(['12345678', 'OK\r']);
+  });
+
+  it('rejects invalid UTF-8 without emitting a line', () => {
+    const input = new PassThrough();
+    const lines: string[] = [];
+    let invalid = 0;
+    readBoundedNdjson(input, {
+      onLine: (line) => lines.push(line),
+      onOverflow: () => {},
+      onInvalidEncoding: () => { invalid += 1; },
+    }, 8);
+
+    input.end(Buffer.from([0xc3, 0x28, 0x0a]));
+
+    expect(invalid).toBe(1);
+    expect(lines).toEqual([]);
+  });
+
   it('rejects deeply nested destination output before canonicalization', () => {
     let nested: Record<string, unknown> = {};
     const root = nested;

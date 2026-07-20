@@ -16,6 +16,7 @@ import {
   existsSync,
   fstatSync,
   fsyncSync,
+  lstatSync,
   openSync,
   readFileSync,
   readSync,
@@ -453,39 +454,95 @@ function authorityKeyId(key: KeyObject): string {
 }
 
 const MAX_AUTHORITY_KEY_BYTES = 64 * 1024;
+const MAX_MCP_CONFIG_BYTES = 1024 * 1024;
 
-function writePrivateFileExclusive(path: string, value: string | Uint8Array): void {
-  if (process.platform !== 'linux') {
-    throw new Error('persistent authority keys currently require Linux file-permission semantics');
+function readBoundedRegularFile(path: string, limit: number, label: string): Buffer {
+  const nonblock = typeof fileConstants.O_NONBLOCK === 'number' ? fileConstants.O_NONBLOCK : 0;
+  const nofollow = process.platform === 'win32' || typeof fileConstants.O_NOFOLLOW !== 'number'
+    ? 0
+    : fileConstants.O_NOFOLLOW;
+  const pathMetadata = lstatSync(path);
+  if (pathMetadata.isSymbolicLink()) throw new Error(`${label} must not be a symbolic link`);
+  const descriptor = openSync(path, fileConstants.O_RDONLY | nonblock | nofollow);
+  try {
+    const metadata = fstatSync(descriptor);
+    if (!metadata.isFile()) throw new Error(`${label} must be a regular file`);
+    if (metadata.dev !== pathMetadata.dev || metadata.ino !== pathMetadata.ino) {
+      throw new Error(`${label} path changed during validation`);
+    }
+    if (metadata.size > limit) throw new Error(`${label} exceeds ${limit} bytes`);
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    while (bytes <= limit) {
+      const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, limit + 1 - bytes));
+      const count = readSync(descriptor, chunk, 0, chunk.length, null);
+      if (count === 0) break;
+      chunks.push(chunk.subarray(0, count));
+      bytes += count;
+    }
+    if (bytes > limit) throw new Error(`${label} exceeds ${limit} bytes`);
+    return Buffer.concat(chunks, bytes);
+  } finally {
+    closeSync(descriptor);
   }
-  const nofollow = typeof fileConstants.O_NOFOLLOW === 'number' ? fileConstants.O_NOFOLLOW : 0;
+}
+
+function parseJsonInput(serialized: Buffer, label: string): unknown {
+  try {
+    return JSON.parse(serialized.toString('utf8')) as unknown;
+  } catch {
+    throw new Error(`${label} is not valid JSON`);
+  }
+}
+
+function writeFileExclusive(path: string, value: string | Uint8Array, mode = 0o600): void {
+  const nofollow = process.platform === 'win32' || typeof fileConstants.O_NOFOLLOW !== 'number'
+    ? 0
+    : fileConstants.O_NOFOLLOW;
   let descriptor: number | undefined;
-  let created = false;
+  let createdMetadata: ReturnType<typeof fstatSync> | undefined;
   try {
     descriptor = openSync(
       path,
       fileConstants.O_WRONLY | fileConstants.O_CREAT | fileConstants.O_EXCL | nofollow,
-      0o600,
+      mode,
     );
-    created = true;
+    createdMetadata = fstatSync(descriptor);
     const bytes = Buffer.from(value);
     let offset = 0;
-    while (offset < bytes.length) offset += writeSync(descriptor, bytes, offset);
+    while (offset < bytes.length) {
+      const count = writeSync(descriptor, bytes, offset);
+      if (count < 1) throw new Error('output file write made no progress');
+      offset += count;
+    }
     fsyncSync(descriptor);
     const metadata = fstatSync(descriptor);
-    if (!metadata.isFile() || (metadata.mode & 0o777) !== 0o600) {
-      throw new Error('authority file permissions could not be secured');
+    if (!metadata.isFile() || (process.platform !== 'win32' && (metadata.mode & 0o777) !== mode)) {
+      throw new Error('output file permissions could not be secured');
+    }
+    if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) {
+      throw new Error('output file must be owned by the current user');
     }
   } catch (cause) {
     if (descriptor != null) closeSync(descriptor);
     descriptor = undefined;
-    if (created) {
-      try { unlinkSync(path); } catch { /* best-effort cleanup of this exclusive create */ }
+    if (createdMetadata) {
+      try {
+        const current = lstatSync(path);
+        if (current.dev === createdMetadata.dev && current.ino === createdMetadata.ino) unlinkSync(path);
+      } catch { /* best-effort cleanup of only this invocation's inode */ }
     }
     throw cause;
   } finally {
     if (descriptor != null) closeSync(descriptor);
   }
+}
+
+function writePrivateFileExclusive(path: string, value: string | Uint8Array): void {
+  if (process.platform !== 'linux') {
+    throw new Error('persistent authority keys currently require Linux file-permission semantics');
+  }
+  writeFileExclusive(path, value);
 }
 
 function readPrivateAuthorityKey(path: string): Buffer {
@@ -816,7 +873,7 @@ async function cmdEvidence(args: readonly string[]): Promise<void> {
   if (parsed.mode === 'verify') {
     try {
       const serialized = readEvidenceBundleInHelper(parsed.filePath);
-      const bundle = JSON.parse(serialized.toString('utf8')) as unknown;
+      const bundle = parseJsonInput(serialized, 'evidence bundle');
       const result = verifyMcpReproduction(bundle);
       console.log(JSON.stringify(result, null, 2));
       if (!result.valid) process.exitCode = 1;
@@ -835,7 +892,7 @@ async function cmdEvidence(args: readonly string[]): Promise<void> {
   const serialized = `${JSON.stringify(bundle, null, 2)}\n`;
   if (parsed.outputPath) {
     try {
-      writeFileSync(parsed.outputPath, serialized, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      writeFileExclusive(parsed.outputPath, serialized);
       console.log(`wrote content-free reproduction bundle: ${parsed.outputPath}`);
     } catch (cause) {
       console.error(`could not write evidence bundle: ${cause instanceof Error ? cause.message : String(cause)}`);
@@ -903,7 +960,10 @@ async function cmdMcp(args: readonly string[]): Promise<void> {
   let destinationConfig: (McpOpaqueFlowDestinationConfig & { env: NodeJS.ProcessEnv }) | undefined;
   if (flowConfigPath) {
     try {
-      flowConfig = parseMcpOpaqueFlowConfig(JSON.parse(readFileSync(flowConfigPath, 'utf8')) as unknown);
+      flowConfig = parseMcpOpaqueFlowConfig(parseJsonInput(
+        readBoundedRegularFile(flowConfigPath, MAX_MCP_CONFIG_BYTES, 'flow config'),
+        'flow config',
+      ));
     } catch (cause) {
       console.error(
         `invalid MCP opaque-flow config ${flowConfigPath}: ${cause instanceof Error ? cause.message : String(cause)}`,
@@ -915,7 +975,10 @@ async function cmdMcp(args: readonly string[]): Promise<void> {
   if (destinationConfigPath) {
     try {
       destinationConfig = parseMcpOpaqueFlowDestinationConfig(
-        JSON.parse(readFileSync(destinationConfigPath, 'utf8')) as unknown,
+        parseJsonInput(
+          readBoundedRegularFile(destinationConfigPath, MAX_MCP_CONFIG_BYTES, 'destination config'),
+          'destination config',
+        ),
       ) as McpOpaqueFlowDestinationConfig & { env: NodeJS.ProcessEnv };
     } catch (cause) {
       console.error(

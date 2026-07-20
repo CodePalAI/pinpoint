@@ -19,6 +19,8 @@ import {
 } from './flow.js';
 import {
   McpDestinationPeer,
+  PINPOINT_RESERVED_CHILD_ENV_NAMES,
+  destinationEnvironmentNames,
   withoutDestinationOnlyEnvironment,
   type McpDestinationStdioConfig,
 } from './destination.js';
@@ -78,6 +80,7 @@ export interface McpGatewayOptions extends McpResultFirewallOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly signal?: AbortSignal;
   readonly shutdownGraceMs?: number;
+  readonly flowTimeoutMs?: number;
   readonly flows?: readonly McpOpaqueFlowPolicy[];
   readonly flowAuthoritySigningKey?: KeyObject;
   readonly onFlowAuthorityReady?: (record: McpOpaqueFlowAuthorityRecord) => void;
@@ -556,6 +559,7 @@ interface PendingRequest {
   readonly opaqueFlow?: {
     readonly clientId: JsonRpcMessage['id'];
     readonly plan: PreparedMcpOpaqueFlow;
+    readonly timer: NodeJS.Timeout;
   };
   readonly protectedSource?: boolean;
 }
@@ -756,6 +760,9 @@ export async function runMcpGateway(
   const exposeQueryTool = options.exposeQueryTool ?? flows.length === 0;
   const exposeArtifactResources = options.exposeArtifactResources ?? flows.length === 0;
   const opaqueArtifactIds = options.opaqueArtifactIds ?? flows.length > 0;
+  const destinationEnvNames = options.destination
+    ? destinationEnvironmentNames(options.destination)
+    : [];
   const firewall = new McpResultFirewall({
     ...options,
     exposeQueryTool,
@@ -779,7 +786,7 @@ export async function runMcpGateway(
         command: options.destination.command,
         args: options.destination.args,
         cwd: options.destination.cwd,
-        envNames: options.destination.declaredEnvNames ?? Object.keys(options.destination.env ?? {}),
+        envNames: destinationEnvNames,
         sharedEnvNames: options.destination.sharedEnvNames,
       } : undefined),
     } : {}),
@@ -792,44 +799,58 @@ export async function runMcpGateway(
   if (!firewall.exposeQueryTool && !flowEngine) {
     throw new TypeError('disabling pinpoint_query requires at least one opaque flow policy');
   }
+  const shutdownGraceMs = Math.max(0, Math.trunc(options.shutdownGraceMs ?? 2_000));
+  const flowTimeoutMs = Math.trunc(options.flowTimeoutMs ?? 30_000);
+  if (!Number.isInteger(flowTimeoutMs) || flowTimeoutMs < 100 || flowTimeoutMs > 300_000) {
+    throw new TypeError('flowTimeoutMs must be an integer from 100 to 300000 milliseconds');
+  }
   const child = spawn(command, [...args], {
     cwd: options.cwd,
     env: (() => {
       const sourceEnv = withoutDestinationOnlyEnvironment(
         options.env ?? process.env,
-        options.destination?.declaredEnvNames ?? Object.keys(options.destination?.env ?? {}),
+        [
+          ...destinationEnvNames,
+          ...PINPOINT_RESERVED_CHILD_ENV_NAMES,
+        ],
         options.destination?.sharedEnvNames ?? [],
       );
-      delete sourceEnv.PINPOINT_DASHBOARD_GROUP;
-      delete sourceEnv.PINPOINT_DASHBOARD_DIR;
       return sourceEnv;
     })(),
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: false,
   });
   let destinationPeer: McpDestinationPeer | undefined;
+  let terminateChild: () => void = () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+  };
   try {
     destinationPeer = options.destination
       ? new McpDestinationPeer(
           options.destination,
           (message) => error.write(message),
-          () => {
-            if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
-          },
+          () => terminateChild(),
         )
       : undefined;
   } catch (cause) {
-    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGTERM');
+      const timer = setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      }, shutdownGraceMs);
+      timer.unref();
+    }
     throw cause;
   }
   const pending = new Map<string, PendingRequest>();
   const activeFlowClientIds = new Set<string>();
-  const shutdownGraceMs = Math.max(0, Math.trunc(options.shutdownGraceMs ?? 2_000));
   let upstreamHasResources = false;
   let clientQueue = Promise.resolve();
   let upstreamQueue = Promise.resolve();
   let destinationQueue = Promise.resolve();
   let forceKillTimer: NodeJS.Timeout | undefined;
+  let fatalTerminationStarted = false;
+  let fatalProtocolFailure = false;
   let activeOpaqueFlows = 0;
   let activeProtectedSources = 0;
   let protectedDataHandled = false;
@@ -848,6 +869,48 @@ export async function runMcpGateway(
   const sensitiveOperationActive = (): boolean => activeOpaqueFlows + activeProtectedSources > 0;
   const resetSensitiveStderr = (): void => {
     if (!sensitiveOperationActive()) suppressedSensitiveStderr = false;
+  };
+  terminateChild = (): void => {
+    if (fatalTerminationStarted) return;
+    fatalTerminationStarted = true;
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+    forceKillTimer = setTimeout(() => {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    }, shutdownGraceMs);
+    forceKillTimer.unref();
+  };
+  const finalizeInternalFlow = (
+    internalKey: string,
+    request: PendingRequest,
+    destinationResult: McpCallToolResult,
+  ): boolean => {
+    if (!request.opaqueFlow || pending.get(internalKey) !== request) return false;
+    pending.delete(internalKey);
+    clearTimeout(request.opaqueFlow.timer);
+    activeFlowClientIds.delete(rpcKey(request.opaqueFlow.clientId));
+    activeOpaqueFlows = Math.max(0, activeOpaqueFlows - 1);
+    resetSensitiveStderr();
+    const result = flowEngine?.complete(request.opaqueFlow.plan, destinationResult) ??
+      errorResult('opaque flow engine unavailable');
+    if (flowEngine) {
+      observe(flowEvent(
+        request.opaqueFlow.plan,
+        destinationResult,
+        result,
+        request.startedAt ?? performance.now(),
+      ));
+    }
+    writeRpc(output, rpcResult(request.opaqueFlow.clientId, result));
+    return true;
+  };
+  const failInternalFlows = (message: string): void => {
+    fatalProtocolFailure = true;
+    flowPoliciesValidated = false;
+    for (const [key, request] of [...pending]) {
+      if (!request.opaqueFlow) continue;
+      finalizeInternalFlow(key, request, errorResult(message));
+    }
+    terminateChild();
   };
 
   child.stderr.setEncoding('utf8');
@@ -941,6 +1004,7 @@ export async function runMcpGateway(
               () => {
                 destinationCatalogValidated = false;
                 flowPoliciesValidated = false;
+                fatalProtocolFailure = true;
                 destinationQueue = queueLine(destinationQueue, () => {
                   activeFlowClientIds.delete(clientKey);
                   activeOpaqueFlows = Math.max(0, activeOpaqueFlows - 1);
@@ -957,12 +1021,29 @@ export async function runMcpGateway(
             );
           } else {
             const internalId = `pinpoint-flow:${randomUUID()}`;
-            pending.set(rpcKey(internalId), {
+            const internalKey = rpcKey(internalId);
+            const timer = setTimeout(() => {
+              upstreamQueue = queueLine(upstreamQueue, () => {
+                const request = pending.get(internalKey);
+                if (!request?.opaqueFlow) return;
+                finalizeInternalFlow(
+                  internalKey,
+                  request,
+                  errorResult('destination execution status unavailable'),
+                );
+                flowPoliciesValidated = false;
+                fatalProtocolFailure = true;
+                terminateChild();
+              }, (cause) => failGateway(message.id, cause));
+            }, flowTimeoutMs);
+            timer.unref();
+            const request: PendingRequest = {
               method: 'tools/call',
               toolName: plan.policy.destinationTool,
-              opaqueFlow: { clientId: message.id, plan },
+              opaqueFlow: { clientId: message.id, plan, timer },
               startedAt: started,
-            });
+            };
+            pending.set(internalKey, request);
             child.stdin.write(`${JSON.stringify({
               jsonrpc: '2.0',
               id: internalId,
@@ -971,7 +1052,19 @@ export async function runMcpGateway(
                 name: plan.policy.destinationTool,
                 arguments: plan.destinationArguments,
               },
-            })}\n`);
+            })}\n`, (cause) => {
+              if (!cause) return;
+              upstreamQueue = queueLine(upstreamQueue, () => {
+                if (!finalizeInternalFlow(
+                  internalKey,
+                  request,
+                  errorResult('destination execution status unavailable'),
+                )) return;
+                flowPoliciesValidated = false;
+                fatalProtocolFailure = true;
+                terminateChild();
+              }, (errorCause) => failGateway(message.id, errorCause));
+            });
           }
         } catch (cause) {
           activeFlowClientIds.delete(clientKey);
@@ -1065,6 +1158,10 @@ export async function runMcpGateway(
   const handleUpstream = async (line: string): Promise<void> => {
     const message = parseRpc(line.trim());
     if (!message) {
+      if (activeOpaqueFlows > 0) {
+        failInternalFlows('destination execution status unavailable');
+        return;
+      }
       error.write(
         protectedDataHandled
           ? '[pinpoint mcp gateway] suppressed non-JSON upstream stdout after protected dataflow\n'
@@ -1089,32 +1186,27 @@ export async function runMcpGateway(
 
     const request = pending.get(rpcKey(message.id));
     if (!request) {
+      if (activeOpaqueFlows > 0) {
+        failInternalFlows('destination execution status unavailable');
+        return;
+      }
       if (protectedDataHandled) return;
       writeRpc(output, message);
       return;
     }
-    pending.delete(rpcKey(message.id));
     if (request.opaqueFlow) {
-      activeFlowClientIds.delete(rpcKey(request.opaqueFlow.clientId));
-      activeOpaqueFlows = Math.max(0, activeOpaqueFlows - 1);
-      resetSensitiveStderr();
       const destinationResult = message.error != null
         ? errorResult('destination returned a JSON-RPC error')
         : asToolResult(message.result) ?? errorResult('destination returned an invalid MCP tool result');
-      const result = flowEngine?.complete(request.opaqueFlow.plan, destinationResult) ??
-        errorResult('opaque flow engine unavailable');
-      if (flowEngine) {
-        observe(flowEvent(
-          request.opaqueFlow.plan,
-          destinationResult,
-          result,
-          request.startedAt ?? performance.now(),
-          options.destination?.id,
-        ));
+      finalizeInternalFlow(rpcKey(message.id), request, destinationResult);
+      if (asToolResult(message.result) == null && message.error == null) {
+        flowPoliciesValidated = false;
+        fatalProtocolFailure = true;
+        terminateChild();
       }
-      writeRpc(output, rpcResult(request.opaqueFlow.clientId, result));
       return;
     }
+    pending.delete(rpcKey(message.id));
     if (request.protectedSource) {
       activeProtectedSources = Math.max(0, activeProtectedSources - 1);
       resetSensitiveStderr();
@@ -1156,7 +1248,8 @@ export async function runMcpGateway(
             destinationCatalogValidated = true;
           } catch {
             destinationCatalogValidated = false;
-            if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+            fatalProtocolFailure = true;
+            terminateChild();
             throw new Error('opaque destination initialization failed');
           }
         }
@@ -1241,6 +1334,7 @@ export async function runMcpGateway(
       clientQueue = queueLine(clientQueue, () => handleClient(line), (cause) => failGateway(null, cause));
     },
     onOverflow: () => failGateway(null, new Error('JSON-RPC request exceeded the frame limit')),
+    onInvalidEncoding: () => failGateway(null, new Error('JSON-RPC request is not valid UTF-8')),
     onEnd: () => {
       child.stdin.end();
       void destinationPeer?.close();
@@ -1266,18 +1360,26 @@ export async function runMcpGateway(
           ? '[pinpoint mcp gateway] suppressed oversized upstream output after protected dataflow\n'
           : '[pinpoint mcp gateway] upstream output exceeded the JSON-RPC frame limit\n',
       );
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+      if (activeOpaqueFlows > 0) failInternalFlows('destination execution status unavailable');
+      else terminateChild();
+    },
+    onInvalidEncoding: () => {
+      error.write(
+        protectedDataHandled
+          ? '[pinpoint mcp gateway] suppressed invalid upstream encoding after protected dataflow\n'
+          : '[pinpoint mcp gateway] upstream output is not valid UTF-8\n',
+      );
+      if (activeOpaqueFlows > 0) failInternalFlows('destination execution status unavailable');
+      else {
+        fatalProtocolFailure = true;
+        terminateChild();
+      }
     },
   });
 
   const abort = (): void => {
-    if (child.exitCode !== null || child.signalCode !== null) return;
-    child.kill('SIGTERM');
+    terminateChild();
     void destinationPeer?.close();
-    forceKillTimer = setTimeout(() => {
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-    }, shutdownGraceMs);
-    forceKillTimer.unref();
   };
   options.signal?.addEventListener('abort', abort, { once: true });
   const exitCode = await new Promise<number | null>((resolve, reject) => {
@@ -1294,21 +1396,10 @@ export async function runMcpGateway(
   upstreamLines.close();
   await Promise.all([clientQueue, upstreamQueue, destinationQueue]);
   if (flowEngine) {
-    for (const [key, request] of pending) {
+    for (const [key, request] of [...pending]) {
       if (!request.opaqueFlow) continue;
-      pending.delete(key);
-      activeFlowClientIds.delete(rpcKey(request.opaqueFlow.clientId));
-      activeOpaqueFlows = Math.max(0, activeOpaqueFlows - 1);
-      resetSensitiveStderr();
-      const destinationResult = errorResult('destination execution status unavailable');
-      const result = flowEngine.complete(request.opaqueFlow.plan, destinationResult);
-      observe(flowEvent(
-        request.opaqueFlow.plan,
-        destinationResult,
-        result,
-        request.startedAt ?? performance.now(),
-      ));
-      writeRpc(output, rpcResult(request.opaqueFlow.clientId, result));
+      fatalProtocolFailure = true;
+      finalizeInternalFlow(key, request, errorResult('destination execution status unavailable'));
     }
   }
   const failed = destinationPeer?.state === 'failed';
@@ -1317,11 +1408,11 @@ export async function runMcpGateway(
     type: 'mcp.lifecycle',
     source: 'mcp',
     occurredAt: occurredAt(),
-    state: failed || (exitCode != null && exitCode !== 0) ? 'failed' : 'stopped',
+    state: failed || fatalProtocolFailure || (exitCode != null && exitCode !== 0) ? 'failed' : 'stopped',
     flowsConfigured: flows.length,
     privateDestination: options.destination != null,
   });
-  return failed ? 1 : exitCode;
+  return failed || fatalProtocolFailure ? 1 : exitCode;
 
   function flowEvent(
     plan: PreparedMcpOpaqueFlow,

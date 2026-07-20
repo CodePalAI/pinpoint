@@ -424,6 +424,76 @@ describe('cross-server opaque MCP flow', () => {
     expect(await running).toBe(1);
   });
 
+  it('fails and terminalizes an in-flight private flow when the client closes cleanly', async () => {
+    const hangingDestination = String.raw`
+      import { createInterface } from 'node:readline';
+      const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+      const reply = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
+      for await (const line of lines) {
+        const message = JSON.parse(line);
+        if (message.method === 'initialize') reply(message.id, {
+          protocolVersion: message.params.protocolVersion,
+          capabilities: { tools: {} },
+          serverInfo: { name: 'closing-destination', version: '1.0.0' },
+        });
+        else if (message.method === 'tools/list') reply(message.id, {
+          tools: [{ name: 'private_campaign_deliver', inputSchema: { type: 'object' } }],
+        });
+        else if (message.method === 'tools/call') {
+          // A side effect could have happened; wait for the expected shutdown without replying.
+        }
+      }
+    `;
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const next = responses(output);
+    const visible: string[] = [];
+    output.on('data', (chunk) => visible.push(String(chunk)));
+    const running = runMcpGateway(process.execPath, ['--input-type=module', '--eval', sourceServer], {
+      input,
+      output,
+      error: new PassThrough(),
+      env: { SOURCE_DOMAIN: 'SOURCE_ENV_PRIVATE' },
+      flows: [{
+        name: 'deliver_active_cross_server',
+        sourceTool: 'private_accounts',
+        sourceKind: 'json-array',
+        destinationTool: 'private_campaign_deliver',
+        destinationArgument: 'recipients',
+        allowedOps: ['json_select'],
+        fixedWhere: { active: true },
+        allowedFields: ['email'],
+      }],
+      destination: {
+        id: 'closing-domain',
+        command: process.execPath,
+        args: ['--input-type=module', '--eval', hangingDestination],
+        shutdownGraceMs: 100,
+      },
+    });
+    send(input, { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+    await next();
+    send(input, { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+    await next();
+    send(input, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'private_accounts', arguments: {} } });
+    const source = await next();
+    const artifactId = JSON.stringify(source).match(/vctx_[a-f0-9]{32,64}/)?.[0];
+    send(input, {
+      jsonrpc: '2.0', id: 4, method: 'tools/call',
+      params: { name: MCP_FLOW_TOOL_NAME, arguments: {
+        flow: 'deliver_active_cross_server', id: artifactId, op: 'json_select', fields: ['email'],
+      } },
+    });
+    input.end();
+
+    expect(await running).toBe(1);
+    const responsesForFlow = visible.join('').trim().split('\n').map((line) => JSON.parse(line)).filter(({ id }) => id === 4);
+    expect(responsesForFlow).toHaveLength(1);
+    const receipt = JSON.parse(responsesForFlow[0].result.content[0].text).pinpointFlow;
+    expect(receipt).toMatchObject({ destinationServer: 'closing-domain', destinationSucceeded: false, items: 2 });
+    expect(verifyMcpOpaqueFlowReceipt(receipt)).toBe(true);
+  });
+
   it('signs failure and terminates when the destination returns a malformed error status', async () => {
     const malformedDestination = String.raw`
       import { createInterface } from 'node:readline';

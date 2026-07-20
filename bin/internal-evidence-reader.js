@@ -3,6 +3,7 @@ import {
   closeSync,
   constants,
   fstatSync,
+  lstatSync,
   openSync,
   readSync,
 } from 'node:fs';
@@ -12,9 +13,18 @@ const limit = Number(process.argv[3]);
 if (!path) throw new Error('bundle path is required');
 if (!Number.isSafeInteger(limit) || limit < 1) throw new Error('bundle limit is invalid');
 const nonblock = typeof constants.O_NONBLOCK === 'number' ? constants.O_NONBLOCK : 0;
-const descriptor = openSync(path, constants.O_RDONLY | nonblock);
+const nofollow = process.platform === 'win32' || typeof constants.O_NOFOLLOW !== 'number'
+  ? 0
+  : constants.O_NOFOLLOW;
+const pathMetadata = lstatSync(path);
+if (pathMetadata.isSymbolicLink()) throw new Error('bundle must not be a symbolic link');
+const descriptor = openSync(path, constants.O_RDONLY | nonblock | nofollow);
 try {
-  if (!fstatSync(descriptor).isFile()) throw new Error('bundle must be a regular file');
+  const metadata = fstatSync(descriptor);
+  if (!metadata.isFile()) throw new Error('bundle must be a regular file');
+  if (metadata.dev !== pathMetadata.dev || metadata.ino !== pathMetadata.ino) {
+    throw new Error('bundle path changed during validation');
+  }
   const chunks = [];
   let bytes = 0;
   while (bytes <= limit) {

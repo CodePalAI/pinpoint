@@ -639,6 +639,144 @@ describe('McpResultFirewall', () => {
     expect(await running).toBe(0);
   });
 
+  it('terminalizes a silent same-server destination exactly once and force-stops the child', async () => {
+    const upstream = String.raw`
+      import { createInterface } from 'node:readline';
+      process.on('SIGTERM', () => {});
+      const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+      const reply = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
+      for await (const line of lines) {
+        const message = JSON.parse(line);
+        if (message.method === 'initialize') {
+          reply(message.id, {
+            protocolVersion: '2024-11-05',
+            capabilities: { tools: {} },
+            serverInfo: { name: 'silent-destination', version: '1.0.0' },
+          });
+        } else if (message.method === 'tools/list') {
+          reply(message.id, { tools: [
+            { name: 'private_read', inputSchema: { type: 'object' } },
+            { name: 'private_write', inputSchema: { type: 'object' } },
+          ] });
+        } else if (message.method === 'tools/call' && message.params.name === 'private_read') {
+          reply(message.id, { content: [{ type: 'text', text: '[{"id":1,"secret":"SILENT_PRIVATE_VALUE"}]' }] });
+        } else if (message.method === 'tools/call' && message.params.name === 'private_write') {
+          // The side effect happened; intentionally never reply.
+        }
+      }
+    `;
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const next = responses(output);
+    const visible: string[] = [];
+    output.on('data', (chunk) => visible.push(String(chunk)));
+    const running = runMcpGateway(process.execPath, ['--input-type=module', '--eval', upstream], {
+      input,
+      output,
+      error: new PassThrough(),
+      flowTimeoutMs: 100,
+      shutdownGraceMs: 20,
+      flows: [{
+        name: 'silent_flow',
+        sourceTool: 'private_read',
+        sourceKind: 'json-array',
+        destinationTool: 'private_write',
+        destinationArgument: 'records',
+        allowedOps: ['json_select'],
+        allowedFields: ['id'],
+      }],
+    });
+
+    send(input, { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+    await next();
+    send(input, { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+    await next();
+    send(input, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'private_read', arguments: {} } });
+    const source = await next();
+    const artifactId = JSON.stringify(source).match(/vctx_[a-f0-9]{32,64}/)?.[0];
+    send(input, {
+      jsonrpc: '2.0',
+      id: 4,
+      method: 'tools/call',
+      params: {
+        name: MCP_FLOW_TOOL_NAME,
+        arguments: { flow: 'silent_flow', id: artifactId, op: 'json_select', fields: ['id'] },
+      },
+    });
+    const response = await next();
+    const text = (response.result as { content: Array<{ text: string }> }).content[0]?.text ?? '{}';
+    const receipt = JSON.parse(text).pinpointFlow;
+
+    expect(receipt).toMatchObject({ sequence: 1, destinationSucceeded: false, items: 1 });
+    expect(verifyMcpOpaqueFlowReceipt(receipt)).toBe(true);
+    expect(await running).toBe(1);
+    expect(visible.join('').trim().split('\n').map((line) => JSON.parse(line)).filter(({ id }) => id === 4)).toHaveLength(1);
+    expect(visible.join('')).not.toContain('SILENT_PRIVATE_VALUE');
+    input.end();
+  });
+
+  it('reports failure when a same-server destination exits cleanly without replying', async () => {
+    const upstream = String.raw`
+      import { createInterface } from 'node:readline';
+      const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+      const reply = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
+      for await (const line of lines) {
+        const message = JSON.parse(line);
+        if (message.method === 'initialize') reply(message.id, {
+          protocolVersion: '2024-11-05', capabilities: { tools: {} },
+          serverInfo: { name: 'clean-exit-destination', version: '1.0.0' },
+        });
+        else if (message.method === 'tools/list') reply(message.id, { tools: [
+          { name: 'private_read', inputSchema: { type: 'object' } },
+          { name: 'private_write', inputSchema: { type: 'object' } },
+        ] });
+        else if (message.method === 'tools/call' && message.params.name === 'private_read') {
+          reply(message.id, { content: [{ type: 'text', text: '[{"id":1}]' }] });
+        } else if (message.method === 'tools/call' && message.params.name === 'private_write') {
+          process.exit(0);
+        }
+      }
+    `;
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const next = responses(output);
+    const visible: string[] = [];
+    const lifecycle: DashboardEvent[] = [];
+    output.on('data', (chunk) => visible.push(String(chunk)));
+    const running = runMcpGateway(process.execPath, ['--input-type=module', '--eval', upstream], {
+      input,
+      output,
+      error: new PassThrough(),
+      observer: { onEvent: (event) => { lifecycle.push(event); } },
+      flows: [{
+        name: 'clean_exit_flow', sourceTool: 'private_read', sourceKind: 'json-array',
+        destinationTool: 'private_write', destinationArgument: 'records',
+        allowedOps: ['json_select'], allowedFields: ['id'],
+      }],
+    });
+    send(input, { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+    await next();
+    send(input, { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+    await next();
+    send(input, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'private_read', arguments: {} } });
+    const source = await next();
+    const artifactId = JSON.stringify(source).match(/vctx_[a-f0-9]{32,64}/)?.[0];
+    send(input, {
+      jsonrpc: '2.0', id: 4, method: 'tools/call',
+      params: { name: MCP_FLOW_TOOL_NAME, arguments: {
+        flow: 'clean_exit_flow', id: artifactId, op: 'json_select', fields: ['id'],
+      } },
+    });
+    expect(await running).toBe(1);
+    const response = visible.join('').trim().split('\n').map((line) => JSON.parse(line)).find(({ id }) => id === 4);
+    const receipt = JSON.parse(response.result.content[0].text).pinpointFlow;
+    expect(receipt).toMatchObject({ destinationSucceeded: false, items: 1 });
+    expect(verifyMcpOpaqueFlowReceipt(receipt)).toBe(true);
+    expect(visible.join('').trim().split('\n').map((line) => JSON.parse(line)).filter(({ id }) => id === 4)).toHaveLength(1);
+    expect(lifecycle.at(-1)).toMatchObject({ type: 'mcp.lifecycle', state: 'failed' });
+    input.end();
+  });
+
   it('moves an exact projection into an allowlisted tool without exposing values to the client', async () => {
     const secretRows = Array.from({ length: 100 }, (_, id) => ({
       id,
@@ -1035,39 +1173,8 @@ describe('McpResultFirewall', () => {
       destinationSucceeded: false,
     });
     expect(verifyMcpOpaqueFlowReceipt(malformedReceipt)).toBe(true);
-
-    send(input, {
-      jsonrpc: '2.0',
-      id: 12,
-      method: 'tools/call',
-      params: {
-        name: MCP_FLOW_TOOL_NAME,
-        arguments: {
-          flow: 'deliver_active_accounts',
-          id: artifactId,
-          op: 'json_select',
-          where: { active: true },
-          fields: ['email'],
-          destinationArguments: { campaign: 'crash-after-dispatch' },
-        },
-      },
-    });
-    expect(await running).toBe(7);
-    const crashResponse = visible
-      .join('')
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line))
-      .find(({ id }) => id === 12);
-    expect(crashResponse).toBeDefined();
-    const crashReceiptText = crashResponse?.result?.content?.[0]?.text ?? '';
-    const crashReceipt = JSON.parse(crashReceiptText).pinpointFlow;
-    expect(crashReceipt).toMatchObject({
-      sequence: 6,
-      previousReceiptHash: malformedReceipt.receiptHash,
-      destinationSucceeded: false,
-    });
-    expect(verifyMcpOpaqueFlowReceipt(crashReceipt)).toBe(true);
+    expect(await running).toBe(1);
+    expect(visible.join('').trim().split('\n').map((line) => JSON.parse(line)).filter(({ id }) => id === 11)).toHaveLength(1);
 
     const clientVisible = visible.join('');
     for (const row of secretRows) {

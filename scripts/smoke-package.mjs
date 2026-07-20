@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, constants as fileConstants, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, constants as fileConstants, existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -245,6 +245,9 @@ try {
     if ((statSync(authorityKey).mode & 0o777) !== 0o600) {
       throw new Error('installed authority initializer did not create a mode-0600 key');
     }
+    if (typeof process.getuid === 'function' && statSync(authorityKey).uid !== process.getuid()) {
+      throw new Error('installed authority initializer did not preserve current-user ownership');
+    }
   }
   const demo = run(process.execPath, [cli, 'demo']);
   for (const expected of [
@@ -356,6 +359,12 @@ try {
     throw new Error('installed evidence command did not enforce usage exactly');
   }
   if (process.platform !== 'win32') {
+    const symlinkBundle = join(temporary, 'reproduction-link.json');
+    symlinkSync(reproductionPath, symlinkBundle);
+    const symlinked = capture(process.execPath, [cli, 'evidence', 'verify', symlinkBundle]);
+    if (symlinked.status !== 2 || symlinked.stdout !== '' || !/could not verify evidence bundle/.test(symlinked.stderr)) {
+      throw new Error('installed evidence verifier did not reject a terminal symlink exactly');
+    }
     const fifoBundle = join(temporary, 'reproduction.fifo');
     run('/usr/bin/mkfifo', [fifoBundle]);
     const fifo = capture(
@@ -366,6 +375,19 @@ try {
     );
     if (fifo.status !== 2 || fifo.stdout !== '' || !/bundle must be a regular file/.test(fifo.stderr)) {
       throw new Error('installed evidence verifier did not reject a FIFO exactly');
+    }
+    for (const option of ['--flow-config', '--destination-config']) {
+      const configFifo = join(temporary, `${option.slice(2)}.fifo`);
+      run('/usr/bin/mkfifo', [configFifo]);
+      const configured = capture(
+        process.execPath,
+        [cli, 'mcp', 'gateway', option, configFifo, '--', process.execPath, '--version'],
+        temporary,
+        { timeout: 2_000, killSignal: 'SIGKILL' },
+      );
+      if (configured.status !== 2 || configured.stdout !== '' || !/must be a regular file/.test(configured.stderr)) {
+        throw new Error(`installed MCP gateway did not reject ${option} FIFO exactly`);
+      }
     }
   }
   const installedReadme = join(

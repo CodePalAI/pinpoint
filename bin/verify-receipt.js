@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash, createPublicKey, verify } from 'node:crypto';
-import { closeSync, constants, fstatSync, openSync, readSync } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from 'node:fs';
 
 import {
   createMcpOpaqueFlowAuthorityPolicy,
@@ -23,9 +23,27 @@ function canonicalJson(value) {
   return JSON.stringify(canonicalize(value));
 }
 
-function argument(name) {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : undefined;
+function parseArguments(values) {
+  const supported = new Set([
+    '--path',
+    '--signing-key-id',
+    '--operator-key-id',
+    '--policy',
+    '--authority-opening',
+    '--destination-config',
+  ]);
+  const file = values[0];
+  if (!file || file.startsWith('--')) throw new Error('receipt path is required');
+  const options = new Map();
+  for (let index = 1; index < values.length; index += 2) {
+    const name = values[index];
+    const value = values[index + 1];
+    if (!supported.has(name)) throw new Error(`unknown option: ${String(name)}`);
+    if (options.has(name)) throw new Error(`duplicate option: ${name}`);
+    if (value == null || value.startsWith('--')) throw new Error(`missing value for ${name}`);
+    options.set(name, value);
+  }
+  return { file, options };
 }
 
 function readJsonFile(path, limit, label) {
@@ -34,10 +52,15 @@ function readJsonFile(path, limit, label) {
   const nofollow = process.platform === 'win32' || typeof constants.O_NOFOLLOW !== 'number'
     ? 0
     : constants.O_NOFOLLOW;
+  const pathMetadata = lstatSync(path);
+  if (pathMetadata.isSymbolicLink()) throw new Error(`${label} must not be a symbolic link`);
   const descriptor = openSync(path, constants.O_RDONLY | nonblock | nofollow);
   try {
     const metadata = fstatSync(descriptor);
     if (!metadata.isFile()) throw new Error(`${label} must be a regular file`);
+    if (metadata.dev !== pathMetadata.dev || metadata.ino !== pathMetadata.ino) {
+      throw new Error(`${label} path changed during validation`);
+    }
     if (metadata.size > limit) throw new Error(`${label} exceeds ${limit} bytes`);
     const chunks = [];
     let bytes = 0;
@@ -49,7 +72,11 @@ function readJsonFile(path, limit, label) {
       bytes += count;
     }
     if (bytes > limit) throw new Error(`${label} exceeds ${limit} bytes`);
-    return JSON.parse(Buffer.concat(chunks, bytes).toString('utf8'));
+    try {
+      return JSON.parse(Buffer.concat(chunks, bytes).toString('utf8'));
+    } catch {
+      throw new Error(`${label} is not valid JSON`);
+    }
   } finally {
     closeSync(descriptor);
   }
@@ -117,23 +144,27 @@ function verifyPolicyOpening(authority, policyPath, openingPath, destinationPath
   return verify(null, Buffer.from(message), publicKey, signatureBytes);
 }
 
-const file = process.argv[2];
-if (!file || file.startsWith('--')) {
+let parsedArguments;
+try {
+  parsedArguments = parseArguments(process.argv.slice(2));
+} catch (error) {
   console.error('usage: pinpoint-verify-receipt <receipt.json> [--path firstReceipt] [--signing-key-id HEX] [--operator-key-id HEX] [--policy FILE --authority-opening FILE [--destination-config FILE]]');
+  console.error(error instanceof Error ? error.message : String(error));
   process.exit(2);
 }
+const { file, options } = parsedArguments;
 
 try {
   let receipt = readJsonFile(file, MAX_RECEIPT_BYTES, 'receipt');
-  const path = argument('--path');
+  const path = options.get('--path');
   if (path) {
     for (const segment of path.split('.').filter(Boolean)) receipt = receipt?.[segment];
   }
   if (receipt == null || typeof receipt !== 'object' || Array.isArray(receipt)) {
     throw new Error('receipt path does not resolve to an object');
   }
-  const expectedKeyId = argument('--signing-key-id');
-  const expectedOperatorKeyId = argument('--operator-key-id');
+  const expectedKeyId = options.get('--signing-key-id');
+  const expectedOperatorKeyId = options.get('--operator-key-id');
   const { receiptHash, verifier: verifierBlock, signature, ...attestation } = receipt;
   if (
     receipt.receiptVersion !== 1 ||
@@ -165,9 +196,9 @@ try {
   );
   const policyOpeningValid = verifyPolicyOpening(
     authority,
-    argument('--policy'),
-    argument('--authority-opening'),
-    argument('--destination-config'),
+    options.get('--policy'),
+    options.get('--authority-opening'),
+    options.get('--destination-config'),
   );
   const valid =
     keyId === receipt.signingKeyId &&

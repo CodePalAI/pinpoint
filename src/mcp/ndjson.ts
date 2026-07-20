@@ -1,10 +1,12 @@
 import type { Readable } from 'node:stream';
+import { TextDecoder } from 'node:util';
 
 export const MAX_MCP_JSON_RPC_FRAME_BYTES = 16 * 1024 * 1024;
 
 export interface BoundedNdjsonHandlers {
   readonly onLine: (line: string) => void;
   readonly onOverflow: () => void;
+  readonly onInvalidEncoding?: () => void;
   readonly onEnd?: () => void;
 }
 
@@ -20,17 +22,23 @@ export function readBoundedNdjson(
   if (!Number.isSafeInteger(maxFrameBytes) || maxFrameBytes < 1) {
     throw new TypeError('maxFrameBytes must be a positive safe integer');
   }
-  let chunks: Buffer[] = [];
+  let buffer = Buffer.allocUnsafe(Math.min(maxFrameBytes, 64 * 1024));
   let frameBytes = 0;
   let discarding = false;
   let closed = false;
 
   const reset = (): void => {
-    chunks = [];
     frameBytes = 0;
   };
   const emitLine = (): void => {
-    const line = Buffer.concat(chunks, frameBytes).toString('utf8');
+    let line: string;
+    try {
+      line = new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, frameBytes));
+    } catch {
+      reset();
+      handlers.onInvalidEncoding?.();
+      return;
+    }
     reset();
     handlers.onLine(line);
   };
@@ -42,7 +50,15 @@ export function readBoundedNdjson(
       handlers.onOverflow();
       return;
     }
-    chunks.push(Buffer.from(chunk));
+    const required = frameBytes + chunk.length;
+    if (required > buffer.length) {
+      let capacity = buffer.length;
+      while (capacity < required) capacity = Math.min(maxFrameBytes, Math.max(capacity * 2, required));
+      const grown = Buffer.allocUnsafe(capacity);
+      buffer.copy(grown, 0, 0, frameBytes);
+      buffer = grown;
+    }
+    chunk.copy(buffer, frameBytes);
     frameBytes += chunk.length;
   };
   const onData = (value: Buffer | string): void => {

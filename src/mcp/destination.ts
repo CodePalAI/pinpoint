@@ -82,6 +82,21 @@ function environmentNameKey(name: string, platform: NodeJS.Platform): string {
   return platform === 'win32' ? name.toUpperCase() : name;
 }
 
+export const PINPOINT_RESERVED_CHILD_ENV_NAMES = [
+  'PINPOINT_DASHBOARD_GROUP',
+  'PINPOINT_DASHBOARD_DIR',
+] as const;
+
+export function destinationEnvironmentNames(
+  config: Pick<McpDestinationStdioConfig, 'declaredEnvNames' | 'env'>,
+  platform: NodeJS.Platform = process.platform,
+): readonly string[] {
+  const names = [...(config.declaredEnvNames ?? []), ...Object.keys(config.env ?? {})];
+  const byKey = new Map<string, string>();
+  for (const name of names) byKey.set(environmentNameKey(name, platform), name);
+  return [...byKey.values()].sort();
+}
+
 export function withoutDestinationOnlyEnvironment(
   sourceEnv: NodeJS.ProcessEnv,
   destinationNames: readonly string[],
@@ -90,8 +105,12 @@ export function withoutDestinationOnlyEnvironment(
 ): NodeJS.ProcessEnv {
   const destination = new Set(destinationNames.map((name) => environmentNameKey(name, platform)));
   const shared = new Set(sharedNames.map((name) => environmentNameKey(name, platform)));
+  const reserved = new Set(
+    PINPOINT_RESERVED_CHILD_ENV_NAMES.map((name) => environmentNameKey(name, platform)),
+  );
   return Object.fromEntries(Object.entries(sourceEnv).filter(([name]) => {
     const key = environmentNameKey(name, platform);
+    if (reserved.has(key)) return false;
     return !destination.has(key) || shared.has(key);
   }));
 }
@@ -152,6 +171,12 @@ export function parseMcpOpaqueFlowDestinationConfig(
     envAllowlist.some((name) => typeof name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(name))
   ) {
     throw new TypeError('opaque-flow destination envAllowlist must contain at most 64 unique environment names');
+  }
+  const reservedEnvNameKeys = new Set(
+    PINPOINT_RESERVED_CHILD_ENV_NAMES.map((name) => environmentNameKey(name, platform)),
+  );
+  if (envNameKeys.some((name) => reservedEnvNameKeys.has(name))) {
+    throw new TypeError('opaque-flow destination envAllowlist contains a reserved Pinpoint environment name');
   }
   const sharedEnvAllowlist = value.sharedEnvAllowlist ?? [];
   const allowedEnvNameKeys = new Set(envNameKeys);
@@ -235,6 +260,12 @@ export class McpDestinationPeer {
     ) {
       throw new TypeError('destination args must contain at most 128 strings of at most 4096 characters');
     }
+    const effectiveEnvNames = destinationEnvironmentNames(config);
+    const reserved = new Set(PINPOINT_RESERVED_CHILD_ENV_NAMES.map((name) => environmentNameKey(name, process.platform)));
+    if (effectiveEnvNames.some((name) =>
+      reserved.has(environmentNameKey(name, process.platform)))) {
+      throw new TypeError('destination environment contains a reserved Pinpoint environment name');
+    }
     this.initializeTimeoutMs = positiveTimeout(config.initializeTimeoutMs, 10_000);
     this.requestTimeoutMs = positiveTimeout(config.requestTimeoutMs, 30_000);
     this.shutdownGraceMs = positiveTimeout(config.shutdownGraceMs, 2_000);
@@ -247,14 +278,19 @@ export class McpDestinationPeer {
     this.lines = readBoundedNdjson(this.child.stdout, {
       onLine: (line) => this.handleLine(line),
       onOverflow: () => this.fail('destination output exceeded the JSON-RPC frame limit'),
+      onInvalidEncoding: () => this.fail('destination output is not valid UTF-8'),
     });
     this.child.stderr.on('data', () => this.diagnostic('destination stderr suppressed'));
-    this.child.stdin.on('error', () => this.fail('destination input failed'));
+    this.child.stdin.on('error', () => {
+      if (this.closeExpected || this.pending.size === 0) return;
+      this.fail('destination input failed');
+    });
     this.child.once('error', () => this.fail('destination process failed'));
     this.exited = new Promise((resolve) => {
       this.child.once('close', (code) => {
         this.lines.close();
-        if (!this.closeExpected && this.currentState !== 'failed') {
+        const hadPending = this.pending.size > 0;
+        if ((!this.closeExpected || hadPending) && this.currentState !== 'failed') {
           this.currentState = 'failed';
           this.rejectPending('destination process exited');
           this.diagnostic('destination process exited');
@@ -270,6 +306,10 @@ export class McpDestinationPeer {
 
   get state(): McpDestinationState {
     return this.currentState;
+  }
+
+  get hasPendingRequests(): boolean {
+    return this.pending.size > 0;
   }
 
   private diagnostic(message: string): void {

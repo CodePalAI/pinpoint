@@ -165,6 +165,21 @@ describe('packaged opaque-flow reproduction bundle', () => {
     expect(verification.errors).toContain('summary.durationMs must be a finite non-negative number');
   });
 
+  it('classifies wrong result-metric types as schema failures', async () => {
+    const bundle = await runMcpReproduction('maintainer');
+    const tampered = structuredClone(bundle) as McpReproductionBundle;
+    (tampered.summary as { destinationAcceptedCalls: unknown }).destinationAcceptedCalls = '30';
+    recomputeChecksum(tampered);
+
+    const verification = verifyMcpReproduction(tampered);
+    expect(verification.valid).toBe(false);
+    expect(verification.checks.checksum).toBe(true);
+    expect(verification.checks.schema).toBe(false);
+    expect(verification.errors).toContain(
+      'summary.destinationAcceptedCalls must be a non-negative safe integer',
+    );
+  });
+
   it('rejects receipt bytes above the signed policy limit', async () => {
     const bundle = await runMcpReproduction('maintainer');
     const tampered = structuredClone(bundle) as McpReproductionBundle;

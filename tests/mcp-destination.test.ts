@@ -75,6 +75,9 @@ describe('private MCP destination peer', () => {
         sourceOnly: null,
       });
       expect(payload.requestId).toMatch(/^pinpoint-destination:/);
+      (peer as unknown as { child: { stdin: { emit: (event: string, cause: Error) => boolean } } })
+        .child.stdin.emit('error', new Error('late completed-write error'));
+      expect(peer.state).toBe('ready');
       expect(diagnosticText).toContain('destination stderr suppressed');
       expect(diagnosticText).not.toContain('PRIVATE_DESTINATION_STDERR');
       expect(diagnosticText).not.toContain('PRIVATE_NON_JSON_OUTPUT');

@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -64,6 +64,84 @@ describe('standalone opaque-flow receipt verifier', () => {
       expect(JSON.parse(tamperedRun.stdout)).toMatchObject({ valid: false });
       expect(wrongKeyRun.status).toBe(1);
       expect(JSON.parse(wrongKeyRun.stdout)).toMatchObject({ valid: false });
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects unknown, missing-value, and duplicate security options', () => {
+    const source = JSON.parse(readFileSync(receiptPath, 'utf8'));
+    const cases = [
+      [verifier, receiptPath, '--operator-key-idd', '0'.repeat(64)],
+      [verifier, receiptPath, '--signing-key-id'],
+      [
+        verifier,
+        receiptPath,
+        '--signing-key-id',
+        source.firstReceipt.signingKeyId,
+        '--signing-key-id',
+        source.firstReceipt.signingKeyId,
+      ],
+    ];
+
+    for (const args of cases) {
+      const run = spawnSync(process.execPath, args, { encoding: 'utf8' });
+      expect(run.status).toBe(2);
+      expect(run.stdout).toBe('');
+      expect(run.stderr).toContain('usage: pinpoint-verify-receipt');
+    }
+  });
+
+  it('does not echo malformed receipt values in parse errors', () => {
+    const temporary = mkdtempSync(join(tmpdir(), 'pinpoint-malformed-receipt-'));
+    try {
+      const canary = 'MALFORMED_RECEIPT_PRIVATE_CANARY';
+      const malformed = join(temporary, 'receipt.json');
+      writeFileSync(malformed, `{"fixed":"${canary}",`);
+      const run = spawnSync(process.execPath, [verifier, malformed], { encoding: 'utf8' });
+      expect(run.status).toBe(1);
+      expect(run.stdout).not.toContain(canary);
+      expect(run.stderr).not.toContain(canary);
+      expect(JSON.parse(run.stdout)).toMatchObject({ valid: false, error: 'receipt is not valid JSON' });
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+
+  it('does not echo malformed policy or opening values in parse errors', () => {
+    const temporary = mkdtempSync(join(tmpdir(), 'pinpoint-malformed-opening-'));
+    try {
+      const source = JSON.parse(readFileSync(receiptPath, 'utf8'));
+      const policyCanary = 'MALFORMED_POLICY_PRIVATE_CANARY';
+      const openingCanary = 'MALFORMED_OPENING_PRIVATE_CANARY';
+      const policy = join(temporary, 'policy.json');
+      const opening = join(temporary, 'opening.json');
+      writeFileSync(policy, `{"fixedWhere":"${policyCanary}",`);
+      writeFileSync(opening, `{"opening":"${openingCanary}",`);
+      const cases = [
+        {
+          canary: policyCanary,
+          args: [
+            verifier, receiptPath, '--path', 'firstReceipt', '--policy', policy,
+            '--authority-opening', receiptPath,
+          ],
+        },
+        {
+          canary: openingCanary,
+          args: [
+            verifier, receiptPath, '--path', 'firstReceipt', '--policy', receiptPath,
+            '--authority-opening', opening,
+          ],
+        },
+      ];
+      for (const testCase of cases) {
+        const run = spawnSync(process.execPath, testCase.args, { encoding: 'utf8' });
+        expect(run.status).toBe(1);
+        expect(run.stdout).not.toContain(testCase.canary);
+        expect(run.stderr).not.toContain(testCase.canary);
+        expect(JSON.parse(run.stdout)).toMatchObject({ valid: false });
+      }
+      expect(source.firstReceipt).toBeDefined();
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }
@@ -262,6 +340,19 @@ describe('standalone opaque-flow receipt verifier', () => {
         killSignal: 'SIGKILL',
       });
       expect(run.signal).toBeNull();
+      expect(run.status).toBe(1);
+      expect(JSON.parse(run.stdout)).toMatchObject({ valid: false });
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects a receipt symlink', () => {
+    const temporary = mkdtempSync(join(tmpdir(), 'pinpoint-receipt-symlink-'));
+    try {
+      const link = join(temporary, 'receipt.json');
+      symlinkSync(receiptPath, link);
+      const run = spawnSync(process.execPath, [verifier, link], { encoding: 'utf8' });
       expect(run.status).toBe(1);
       expect(JSON.parse(run.stdout)).toMatchObject({ valid: false });
     } finally {

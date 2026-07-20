@@ -31,18 +31,26 @@ function hasBoundedJsonShape(value: unknown): boolean {
     if (typeof current.value !== 'object') return false;
     if (seen.has(current.value)) return false;
     seen.add(current.value);
-    const entries = Array.isArray(current.value)
-      ? current.value.map((item) => [null, item] as const)
-      : Object.entries(current.value);
-    collectionItems += entries.length;
-    if (collectionItems > MAX_MCP_TOOL_RESULT_COLLECTION_ITEMS) return false;
-    for (const [key, item] of entries) {
-      if (key != null) {
-        stringBytes += Buffer.byteLength(key);
-        if (stringBytes > MAX_MCP_TOOL_RESULT_STRING_BYTES) return false;
+    const remainingItems = MAX_MCP_TOOL_RESULT_COLLECTION_ITEMS - collectionItems;
+    if (Array.isArray(current.value)) {
+      if (current.value.length > remainingItems) return false;
+      collectionItems += current.value.length;
+      for (let index = current.value.length - 1; index >= 0; index -= 1) {
+        stack.push({ value: current.value[index], depth: current.depth + 1 });
       }
-      stack.push({ value: item, depth: current.depth + 1 });
+      continue;
     }
+    let ownKeys = 0;
+    const record = current.value as Record<string, unknown>;
+    for (const key in record) {
+      if (!Object.hasOwn(record, key)) continue;
+      ownKeys += 1;
+      if (ownKeys > remainingItems) return false;
+      stringBytes += Buffer.byteLength(key);
+      if (stringBytes > MAX_MCP_TOOL_RESULT_STRING_BYTES) return false;
+      stack.push({ value: record[key], depth: current.depth + 1 });
+    }
+    collectionItems += ownKeys;
   }
   try {
     const serialized = JSON.stringify(value);

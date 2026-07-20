@@ -1,4 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -15,6 +18,7 @@ import {
 } from '../src/cli/main.js';
 import { parseMcpOpaqueFlowConfig } from '../src/mcp/flow.js';
 import {
+  destinationEnvironmentNames,
   parseMcpOpaqueFlowDestinationConfig,
   withoutDestinationOnlyEnvironment,
 } from '../src/mcp/destination.js';
@@ -218,6 +222,56 @@ describe('parseMcpArgs', () => {
     });
   });
 
+  it('does not echo malformed flow, destination, or evidence values', () => {
+    const temporary = mkdtempSync(join(tmpdir(), 'pinpoint-malformed-cli-'));
+    const cli = join(process.cwd(), 'bin', 'cli.js');
+    const flowCanary = 'MALFORMED_FLOW_PRIVATE_CANARY';
+    const destinationCanary = 'MALFORMED_DESTINATION_PRIVATE_CANARY';
+    const evidenceCanary = 'MALFORMED_EVIDENCE_PRIVATE_CANARY';
+    try {
+      const validFlow = join(temporary, 'flow.json');
+      const malformedFlow = join(temporary, 'malformed-flow.json');
+      const malformedDestination = join(temporary, 'malformed-destination.json');
+      const malformedEvidence = join(temporary, 'malformed-evidence.json');
+      writeFileSync(validFlow, JSON.stringify({
+        version: 1,
+        flows: [{
+          name: 'test_flow',
+          sourceTool: 'source_read',
+          destinationTool: 'destination_write',
+          destinationArgument: 'records',
+          allowedOps: ['json_select'],
+          allowedFields: ['id'],
+        }],
+      }));
+      writeFileSync(malformedFlow, `{"fixedWhere":"${flowCanary}",`);
+      writeFileSync(malformedDestination, `{"token":"${destinationCanary}",`);
+      writeFileSync(malformedEvidence, `{"value":"${evidenceCanary}",`);
+      const cases = [
+        {
+          canary: flowCanary,
+          args: ['mcp', 'gateway', '--flow-config', malformedFlow, '--', process.execPath, '--version'],
+        },
+        {
+          canary: destinationCanary,
+          args: [
+            'mcp', 'gateway', '--flow-config', validFlow,
+            '--destination-config', malformedDestination, '--', process.execPath, '--version',
+          ],
+        },
+        { canary: evidenceCanary, args: ['evidence', 'verify', malformedEvidence] },
+      ];
+      for (const testCase of cases) {
+        const run = spawnSync(process.execPath, [cli, ...testCase.args], { encoding: 'utf8' });
+        expect(run.status).toBe(2);
+        expect(run.stdout).not.toContain(testCase.canary);
+        expect(run.stderr).not.toContain(testCase.canary);
+      }
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+
   it('parses versioned opaque-flow policy with privacy-preserving defaults', () => {
     const config = parseMcpOpaqueFlowConfig({
       version: 1,
@@ -320,6 +374,22 @@ describe('parseMcpArgs', () => {
       command: 'crm-mcp.exe',
       envAllowlist: ['CRM_TOKEN', 'crm_token'],
     }, {}, 'win32')).toThrow('envAllowlist must contain at most 64 unique environment names');
+    expect(() => parseMcpOpaqueFlowDestinationConfig({
+      version: 1,
+      id: 'crm-domain',
+      command: 'crm-mcp.exe',
+      envAllowlist: ['pinpoint_dashboard_group'],
+    }, {}, 'win32')).toThrow('envAllowlist contains a reserved Pinpoint environment name');
+    expect(withoutDestinationOnlyEnvironment(
+      { pinpoint_dashboard_group: 'private-group', Pinpoint_Dashboard_Dir: 'private-dir', PATH: 'C:\\Windows' },
+      ['PINPOINT_DASHBOARD_GROUP', 'PINPOINT_DASHBOARD_DIR'],
+      [],
+      'win32',
+    )).toEqual({ PATH: 'C:\\Windows' });
+    expect(destinationEnvironmentNames({
+      declaredEnvNames: [],
+      env: { CRM_TOKEN: 'secret', PATH: 'C:\\Windows' },
+    }, 'win32')).toEqual(['CRM_TOKEN', 'PATH']);
   });
 
   it('parses the shipped private-destination example', () => {

@@ -15,9 +15,9 @@
     "persistedData": "Synthetic source and destination values are not persisted. Counts, byte sizes, fingerprints, receipts, and the opening signature for the already-public synthetic policy are retained.",
     "fingerprints": {
       "src/mcp/flow.ts": "fb176f85fe8ef675a188fc02cd9ff2f422ebba4bd9f71596130cae0ca5ebddf4",
-      "src/mcp/gateway.ts": "5b4ea774342578f28791950b91fc36833f67f19c431c7070fe9a7315dc477143",
+      "src/mcp/gateway.ts": "f7476a17063c9d26fcd733cafaaf7095b3f4417d4252cd571db4dc773b141475",
       "src/virtual-context/store.ts": "7b0bbc2de4e400b7cb85a23d926bf5ec2c898c7242df57b220026bf3cbc36783",
-      "src/cli/main.ts": "599cbda60038c4b9e25a556b285817e9d828a52670f6462d0544cafa1eafc960",
+      "src/cli/main.ts": "0acacc03a6c1bc60ae1ed5bfd1ced401b72e6c9a867384f4a4d3c097f81900ae",
       "benchmarks/v2/mcp_opaque_flow_gate.mjs": "adf0563992a9e697501443c9163562c8e8cba242015ff61e82222f73951b0840",
       "benchmarks/fixtures/opaque_flow_data.mjs": "af3b9cdde4f9a025acc1d8dade13dec080025072edd2d3483dbde7226d11b263",
       "benchmarks/fixtures/opaque_flow_server.mjs": "1a70a6162a7b30ae71f72616d611b7e3e0081806ee666ef64db1dc9bd006d603",
@@ -28,7 +28,7 @@
         "name": "@codepalaiorg/pinpoint",
         "version": "0.2.5"
       },
-      "gitBaseCommit": "0294d9aa6d2f179ce1bfe2de23495a1a084f17d7",
+      "gitBaseCommit": "209328e4010ff90ef0c1ec4a69a8cc8e9f245ea3",
       "worktreeDirty": true,
       "entryPoint": "dist/mcp/index.js",
       "javascriptManifest": [
@@ -58,11 +58,11 @@
         },
         {
           "path": "dist/cli/evidence.js",
-          "sha256": "cb69095de9e1ef7cac405be626549ab5f61fc588ece3f63f24d8f4797825fcae"
+          "sha256": "aaffebfe090448396d97b0b3814029576d65a7aa9de40744d3b5fcebb53490a2"
         },
         {
           "path": "dist/cli/main.js",
-          "sha256": "6acc2e5cdb9f9135c1cf9c713cca9146e068e8c209b33d1c88bb1ccbed2ed895"
+          "sha256": "9387b4201c928f589fcf8233f5d624ef512b27a50c6ca7cb1b3bc81dc4855036"
         },
         {
           "path": "dist/cli/mcp-demo.js",
@@ -166,7 +166,7 @@
         },
         {
           "path": "dist/mcp/destination.js",
-          "sha256": "65a0b8abff80b63fe1c08b9b370ab3e0831a96d61848f8b6d5b807a3f826e2d1"
+          "sha256": "899c34a86d8f8ac046878f92ffb73b7f40105008ecd334693bd694ba79f97a55"
         },
         {
           "path": "dist/mcp/flow.js",
@@ -174,7 +174,7 @@
         },
         {
           "path": "dist/mcp/gateway.js",
-          "sha256": "934e8236e33e5306f618d3c819e595395abdfac8d67a3d263c2f83605a9af401"
+          "sha256": "596c86e46ec7847b0c8c3a66e51fb8cd89434b15516b4cb428f999361d3f6895"
         },
         {
           "path": "dist/mcp/index.js",
@@ -182,7 +182,7 @@
         },
         {
           "path": "dist/mcp/ndjson.js",
-          "sha256": "94518b8fbe2ba209f622de6e328429fe36bfb517d5eae916ccd957151a59cb53"
+          "sha256": "ed08456aa7bf44e27b8c1ecfa7e69b2517c253239efdf7163a4101253822f824"
         },
         {
           "path": "dist/mcp/server.js",
@@ -190,7 +190,7 @@
         },
         {
           "path": "dist/mcp/tool-result.js",
-          "sha256": "119908feadf8c07a1ed8340e231655f47a79796fe8065976a81b86f1cf433bc4"
+          "sha256": "4e48c586075fb8dc7e46aee48c8969dbc91b66debb2cd6c6d83ba7bdc8e2395a"
         },
         {
           "path": "dist/measurement/savings.js",
@@ -361,8 +361,8 @@
     "verifierPinnedAtInitialize": true,
     "operatorAuthorityBindingValid": true,
     "exactPolicyOpeningValid": true,
-    "operatorKeyId": "93e6fb3144446a4e020aa6eb35e6974ca80798e11531d8a4886889864a550ae9",
-    "policyCommitment": "sha256:e2bbe00984a2ec3a287fc92dbc80a64e38a2885593b7bf8739cc07f6f8335b0d",
+    "operatorKeyId": "bb9b27053a452640496d686a178c63daf058be30b9bea283f454979a17370f47",
+    "policyCommitment": "sha256:2533f4598d059f8a0c60c0fe66d0e6820985dcaef6e9c7112bf73f45366080f8",
     "commitmentsUnlinkableAcrossIdenticalPayloads": true,
     "tamperedReceiptRejected": true,
     "tamperedAuthorityRejected": true,
@@ -370,41 +370,41 @@
     "destinationAcceptedExactProjection": true,
     "receiptChain": {
       "count": 30,
-      "signingKeyId": "b045802ddb1049821a78470686fec93ee51d07020a90f4a67f1452dd95b798f5",
-      "firstReceiptHash": "c39a37e8e1c41d44932b4b0e9a93a9deb6ca68f15b2d807210ba97cdc12eb436",
-      "lastReceiptHash": "9d3f1f338c4b46d75443fb2ca8580bf29a837e64280cbc018456f1195ba2dded"
+      "signingKeyId": "76b9a52dab63710f1b537371279e38fd30d6b1c029e9e2082ef766640914dd6e",
+      "firstReceiptHash": "ede92a4c64003301c2d412be9ad6c5656af637c764507513b48ad7ef33ca5215",
+      "lastReceiptHash": "dc85591bf993fad6bf310b386e847e0a6a07988384d9c7f6d3d36d54ddd59ecd"
     }
   },
   "latencyMs": {
     "samples": 30,
-    "p50": 0.33654200000000856,
-    "p95": 0.7821250000000077,
-    "p99": 1.3541669999999613,
-    "max": 1.3541669999999613
+    "p50": 0.5722079999999892,
+    "p95": 2.928707999999972,
+    "p99": 3.9624580000000265,
+    "max": 3.9624580000000265
   },
   "authority": {
     "authorityVersion": 1,
     "domain": "pinpoint.mcp.opaque-flow.session",
-    "operatorKeyId": "93e6fb3144446a4e020aa6eb35e6974ca80798e11531d8a4886889864a550ae9",
-    "sessionSigningKeyId": "b045802ddb1049821a78470686fec93ee51d07020a90f4a67f1452dd95b798f5",
-    "sessionPublicKey": "MCowBQYDK2VwAyEA2eejx6roFjrk5kkuUIfYEIs4-7-co17yh_zx2LfTwv0",
-    "policyNonce": "T1-nDzdlRBMGbyPowq06jxeSVkU40KVK2VO9iKnNoKY",
+    "operatorKeyId": "bb9b27053a452640496d686a178c63daf058be30b9bea283f454979a17370f47",
+    "sessionSigningKeyId": "76b9a52dab63710f1b537371279e38fd30d6b1c029e9e2082ef766640914dd6e",
+    "sessionPublicKey": "MCowBQYDK2VwAyEAVba-9oHxHAKWECuY07N7oFOwoTpJS1z_YgZHlHdCHPI",
+    "policyNonce": "33DL1HLQpXcPZ0ZCzOWIcYOMY0ujV509p9rTY9LhETA",
     "policyCommitmentAlgorithm": "Ed25519-SHA256",
-    "policyCommitment": "sha256:e2bbe00984a2ec3a287fc92dbc80a64e38a2885593b7bf8739cc07f6f8335b0d",
+    "policyCommitment": "sha256:2533f4598d059f8a0c60c0fe66d0e6820985dcaef6e9c7112bf73f45366080f8",
     "verifier": {
       "algorithm": "Ed25519",
-      "publicKey": "MCowBQYDK2VwAyEAN3N0SLUltSDiG8BxZ_FyexYzynGtZUhiDAaQXNRYjpM"
+      "publicKey": "MCowBQYDK2VwAyEAP22Bvpf1BDcV2X-5QLnu5TmR4q3tHQwAYo4FUx0PGuA"
     },
-    "signature": "v3aYVWEGTCyf8qt94c55HCR_SneaVaxHmJ2nByn_0R_SJ0IkaPFdJ9lbacmSqq4dTDG9TvMe3EjUdaDSaRVoAw"
+    "signature": "m4NO6b9fxQI5dwWBEacVtIZMKBWQZIi-JYq8vMHwWFG52ImXczujwj_jS5yV2BN6vGEXHKL8fWntYnCiT9P0BA"
   },
   "opening": {
-    "policyAuthorizationSignature": "X3bouncJJOL1MX5A_7_Zf5MTsDDVBHS8Olr4RJZ19Ro6GlqQJ3HjEruz5Na7vLnzic4qup6QYZwAtHOVyU13Cg"
+    "policyAuthorizationSignature": "ewY7_zyiDJb-Kjm4Zoo53Oeb1XUCtFocXVJXX1CmUNVTh_ll1eJEYO-Fo2ZUzyEet1KX30vRJ7KiB5yJhlOsDQ"
   },
   "firstReceipt": {
     "receiptVersion": 1,
     "sequence": 1,
     "flow": "validate_renewal_projection",
-    "artifactId": "vctx_1391c23441e03d7566fcd48a33bcb955",
+    "artifactId": "vctx_79ad6a9cc75f7b31d790eda57d3dfe25",
     "sourceTool": "synthetic_accounts_list",
     "destinationTool": "synthetic_projection_validate",
     "destinationArgument": "projectedRecords",
@@ -426,35 +426,35 @@
     "items": 40,
     "payloadBytes": 1739,
     "commitmentAlgorithm": "HMAC-SHA256",
-    "payloadCommitment": "hmac-sha256:46046650f5dd47a35b4615abe1ccbc1a567d6f7f480e1dc05ba7107882afdec1",
-    "queryCommitment": "hmac-sha256:3b8470c09462b87a4ba6d3b6108a3217fae350efd29189768a6a3725710b507d",
+    "payloadCommitment": "hmac-sha256:b0ce690262ef1bc54e9ddebd377e1a7e2999785f9cd172cafa364e147e6d589d",
+    "queryCommitment": "hmac-sha256:a53ff8ba8253d79d0a5e1e573c0007a81087ffcf15faf24615f4810176c51df8",
     "destinationSucceeded": true,
     "destinationResultBytes": 120,
-    "destinationResultCommitment": "hmac-sha256:5c323ef1d5e225bf1555bf5f54364d9de376193a101f61fd114a1f6e36082656",
+    "destinationResultCommitment": "hmac-sha256:b089ea79ac724e8e9fd684d15ec0f7986fa4e8d1b6bf9af25357f123f7c746ce",
     "previousReceiptHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "signingKeyId": "b045802ddb1049821a78470686fec93ee51d07020a90f4a67f1452dd95b798f5",
+    "signingKeyId": "76b9a52dab63710f1b537371279e38fd30d6b1c029e9e2082ef766640914dd6e",
     "disclosure": "receipt",
-    "receiptHash": "c39a37e8e1c41d44932b4b0e9a93a9deb6ca68f15b2d807210ba97cdc12eb436",
+    "receiptHash": "ede92a4c64003301c2d412be9ad6c5656af637c764507513b48ad7ef33ca5215",
     "verifier": {
       "algorithm": "Ed25519",
-      "publicKey": "MCowBQYDK2VwAyEA2eejx6roFjrk5kkuUIfYEIs4-7-co17yh_zx2LfTwv0",
+      "publicKey": "MCowBQYDK2VwAyEAVba-9oHxHAKWECuY07N7oFOwoTpJS1z_YgZHlHdCHPI",
       "authority": {
         "authorityVersion": 1,
         "domain": "pinpoint.mcp.opaque-flow.session",
-        "operatorKeyId": "93e6fb3144446a4e020aa6eb35e6974ca80798e11531d8a4886889864a550ae9",
-        "sessionSigningKeyId": "b045802ddb1049821a78470686fec93ee51d07020a90f4a67f1452dd95b798f5",
-        "sessionPublicKey": "MCowBQYDK2VwAyEA2eejx6roFjrk5kkuUIfYEIs4-7-co17yh_zx2LfTwv0",
-        "policyNonce": "T1-nDzdlRBMGbyPowq06jxeSVkU40KVK2VO9iKnNoKY",
+        "operatorKeyId": "bb9b27053a452640496d686a178c63daf058be30b9bea283f454979a17370f47",
+        "sessionSigningKeyId": "76b9a52dab63710f1b537371279e38fd30d6b1c029e9e2082ef766640914dd6e",
+        "sessionPublicKey": "MCowBQYDK2VwAyEAVba-9oHxHAKWECuY07N7oFOwoTpJS1z_YgZHlHdCHPI",
+        "policyNonce": "33DL1HLQpXcPZ0ZCzOWIcYOMY0ujV509p9rTY9LhETA",
         "policyCommitmentAlgorithm": "Ed25519-SHA256",
-        "policyCommitment": "sha256:e2bbe00984a2ec3a287fc92dbc80a64e38a2885593b7bf8739cc07f6f8335b0d",
+        "policyCommitment": "sha256:2533f4598d059f8a0c60c0fe66d0e6820985dcaef6e9c7112bf73f45366080f8",
         "verifier": {
           "algorithm": "Ed25519",
-          "publicKey": "MCowBQYDK2VwAyEAN3N0SLUltSDiG8BxZ_FyexYzynGtZUhiDAaQXNRYjpM"
+          "publicKey": "MCowBQYDK2VwAyEAP22Bvpf1BDcV2X-5QLnu5TmR4q3tHQwAYo4FUx0PGuA"
         },
-        "signature": "v3aYVWEGTCyf8qt94c55HCR_SneaVaxHmJ2nByn_0R_SJ0IkaPFdJ9lbacmSqq4dTDG9TvMe3EjUdaDSaRVoAw"
+        "signature": "m4NO6b9fxQI5dwWBEacVtIZMKBWQZIi-JYq8vMHwWFG52ImXczujwj_jS5yV2BN6vGEXHKL8fWntYnCiT9P0BA"
       }
     },
-    "signature": "rST4kLTBPZR-CVRrsvgQMLYjHELD90hRKTaw6k1SD0-DTzOwhM-kyhYok35bC9anzD3EoHKA7bv9vIfWL2D7DA"
+    "signature": "mQoqp-jc8tUzZxk8Dbn6OVh6d6LEHXXUCMZ3rJgyryoW54xmn_drDhegvXRtRLk_g4n7Nf1RQmoelmMAhB9kBg"
   },
   "limitations": [
     "This is a deterministic first-party protocol integration, not a model-quality or production-demand measurement.",
